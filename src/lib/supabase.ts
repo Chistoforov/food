@@ -1,7 +1,16 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || ''
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+
+// Проверяем наличие обязательных переменных окружения
+if (!supabaseUrl) {
+  throw new Error('VITE_SUPABASE_URL is required. Please check your environment variables.')
+}
+
+if (!supabaseAnonKey) {
+  throw new Error('VITE_SUPABASE_ANON_KEY is required. Please check your environment variables.')
+}
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
@@ -9,6 +18,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 export interface Product {
   id: number
   name: string
+  original_name?: string
   last_purchase: string
   avg_days: number | null
   predicted_end: string | null

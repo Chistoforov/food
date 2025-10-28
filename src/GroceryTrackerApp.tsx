@@ -1,6 +1,8 @@
-import { useState } from 'react';
-import { Camera, ShoppingCart, Home, BarChart3, Users, Plus, Clock, AlertCircle, CheckCircle, Edit2, Save, X } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { Camera, ShoppingCart, Home, BarChart3, Users, Plus, Clock, AlertCircle, CheckCircle, Edit2, Save, X, Upload, Loader2, XCircle } from 'lucide-react';
 import { useProducts, useReceipts, useFamilies, useProductHistory, useMonthlyStats } from './hooks/useSupabaseData';
+import { parseReceiptImage, ReceiptItem } from './services/perplexityService';
+import { SupabaseService } from './services/supabaseService';
 
 const GroceryTrackerApp = () => {
   const [activeTab, setActiveTab] = useState('home');
@@ -10,7 +12,7 @@ const GroceryTrackerApp = () => {
   const { families, loading: familiesLoading } = useFamilies();
   const { products, loading: productsLoading, updateProduct } = useProducts(selectedFamilyId);
   const { receipts, loading: receiptsLoading } = useReceipts(selectedFamilyId);
-  const { stats: monthlyStatsData, loading: statsLoading } = useMonthlyStats(selectedFamilyId);
+  const { stats: monthlyStatsData, loading: statsLoading, recalculateStats, error: statsError } = useMonthlyStats(selectedFamilyId);
 
   // Находим выбранную семью
   const selectedFamily = families.find(f => f.id === selectedFamilyId)?.name || 'Моя семья';
@@ -19,6 +21,7 @@ const GroceryTrackerApp = () => {
   const processedProducts = products.map(product => ({
     id: product.id,
     name: product.name,
+    originalName: product.original_name,
     lastPurchase: product.last_purchase,
     avgDays: product.avg_days,
     predictedEnd: product.predicted_end,
@@ -90,7 +93,34 @@ const GroceryTrackerApp = () => {
     <div className="space-y-6">
       {/* Статистика за месяц */}
       <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl p-6 text-white">
-        <h2 className="text-lg font-semibold mb-4">Статистика за октябрь</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold">Статистика за октябрь</h2>
+          <button
+            onClick={async () => {
+              try {
+                await recalculateStats();
+              } catch (error) {
+                console.error('Ошибка пересчета статистики:', error);
+              }
+            }}
+            disabled={statsLoading}
+            className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+              statsLoading 
+                ? 'bg-white/10 text-white/50 cursor-not-allowed' 
+                : 'bg-white/20 hover:bg-white/30'
+            }`}
+            title="Пересчитать статистику"
+          >
+            {statsLoading ? 'Обновление...' : 'Обновить'}
+          </button>
+        </div>
+        {statsError && (
+          <div className="bg-red-100 border border-red-300 rounded-lg p-3 mb-4">
+            <div className="text-red-800 text-sm">
+              <strong>Ошибка:</strong> {statsError}
+            </div>
+          </div>
+        )}
         {statsLoading ? (
           <div className="text-center py-4">Загрузка статистики...</div>
         ) : (
@@ -127,6 +157,9 @@ const GroceryTrackerApp = () => {
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex-1">
                     <h4 className="font-semibold text-gray-900">{product.name}</h4>
+                    {product.originalName && (
+                      <div className="text-xs text-gray-400 mt-0.5">{product.originalName}</div>
+                    )}
                     <div className="text-sm text-gray-500 mt-1">
                       Куплено {product.purchaseCount} раз
                     </div>
@@ -171,42 +204,225 @@ const GroceryTrackerApp = () => {
   );
 
   // Страница загрузки чека
-  const UploadPage = () => (
-    <div className="space-y-6">
-      <h2 className="text-2xl font-bold">Загрузить чек</h2>
-      
-      <div className="border-2 border-dashed border-gray-300 rounded-2xl p-12 text-center bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer">
-        <Camera size={48} className="mx-auto text-gray-400 mb-4" />
-        <p className="text-lg font-semibold text-gray-700 mb-2">Сфотографируйте чек</p>
-        <p className="text-sm text-gray-500">или выберите фото из галереи</p>
-        <button className="mt-6 bg-indigo-600 text-white px-6 py-3 rounded-xl font-semibold hover:bg-indigo-700 transition-colors">
-          Выбрать фото
-        </button>
-      </div>
+  const UploadPage = () => {
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [uploadError, setUploadError] = useState<string | null>(null);
+    const [uploadSuccess, setUploadSuccess] = useState(false);
+    const [parsedItems, setParsedItems] = useState<ReceiptItem[] | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
-      <div className="mt-8">
-        <h3 className="text-lg font-semibold mb-4">Последние чеки</h3>
-        <div className="space-y-3">
-          {receiptsLoading ? (
-            <div className="text-center py-8 text-gray-500">Загрузка чеков...</div>
-          ) : (
-            processedReceipts.map(receipt => (
-              <div key={receipt.id} className="bg-white rounded-xl p-4 border border-gray-200 flex items-center justify-between">
-                <div>
-                  <div className="font-semibold text-gray-900">{new Date(receipt.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}</div>
-                  <div className="text-sm text-gray-500">{receipt.items} товаров</div>
-                </div>
-                <div className="text-right">
-                  <div className="font-bold text-gray-900">€{receipt.total.toFixed(2)}</div>
-                  <div className="text-xs text-green-600">Обработан</div>
+    const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        setUploadError('Пожалуйста, выберите файл изображения');
+        return;
+      }
+
+      // Validate file size (max 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        setUploadError('Размер файла не должен превышать 10MB');
+        return;
+      }
+
+      setIsProcessing(true);
+      setUploadError(null);
+      setUploadSuccess(false);
+      setParsedItems(null);
+
+      try {
+        // Parse receipt using Perplexity AI
+        const parsedReceipt = await parseReceiptImage(file);
+        
+        // Process receipt and save to database
+        await SupabaseService.processReceipt(
+          selectedFamilyId,
+          parsedReceipt.items,
+          parsedReceipt.total,
+          parsedReceipt.date || new Date().toISOString().split('T')[0]
+        );
+
+        setParsedItems(parsedReceipt.items);
+        setUploadSuccess(true);
+        
+        // Show success message for 3 seconds
+        setTimeout(() => {
+          setUploadSuccess(false);
+          setParsedItems(null);
+        }, 5000);
+
+      } catch (error) {
+        console.error('Error processing receipt:', error);
+        setUploadError(
+          error instanceof Error 
+            ? `Ошибка обработки чека: ${error.message}` 
+            : 'Не удалось обработать чек. Попробуйте еще раз.'
+        );
+      } finally {
+        setIsProcessing(false);
+        // Reset file input
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      }
+    };
+
+    const triggerFileInput = () => {
+      fileInputRef.current?.click();
+    };
+
+    return (
+      <div className="space-y-6">
+        <h2 className="text-2xl font-bold">Загрузить чек</h2>
+        
+        {/* Success Message */}
+        {uploadSuccess && parsedItems && (
+          <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+            <div className="flex items-start gap-3 mb-3">
+              <CheckCircle size={24} className="text-green-600 flex-shrink-0 mt-1" />
+              <div className="flex-1">
+                <div className="font-semibold text-green-900 mb-1">Чек успешно обработан!</div>
+                <div className="text-sm text-green-700 mb-2">Добавлено {parsedItems.length} товаров:</div>
+                <div className="space-y-2">
+                  {parsedItems.map((item, idx) => (
+                    <div key={idx} className="text-xs text-green-800">
+                      <div className="font-medium">{item.name}</div>
+                      <div className="text-[10px] text-green-600 opacity-75 mb-0.5">{item.originalName}</div>
+                      <div>{item.quantity} {item.unit} - €{item.price.toFixed(2)} ({item.calories} ккал)</div>
+                    </div>
+                  ))}
                 </div>
               </div>
-            ))
+            </div>
+          </div>
+        )}
+
+        {/* Error Message */}
+        {uploadError && (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+            <div className="flex items-start gap-3">
+              <XCircle size={24} className="text-red-600 flex-shrink-0" />
+              <div className="flex-1">
+                <div className="font-semibold text-red-900 mb-1">Ошибка</div>
+                <div className="text-sm text-red-700">{uploadError}</div>
+              </div>
+              <button 
+                onClick={() => setUploadError(null)}
+                className="text-red-400 hover:text-red-600"
+              >
+                <X size={20} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Upload Area */}
+        <div 
+          onClick={!isProcessing ? triggerFileInput : undefined}
+          className={`border-2 border-dashed rounded-2xl p-12 text-center transition-all ${
+            isProcessing 
+              ? 'border-indigo-300 bg-indigo-50 cursor-not-allowed' 
+              : 'border-gray-300 bg-gray-50 hover:bg-gray-100 hover:border-indigo-400 cursor-pointer'
+          }`}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={handleFileSelect}
+            className="hidden"
+            disabled={isProcessing}
+          />
+          
+          {isProcessing ? (
+            <>
+              <Loader2 size={48} className="mx-auto text-indigo-600 mb-4 animate-spin" />
+              <p className="text-lg font-semibold text-gray-700 mb-2">Обрабатываем чек...</p>
+              <p className="text-sm text-gray-500">Это может занять несколько секунд</p>
+            </>
+          ) : (
+            <>
+              <Camera size={48} className="mx-auto text-gray-400 mb-4" />
+              <p className="text-lg font-semibold text-gray-700 mb-2">Сфотографируйте чек</p>
+              <p className="text-sm text-gray-500 mb-4">или выберите фото из галереи</p>
+              <div className="flex gap-3 justify-center">
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    triggerFileInput();
+                  }}
+                  className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-semibold hover:bg-indigo-700 transition-colors flex items-center gap-2"
+                >
+                  <Camera size={20} />
+                  Камера
+                </button>
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    triggerFileInput();
+                  }}
+                  className="bg-white text-indigo-600 border-2 border-indigo-600 px-6 py-3 rounded-xl font-semibold hover:bg-indigo-50 transition-colors flex items-center gap-2"
+                >
+                  <Upload size={20} />
+                  Галерея
+                </button>
+              </div>
+            </>
           )}
         </div>
+
+        {/* Info Box */}
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+          <div className="flex items-start gap-3">
+            <AlertCircle size={20} className="text-blue-600 flex-shrink-0 mt-0.5" />
+            <div className="text-sm text-blue-800">
+              <p className="font-semibold mb-1">Как это работает:</p>
+              <ul className="space-y-1 list-disc list-inside">
+                <li>Сфотографируйте чек или выберите фото</li>
+                <li>AI автоматически распознает продукты, цены и количество</li>
+                <li>Калории рассчитываются для полного купленного объема</li>
+                <li>Все данные автоматически добавляются в ваш список</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        {/* Recent Receipts */}
+        <div className="mt-8">
+          <h3 className="text-lg font-semibold mb-4">Последние чеки</h3>
+          <div className="space-y-3">
+            {receiptsLoading ? (
+              <div className="text-center py-8 text-gray-500">Загрузка чеков...</div>
+            ) : processedReceipts.length === 0 ? (
+              <div className="text-center py-8 text-gray-400">
+                <Camera size={48} className="mx-auto mb-3 opacity-50" />
+                <p>Пока нет загруженных чеков</p>
+              </div>
+            ) : (
+              processedReceipts.map(receipt => (
+                <div key={receipt.id} className="bg-white rounded-xl p-4 border border-gray-200 flex items-center justify-between hover:shadow-md transition-shadow">
+                  <div>
+                    <div className="font-semibold text-gray-900">{new Date(receipt.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}</div>
+                    <div className="text-sm text-gray-500">{receipt.items} товаров</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-bold text-gray-900">€{receipt.total.toFixed(2)}</div>
+                    <div className="text-xs text-green-600 flex items-center gap-1">
+                      <CheckCircle size={12} />
+                      Обработан
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   // Страница аналитики
   const AnalyticsPage = () => {
@@ -512,6 +728,7 @@ const GroceryTrackerApp = () => {
   const ProductsPage = () => {
     const [editingId, setEditingId] = useState<number | null>(null);
     const [editedCalories, setEditedCalories] = useState<string>('');
+    const [showSuccessMessage, setShowSuccessMessage] = useState(false);
 
     const startEditing = (product: typeof processedProducts[0]) => {
       setEditingId(product.id);
@@ -530,6 +747,10 @@ const GroceryTrackerApp = () => {
           await updateProduct(productId, { calories: newCalories });
           setEditingId(null);
           setEditedCalories('');
+          
+          // Показываем уведомление о пересчете статистики
+          setShowSuccessMessage(true);
+          setTimeout(() => setShowSuccessMessage(false), 3000);
         } catch (error) {
           console.error('Ошибка обновления калорий:', error);
         }
@@ -540,6 +761,17 @@ const GroceryTrackerApp = () => {
       <div className="space-y-6">
         <h2 className="text-2xl font-bold">Мои продукты</h2>
         
+        {/* Уведомление о пересчете статистики */}
+        {showSuccessMessage && (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3">
+            <CheckCircle size={20} className="text-green-600" />
+            <div>
+              <div className="font-medium text-green-800">Калорийность обновлена</div>
+              <div className="text-sm text-green-600">Статистика автоматически пересчитана</div>
+            </div>
+          </div>
+        )}
+        
         <div className="space-y-3">
           {productsLoading ? (
             <div className="text-center py-8 text-gray-500">Загрузка продуктов...</div>
@@ -549,6 +781,9 @@ const GroceryTrackerApp = () => {
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1">
                     <h3 className="font-semibold text-gray-900 text-lg">{product.name}</h3>
+                    {product.originalName && (
+                      <div className="text-xs text-gray-400 mt-0.5">{product.originalName}</div>
+                    )}
                     <div className="text-sm text-gray-500 mt-1">
                       Куплено {product.purchaseCount} раз
                     </div>

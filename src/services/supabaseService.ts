@@ -230,4 +230,213 @@ export class SupabaseService {
       status: stats.status
     })
   }
+
+  // Метод для ручного пересчета статистики
+  static async recalculateMonthlyStats(familyId: number, month: string, year: number): Promise<void> {
+    console.log('📊 Пересчитываем статистику с параметрами:', { familyId, month, year })
+    
+    try {
+      // Сначала пробуем RPC функцию
+      const { error: rpcError } = await supabase.rpc('recalculate_monthly_stats', {
+        p_family_id: familyId,
+        p_month: month,
+        p_year: year
+      })
+
+      if (rpcError) {
+        console.warn('⚠️ RPC функция недоступна, используем альтернативный метод:', rpcError)
+        await this.recalculateMonthlyStatsAlternative(familyId, month, year)
+      } else {
+        console.log('✅ RPC вызов успешен')
+      }
+    } catch (error) {
+      console.error('❌ Ошибка пересчета статистики:', error)
+      throw error
+    }
+  }
+
+  // Альтернативный метод пересчета статистики без RPC
+  static async recalculateMonthlyStatsAlternative(familyId: number, month: string, year: number): Promise<void> {
+    console.log('🔄 Используем альтернативный метод пересчета статистики')
+    
+    // Получаем все покупки за указанный месяц
+    const { data: history, error: historyError } = await supabase
+      .from('product_history')
+      .select(`
+        quantity,
+        date,
+        products!inner(calories)
+      `)
+      .eq('family_id', familyId)
+      .gte('date', `${year}-${month.padStart(2, '0')}-01`)
+      .lt('date', `${year}-${String(parseInt(month) + 1).padStart(2, '0')}-01`)
+
+    if (historyError) {
+      console.error('❌ Ошибка получения истории покупок:', historyError)
+      throw historyError
+    }
+
+    // Получаем все чеки за указанный месяц
+    const { data: receipts, error: receiptsError } = await supabase
+      .from('receipts')
+      .select('total_amount')
+      .eq('family_id', familyId)
+      .gte('date', `${year}-${month.padStart(2, '0')}-01`)
+      .lt('date', `${year}-${String(parseInt(month) + 1).padStart(2, '0')}-01`)
+
+    if (receiptsError) {
+      console.error('❌ Ошибка получения чеков:', receiptsError)
+      throw receiptsError
+    }
+
+    // Вычисляем статистику
+    const totalSpent = receipts?.reduce((sum, receipt) => sum + (receipt.total_amount || 0), 0) || 0
+    const totalCalories = history?.reduce((sum, item: any) => {
+      const calories = item.products?.calories || 0
+      const quantity = item.quantity || 0
+      return sum + (calories * quantity)
+    }, 0) || 0
+    
+    const daysInMonth = new Date(year, parseInt(month), 0).getDate()
+    const avgCaloriesPerDay = Math.round(totalCalories / daysInMonth)
+    const receiptsCount = receipts?.length || 0
+
+    console.log('📊 Вычисленная статистика:', {
+      totalSpent,
+      totalCalories,
+      avgCaloriesPerDay,
+      receiptsCount
+    })
+
+    // Обновляем или создаем запись статистики
+    const { error: upsertError } = await supabase
+      .from('monthly_stats')
+      .upsert({
+        family_id: familyId,
+        month: `${year}-${month.padStart(2, '0')}`,
+        year: year,
+        total_spent: totalSpent,
+        total_calories: totalCalories,
+        avg_calories_per_day: avgCaloriesPerDay,
+        receipts_count: receiptsCount
+      }, {
+        onConflict: 'family_id,month,year'
+      })
+
+    if (upsertError) {
+      console.error('❌ Ошибка сохранения статистики:', upsertError)
+      throw upsertError
+    }
+
+    console.log('✅ Статистика успешно пересчитана альтернативным методом')
+  }
+
+  // Метод для пересчета статистики при изменении калорийности продукта
+  static async recalculateStatsForProduct(productId: number, familyId: number): Promise<void> {
+    // Получаем все месяцы, где есть покупки этого продукта
+    const history = await this.getProductHistory(productId, familyId)
+    
+    if (history.length === 0) return
+
+    // Получаем уникальные месяцы и годы
+    const months = new Set<string>()
+    history.forEach(item => {
+      const date = new Date(item.date)
+      const year = date.getFullYear()
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      months.add(`${year}-${month}`)
+    })
+
+    // Пересчитываем статистику для каждого месяца
+    for (const monthYear of months) {
+      const [year, month] = monthYear.split('-')
+      await this.recalculateMonthlyStats(familyId, month, parseInt(year))
+    }
+  }
+
+  // Метод для обработки распарсенного чека
+  static async processReceipt(
+    familyId: number,
+    items: Array<{
+      name: string
+      originalName?: string
+      quantity: number
+      price: number
+      calories: number
+    }>,
+    total: number,
+    date: string
+  ): Promise<Receipt> {
+    // Создаем чек
+    const receipt = await this.createReceipt({
+      family_id: familyId,
+      date: date,
+      items_count: items.length,
+      total_amount: total,
+      status: 'processed'
+    })
+
+    // Обрабатываем каждый товар
+    for (const item of items) {
+      // Ищем существующий продукт или создаем новый
+      const { data: existingProducts } = await supabase
+        .from('products')
+        .select('*')
+        .eq('family_id', familyId)
+        .ilike('name', item.name)
+        .limit(1)
+
+      let product: Product
+
+      if (existingProducts && existingProducts.length > 0) {
+        // Обновляем существующий продукт
+        product = existingProducts[0]
+        const unitPrice = item.quantity > 0 ? item.price / item.quantity : item.price
+        
+        await this.updateProduct(product.id, {
+          last_purchase: date,
+          price: unitPrice,
+          calories: Math.round(item.calories / (item.quantity || 1)), // Store per unit
+          purchase_count: (product.purchase_count || 0) + 1,
+          original_name: item.originalName || product.original_name
+        })
+      } else {
+        // Создаем новый продукт
+        const unitPrice = item.quantity > 0 ? item.price / item.quantity : item.price
+        product = await this.createProduct({
+          name: item.name,
+          original_name: item.originalName,
+          family_id: familyId,
+          last_purchase: date,
+          price: unitPrice,
+          calories: Math.round(item.calories / (item.quantity || 1)), // Store per unit
+          purchase_count: 1,
+          status: 'calculating',
+          avg_days: null,
+          predicted_end: null
+        })
+      }
+
+      // Добавляем запись в историю покупок
+      await this.addProductHistory({
+        product_id: product.id,
+        family_id: familyId,
+        date: date,
+        quantity: item.quantity,
+        price: item.price,
+        unit_price: item.quantity > 0 ? item.price / item.quantity : item.price
+      })
+
+      // Обновляем статистику продукта
+      await this.updateProductStats(product.id, familyId)
+    }
+
+    // Пересчитываем месячную статистику
+    const receiptDate = new Date(date)
+    const year = receiptDate.getFullYear()
+    const month = String(receiptDate.getMonth() + 1).padStart(2, '0')
+    await this.recalculateMonthlyStats(familyId, month, year)
+
+    return receipt
+  }
 }

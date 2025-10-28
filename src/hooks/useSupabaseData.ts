@@ -26,6 +26,12 @@ export const useProducts = (familyId: number) => {
       setError(null)
       const updatedProduct = await SupabaseService.updateProduct(id, updates)
       setProducts(prev => prev.map(p => p.id === id ? updatedProduct : p))
+      
+      // Если изменилась калорийность, пересчитываем статистику
+      if (updates.calories !== undefined) {
+        await SupabaseService.recalculateStatsForProduct(id, familyId)
+      }
+      
       return updatedProduct
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ошибка обновления продукта')
@@ -259,6 +265,29 @@ export const useMonthlyStats = (familyId: number, month?: string, year?: number)
     }
   }
 
+  const recalculateStats = async (month?: string, year?: number) => {
+    try {
+      setError(null)
+      setLoading(true) // Показываем индикатор загрузки
+      const currentDate = new Date()
+      const targetMonth = month || String(currentDate.getMonth() + 1).padStart(2, '0')
+      const targetYear = year || currentDate.getFullYear()
+      
+      console.log('🔄 Пересчитываем статистику для:', { familyId, targetMonth, targetYear })
+      
+      await SupabaseService.recalculateMonthlyStats(familyId, targetMonth, targetYear)
+      await fetchStats() // Обновляем локальные данные
+      
+      console.log('✅ Статистика успешно пересчитана')
+    } catch (err) {
+      console.error('❌ Ошибка пересчета статистики:', err)
+      setError(err instanceof Error ? err.message : 'Ошибка пересчета статистики')
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }
+
   useEffect(() => {
     if (familyId) {
       fetchStats()
@@ -270,6 +299,7 @@ export const useMonthlyStats = (familyId: number, month?: string, year?: number)
     loading,
     error,
     refetch: fetchStats,
-    createOrUpdateStats
+    createOrUpdateStats,
+    recalculateStats
   }
 }

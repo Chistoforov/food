@@ -14,6 +14,7 @@ CREATE TABLE families (
 CREATE TABLE products (
   id SERIAL PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
+  original_name VARCHAR(255),
   last_purchase DATE,
   avg_days INTEGER,
   predicted_end DATE,
@@ -85,6 +86,120 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
+-- Функция для пересчета месячной статистики
+CREATE OR REPLACE FUNCTION recalculate_monthly_stats(p_family_id INTEGER, p_month VARCHAR(10), p_year INTEGER)
+RETURNS VOID AS $$
+DECLARE
+    v_total_spent DECIMAL(10,2) := 0;
+    v_total_calories INTEGER := 0;
+    v_avg_calories_per_day INTEGER := 0;
+    v_receipts_count INTEGER := 0;
+    v_days_in_month INTEGER;
+BEGIN
+    -- Получаем количество дней в месяце
+    v_days_in_month := EXTRACT(DAY FROM (DATE_TRUNC('month', (p_year || '-' || p_month || '-01')::DATE) + INTERVAL '1 month - 1 day'));
+    
+    -- Вычисляем общую сумму потраченную в месяце
+    SELECT COALESCE(SUM(total_amount), 0)
+    INTO v_total_spent
+    FROM receipts 
+    WHERE family_id = p_family_id 
+    AND EXTRACT(YEAR FROM date) = p_year 
+    AND EXTRACT(MONTH FROM date) = EXTRACT(MONTH FROM (p_year || '-' || p_month || '-01')::DATE);
+    
+    -- Вычисляем общее количество калорий в месяце
+    SELECT COALESCE(SUM(p.calories * ph.quantity), 0)
+    INTO v_total_calories
+    FROM product_history ph
+    JOIN products p ON ph.product_id = p.id
+    WHERE ph.family_id = p_family_id 
+    AND EXTRACT(YEAR FROM ph.date) = p_year 
+    AND EXTRACT(MONTH FROM ph.date) = EXTRACT(MONTH FROM (p_year || '-' || p_month || '-01')::DATE);
+    
+    -- Вычисляем среднее количество калорий в день
+    v_avg_calories_per_day := CASE 
+        WHEN v_days_in_month > 0 THEN v_total_calories / v_days_in_month 
+        ELSE 0 
+    END;
+    
+    -- Подсчитываем количество чеков
+    SELECT COUNT(*)
+    INTO v_receipts_count
+    FROM receipts 
+    WHERE family_id = p_family_id 
+    AND EXTRACT(YEAR FROM date) = p_year 
+    AND EXTRACT(MONTH FROM date) = EXTRACT(MONTH FROM (p_year || '-' || p_month || '-01')::DATE);
+    
+    -- Обновляем или создаем запись статистики
+    INSERT INTO monthly_stats (family_id, month, year, total_spent, total_calories, avg_calories_per_day, receipts_count)
+    VALUES (p_family_id, p_month, p_year, v_total_spent, v_total_calories, v_avg_calories_per_day, v_receipts_count)
+    ON CONFLICT (family_id, month, year) 
+    DO UPDATE SET 
+        total_spent = EXCLUDED.total_spent,
+        total_calories = EXCLUDED.total_calories,
+        avg_calories_per_day = EXCLUDED.avg_calories_per_day,
+        receipts_count = EXCLUDED.receipts_count,
+        updated_at = NOW();
+END;
+$$ LANGUAGE plpgsql;
+
+-- Функция для пересчета статистики при изменении продукта
+CREATE OR REPLACE FUNCTION recalculate_stats_on_product_change()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_family_id INTEGER;
+    v_month VARCHAR(10);
+    v_year INTEGER;
+    v_current_date DATE;
+BEGIN
+    -- Получаем family_id из измененного продукта
+    v_family_id := NEW.family_id;
+    
+    -- Получаем текущую дату
+    v_current_date := CURRENT_DATE;
+    v_year := EXTRACT(YEAR FROM v_current_date);
+    v_month := LPAD(EXTRACT(MONTH FROM v_current_date)::TEXT, 2, '0');
+    
+    -- Пересчитываем статистику для текущего месяца
+    PERFORM recalculate_monthly_stats(v_family_id, v_year || '-' || v_month, v_year);
+    
+    -- Если изменилась калорийность, пересчитываем статистику для всех месяцев, где есть покупки этого продукта
+    IF OLD.calories != NEW.calories THEN
+        -- Пересчитываем статистику для всех месяцев, где есть покупки этого продукта
+        FOR v_year, v_month IN 
+            SELECT DISTINCT 
+                EXTRACT(YEAR FROM ph.date)::INTEGER,
+                LPAD(EXTRACT(MONTH FROM ph.date)::TEXT, 2, '0')
+            FROM product_history ph
+            WHERE ph.product_id = NEW.id
+        LOOP
+            PERFORM recalculate_monthly_stats(v_family_id, v_year || '-' || v_month, v_year);
+        END LOOP;
+    END IF;
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Функция для пересчета статистики при добавлении новой покупки
+CREATE OR REPLACE FUNCTION recalculate_stats_on_history_insert()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_family_id INTEGER;
+    v_month VARCHAR(10);
+    v_year INTEGER;
+BEGIN
+    v_family_id := NEW.family_id;
+    v_year := EXTRACT(YEAR FROM NEW.date);
+    v_month := LPAD(EXTRACT(MONTH FROM NEW.date)::TEXT, 2, '0');
+    
+    -- Пересчитываем статистику для месяца покупки
+    PERFORM recalculate_monthly_stats(v_family_id, v_year || '-' || v_month, v_year);
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
 -- Триггеры для автоматического обновления updated_at
 CREATE TRIGGER update_families_updated_at BEFORE UPDATE ON families
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
@@ -94,6 +209,18 @@ CREATE TRIGGER update_products_updated_at BEFORE UPDATE ON products
 
 CREATE TRIGGER update_monthly_stats_updated_at BEFORE UPDATE ON monthly_stats
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Триггер для автоматического пересчета статистики при изменении продукта
+CREATE TRIGGER recalculate_stats_on_product_update 
+    AFTER UPDATE ON products
+    FOR EACH ROW 
+    EXECUTE FUNCTION recalculate_stats_on_product_change();
+
+-- Триггер для пересчета статистики при добавлении новой покупки
+CREATE TRIGGER recalculate_stats_on_history_insert
+    AFTER INSERT ON product_history
+    FOR EACH ROW 
+    EXECUTE FUNCTION recalculate_stats_on_history_insert();
 
 -- Вставка тестовых данных
 INSERT INTO families (name, member_count) VALUES ('Моя семья', 2);
