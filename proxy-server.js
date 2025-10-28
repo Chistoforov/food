@@ -11,11 +11,13 @@ app.use(express.json({ limit: '50mb' }));
 // Proxy endpoint for Perplexity API
 app.post('/api/perplexity', async (req, res) => {
   try {
-    const PERPLEXITY_API_KEY = process.env.VITE_PERPLEXITY_API_KEY;
+    // On Vercel, use PERPLEXITY_API_KEY (without VITE_ prefix)
+    // On local, try both VITE_PERPLEXITY_API_KEY and PERPLEXITY_API_KEY
+    const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY || process.env.VITE_PERPLEXITY_API_KEY;
     
     if (!PERPLEXITY_API_KEY) {
       return res.status(500).json({ 
-        error: 'Perplexity API key not configured' 
+        error: 'Perplexity API key not configured. Please set PERPLEXITY_API_KEY environment variable.' 
       });
     }
 

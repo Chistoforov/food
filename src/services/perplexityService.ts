@@ -1,7 +1,11 @@
 // Service for Perplexity API integration to parse receipt images
 
-// Use local proxy server to avoid CORS issues
-const PROXY_URL = import.meta.env.VITE_PROXY_URL || 'http://localhost:3001/api/perplexity';
+// Use proxy server to avoid CORS issues
+// On production (Vercel), use relative path /api/perplexity
+// On local development, use localhost:3001
+const PROXY_URL = import.meta.env.PROD 
+  ? '/api/perplexity' 
+  : (import.meta.env.VITE_PROXY_URL || 'http://localhost:3001/api/perplexity');
 
 export interface ReceiptItem {
   name: string; // Russian name
