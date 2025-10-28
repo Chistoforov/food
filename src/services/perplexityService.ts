@@ -1,11 +1,10 @@
 // Service for Perplexity API integration to parse receipt images
 
 // Use proxy server to avoid CORS issues
-// On production (Vercel), use relative path /api/perplexity
-// On local development, use localhost:3001
-const PROXY_URL = import.meta.env.PROD 
-  ? '/api/perplexity' 
-  : (import.meta.env.VITE_PROXY_URL || 'http://localhost:3001/api/perplexity');
+// Use relative path /api/perplexity for both production and development
+// In development, Vite proxy will forward to localhost:3001
+// In production, Vercel will forward to serverless function
+const PROXY_URL = '/api/perplexity';
 
 export interface ReceiptItem {
   name: string; // Russian name
@@ -78,34 +77,42 @@ export async function parseReceiptImage(imageFile: File): Promise<ParsedReceipt>
 Верни только JSON без дополнительного текста.`;
 
     // Make API call to Perplexity via proxy server
-    const response = await fetch(PROXY_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: 'sonar-pro',
-        messages: [
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'text',
-                text: prompt
-              },
-              {
-                type: 'image_url',
-                image_url: {
-                  url: base64Image
+    console.log('Making request to:', PROXY_URL);
+    
+    let response;
+    try {
+      response = await fetch(PROXY_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'sonar-pro',
+          messages: [
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'text',
+                  text: prompt
+                },
+                {
+                  type: 'image_url',
+                  image_url: {
+                    url: base64Image
+                  }
                 }
-              }
-            ]
-          }
-        ],
-        temperature: 0.2,
-        max_tokens: 2000
-      })
-    });
+              ]
+            }
+          ],
+          temperature: 0.2,
+          max_tokens: 2000
+        })
+      });
+    } catch (fetchError) {
+      console.error('Network error:', fetchError);
+      throw new Error(`Не удалось подключиться к прокси-серверу. Убедитесь, что прокси-сервер запущен (npm run proxy) и доступен по адресу ${PROXY_URL}. Ошибка: ${fetchError instanceof Error ? fetchError.message : 'Network error'}`);
+    }
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));

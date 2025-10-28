@@ -1,0 +1,10 @@
+node_modules
+.git
+*.md
+.env
+.env.local
+proxy-server-local.js
+test_*.js
+*.sql
+dist
+
