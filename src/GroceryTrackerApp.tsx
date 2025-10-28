@@ -217,26 +217,37 @@ const GroceryTrackerApp = () => {
     const [selectedProduct, setSelectedProduct] = useState(null);
     const [dateRange, setDateRange] = useState('month'); // week, month, 3months, all
     const [showProductSelect, setShowProductSelect] = useState(false);
+    const [chartType, setChartType] = useState('quantity'); // quantity, price
 
     // Моковые данные для графика продукта
     const productHistory = {
       1: [ // Молоко
-        { date: '2024-09-15', quantity: 1, price: 1.89 },
-        { date: '2024-09-22', quantity: 1, price: 1.89 },
-        { date: '2024-09-29', quantity: 2, price: 3.78 },
-        { date: '2024-10-06', quantity: 1, price: 1.89 },
-        { date: '2024-10-13', quantity: 1, price: 1.89 },
-        { date: '2024-10-21', quantity: 1, price: 1.89 },
+        { date: '2024-09-15', quantity: 1, price: 1.89, unitPrice: 1.89 },
+        { date: '2024-09-22', quantity: 1, price: 1.89, unitPrice: 1.89 },
+        { date: '2024-09-29', quantity: 2, price: 3.78, unitPrice: 1.89 },
+        { date: '2024-10-06', quantity: 1, price: 1.95, unitPrice: 1.95 },
+        { date: '2024-10-13', quantity: 1, price: 1.95, unitPrice: 1.95 },
+        { date: '2024-10-21', quantity: 1, price: 1.89, unitPrice: 1.89 },
       ],
       2: [ // Хлеб
-        { date: '2024-10-02', quantity: 1, price: 1.25 },
-        { date: '2024-10-05', quantity: 1, price: 1.25 },
-        { date: '2024-10-09', quantity: 2, price: 2.50 },
-        { date: '2024-10-12', quantity: 1, price: 1.25 },
-        { date: '2024-10-16', quantity: 1, price: 1.25 },
-        { date: '2024-10-19', quantity: 1, price: 1.25 },
-        { date: '2024-10-22', quantity: 1, price: 1.25 },
-        { date: '2024-10-25', quantity: 1, price: 1.25 },
+        { date: '2024-10-02', quantity: 1, price: 1.25, unitPrice: 1.25 },
+        { date: '2024-10-05', quantity: 1, price: 1.25, unitPrice: 1.25 },
+        { date: '2024-10-09', quantity: 2, price: 2.50, unitPrice: 1.25 },
+        { date: '2024-10-12', quantity: 1, price: 1.30, unitPrice: 1.30 },
+        { date: '2024-10-16', quantity: 1, price: 1.30, unitPrice: 1.30 },
+        { date: '2024-10-19', quantity: 1, price: 1.25, unitPrice: 1.25 },
+        { date: '2024-10-22', quantity: 1, price: 1.25, unitPrice: 1.25 },
+        { date: '2024-10-25', quantity: 1, price: 1.20, unitPrice: 1.20 },
+      ],
+      3: [ // Сникерс
+        { date: '2024-09-10', quantity: 1, price: 0.89, unitPrice: 0.89 },
+        { date: '2024-09-24', quantity: 1, price: 0.89, unitPrice: 0.89 },
+        { date: '2024-10-08', quantity: 1, price: 0.95, unitPrice: 0.95 },
+        { date: '2024-10-20', quantity: 1, price: 0.95, unitPrice: 0.95 },
+      ],
+      4: [ // Творог
+        { date: '2024-10-15', quantity: 1, price: 2.49, unitPrice: 2.49 },
+        { date: '2024-10-27', quantity: 1, price: 2.39, unitPrice: 2.39 },
       ]
     };
 
@@ -289,37 +300,81 @@ const GroceryTrackerApp = () => {
               )}
             </div>
 
-            {/* Выбор периода */}
+            {/* Выбор периода и типа графика */}
             {selectedProduct && (
               <>
-                <div className="flex gap-2">
-                  {dateRangeOptions.map(option => (
+                <div className="space-y-4">
+                  {/* Переключатель типа графика */}
+                  <div className="flex gap-2">
                     <button
-                      key={option.value}
-                      onClick={() => setDateRange(option.value)}
+                      onClick={() => setChartType('quantity')}
                       className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
-                        dateRange === option.value
+                        chartType === 'quantity'
                           ? 'bg-indigo-600 text-white'
                           : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                       }`}
                     >
-                      {option.label}
+                      Количество
                     </button>
-                  ))}
+                    <button
+                      onClick={() => setChartType('price')}
+                      className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
+                        chartType === 'price'
+                          ? 'bg-indigo-600 text-white'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      Цена
+                    </button>
+                  </div>
+
+                  {/* Выбор периода */}
+                  <div className="flex gap-2">
+                    {dateRangeOptions.map(option => (
+                      <button
+                        key={option.value}
+                        onClick={() => setDateRange(option.value)}
+                        className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
+                          dateRange === option.value
+                            ? 'bg-indigo-600 text-white'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 {/* График */}
                 <div className="mt-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="font-semibold text-gray-900">
+                      {chartType === 'quantity' ? 'Динамика количества покупок' : 'Динамика цены продукта'}
+                    </h4>
+                    <div className="text-sm text-gray-500">
+                      {productHistory[selectedProduct]?.length} покупок
+                    </div>
+                  </div>
                   <div className="flex items-end justify-between gap-2 h-48 border-b border-gray-200 pb-2">
                     {productHistory[selectedProduct]?.map((item, i) => {
-                      const maxQuantity = Math.max(...productHistory[selectedProduct].map(h => h.quantity));
-                      const height = (item.quantity / maxQuantity) * 100;
+                      const data = chartType === 'quantity' ? item.quantity : item.unitPrice;
+                      const maxValue = chartType === 'quantity' 
+                        ? Math.max(...productHistory[selectedProduct].map(h => h.quantity))
+                        : Math.max(...productHistory[selectedProduct].map(h => h.unitPrice));
+                      const height = (data / maxValue) * 100;
                       
                       return (
                         <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                          <div className="text-xs font-semibold text-gray-700">{item.quantity}</div>
+                          <div className="text-xs font-semibold text-gray-700">
+                            {chartType === 'quantity' ? item.quantity : `€${item.unitPrice.toFixed(2)}`}
+                          </div>
                           <div 
-                            className="w-full bg-gradient-to-t from-indigo-500 to-indigo-400 rounded-t hover:from-indigo-600 hover:to-indigo-500 transition-colors cursor-pointer"
+                            className={`w-full rounded-t hover:opacity-80 transition-all cursor-pointer ${
+                              chartType === 'quantity' 
+                                ? 'bg-gradient-to-t from-indigo-500 to-indigo-400 hover:from-indigo-600 hover:to-indigo-500'
+                                : 'bg-gradient-to-t from-green-500 to-green-400 hover:from-green-600 hover:to-green-500'
+                            }`}
                             style={{ height: `${height}%` }}
                           ></div>
                         </div>
@@ -336,24 +391,65 @@ const GroceryTrackerApp = () => {
 
                   {/* Статистика по продукту */}
                   <div className="mt-6 grid grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg">
-                    <div>
-                      <div className="text-xs text-gray-500">Всего куплено</div>
-                      <div className="text-lg font-bold text-gray-900">
-                        {productHistory[selectedProduct]?.reduce((sum, item) => sum + item.quantity, 0)}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-gray-500">Потрачено</div>
-                      <div className="text-lg font-bold text-gray-900">
-                        €{productHistory[selectedProduct]?.reduce((sum, item) => sum + item.price, 0).toFixed(2)}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-gray-500">Частота</div>
-                      <div className="text-lg font-bold text-gray-900">
-                        {products.find(p => p.id === selectedProduct)?.avgDays} дн
-                      </div>
-                    </div>
+                    {chartType === 'quantity' ? (
+                      <>
+                        <div>
+                          <div className="text-xs text-gray-500">Всего куплено</div>
+                          <div className="text-lg font-bold text-gray-900">
+                            {productHistory[selectedProduct]?.reduce((sum, item) => sum + item.quantity, 0)}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500">Потрачено</div>
+                          <div className="text-lg font-bold text-gray-900">
+                            €{productHistory[selectedProduct]?.reduce((sum, item) => sum + item.price, 0).toFixed(2)}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500">Частота</div>
+                          <div className="text-lg font-bold text-gray-900">
+                            {products.find(p => p.id === selectedProduct)?.avgDays} дн
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div>
+                          <div className="text-xs text-gray-500">Средняя цена</div>
+                          <div className="text-lg font-bold text-gray-900">
+                            €{(productHistory[selectedProduct]?.reduce((sum, item) => sum + item.unitPrice, 0) / productHistory[selectedProduct]?.length).toFixed(2)}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500">Изменение</div>
+                          <div className={`text-lg font-bold ${
+                            (() => {
+                              const history = productHistory[selectedProduct];
+                              if (!history || history.length < 2) return 'text-gray-900';
+                              const firstPrice = history[0].unitPrice;
+                              const lastPrice = history[history.length - 1].unitPrice;
+                              const change = ((lastPrice - firstPrice) / firstPrice) * 100;
+                              return change > 0 ? 'text-red-600' : change < 0 ? 'text-green-600' : 'text-gray-900';
+                            })()
+                          }`}>
+                            {(() => {
+                              const history = productHistory[selectedProduct];
+                              if (!history || history.length < 2) return '—';
+                              const firstPrice = history[0].unitPrice;
+                              const lastPrice = history[history.length - 1].unitPrice;
+                              const change = ((lastPrice - firstPrice) / firstPrice) * 100;
+                              return `${change > 0 ? '+' : ''}${change.toFixed(1)}%`;
+                            })()}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500">Диапазон</div>
+                          <div className="text-lg font-bold text-gray-900">
+                            €{Math.min(...productHistory[selectedProduct]?.map(h => h.unitPrice)).toFixed(2)} - €{Math.max(...productHistory[selectedProduct]?.map(h => h.unitPrice)).toFixed(2)}
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               </>
