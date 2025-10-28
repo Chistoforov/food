@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "proxy": "node proxy-server.js"
+    "proxy": "node proxy-server-local.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.76.1",

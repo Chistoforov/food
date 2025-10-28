@@ -1,35 +1,22 @@
-// Serverless function for Vercel to proxy Perplexity API requests
-// This avoids CORS issues when calling Perplexity API from the browser
+// Local development proxy server
+// Run with: node proxy-server-local.js
+import express from 'express';
+import cors from 'cors';
 
-export default async function handler(req, res) {
-  // Enable CORS
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-  res.setHeader(
-    'Access-Control-Allow-Headers',
-    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
-  );
+const app = express();
 
-  // Handle preflight requests
-  if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
-  }
+// Enable CORS for all origins
+app.use(cors());
+app.use(express.json({ limit: '50mb' }));
 
-  // Only allow POST requests
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
+// Proxy endpoint for Perplexity API
+app.post('/api/perplexity', async (req, res) => {
   try {
-    // On Vercel, use PERPLEXITY_API_KEY (without VITE_ prefix)
     const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY || process.env.VITE_PERPLEXITY_API_KEY;
     
     if (!PERPLEXITY_API_KEY) {
-      console.error('API key not found in environment variables');
       return res.status(500).json({ 
-        error: 'Perplexity API key not configured. Please set PERPLEXITY_API_KEY environment variable.' 
+        error: 'Perplexity API key not configured. Please set PERPLEXITY_API_KEY or VITE_PERPLEXITY_API_KEY environment variable.' 
       });
     }
 
@@ -57,20 +44,25 @@ export default async function handler(req, res) {
     const data = await response.json();
     console.log('Successfully received response from Perplexity API');
     
-    // Log the response content for debugging
     if (data.choices && data.choices[0] && data.choices[0].message) {
       const content = data.choices[0].message.content;
       console.log('Response content preview:', content.substring(0, 200));
     }
     
-    return res.status(200).json(data);
+    res.json(data);
 
   } catch (error) {
     console.error('Proxy error:', error);
-    return res.status(500).json({ 
+    res.status(500).json({ 
       error: 'Failed to proxy request', 
       details: error.message 
     });
   }
-}
+});
+
+const PORT = process.env.PORT || 3001;
+app.listen(PORT, () => {
+  console.log(`🚀 Proxy server running on http://localhost:${PORT}`);
+  console.log(`📡 Forwarding requests to Perplexity API`);
+});
 
