@@ -49,9 +49,6 @@ const GroceryTrackerApp = () => {
     });
   };
 
-  const goToCurrentMonth = () => {
-    setSelectedMonth(null);
-  };
 
   const isCurrentMonth = () => {
     if (!selectedMonth) return true;
@@ -217,35 +214,24 @@ const GroceryTrackerApp = () => {
             </button>
           </div>
           
-          <div className="flex items-center space-x-2">
-            {!isCurrentMonth() && (
-              <button
-                onClick={goToCurrentMonth}
-                className="px-3 py-1 rounded-lg text-sm font-medium bg-white/20 hover:bg-white/30 transition-colors"
-                title="Вернуться к текущему месяцу"
-              >
-                Сегодня
-              </button>
-            )}
-            <button
-              onClick={async () => {
-                try {
-                  await recalculateStats();
-                } catch (error) {
-                  console.error('Ошибка пересчета статистики:', error);
-                }
-              }}
-              disabled={statsLoading}
-              className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                statsLoading 
-                  ? 'bg-white/10 text-white/50 cursor-not-allowed' 
-                  : 'bg-white/20 hover:bg-white/30'
-              }`}
-              title="Пересчитать статистику"
-            >
-              {statsLoading ? 'Обновление...' : 'Обновить'}
-            </button>
-          </div>
+          <button
+            onClick={async () => {
+              try {
+                await recalculateStats();
+              } catch (error) {
+                console.error('Ошибка пересчета статистики:', error);
+              }
+            }}
+            disabled={statsLoading}
+            className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+              statsLoading 
+                ? 'bg-white/10 text-white/50 cursor-not-allowed' 
+                : 'bg-white/20 hover:bg-white/30'
+            }`}
+            title="Пересчитать статистику"
+          >
+            {statsLoading ? 'Обновление...' : 'Обновить'}
+          </button>
         </div>
         {statsError && (
           <div className="bg-red-100 border border-red-300 rounded-lg p-3 mb-4">
