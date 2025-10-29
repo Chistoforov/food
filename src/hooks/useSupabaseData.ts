@@ -110,6 +110,17 @@ export const useReceipts = (familyId: number) => {
     }
   }
 
+  const deleteReceipt = async (id: number) => {
+    try {
+      setError(null)
+      await SupabaseService.deleteReceipt(id, familyId)
+      setReceipts(prev => prev.filter(r => r.id !== id))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Ошибка удаления чека')
+      throw err
+    }
+  }
+
   useEffect(() => {
     if (familyId) {
       fetchReceipts()
@@ -121,7 +132,8 @@ export const useReceipts = (familyId: number) => {
     loading,
     error,
     refetch: fetchReceipts,
-    createReceipt
+    createReceipt,
+    deleteReceipt
   }
 }
 

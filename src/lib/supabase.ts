@@ -59,6 +59,7 @@ export interface ProductHistory {
   price: number
   unit_price: number
   family_id: number
+  receipt_id?: number
   created_at: string
 }
 

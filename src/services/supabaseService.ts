@@ -80,6 +80,33 @@ export class SupabaseService {
     return data
   }
 
+  static async deleteReceipt(id: number, familyId: number): Promise<void> {
+    // Получаем информацию о чеке для пересчета статистики
+    const { data: receipt, error: fetchError } = await supabase
+      .from('receipts')
+      .select('date, family_id')
+      .eq('id', id)
+      .single()
+
+    if (fetchError) throw fetchError
+
+    // Удаляем чек (product_history удалится автоматически через CASCADE)
+    const { error: deleteError } = await supabase
+      .from('receipts')
+      .delete()
+      .eq('id', id)
+
+    if (deleteError) throw deleteError
+
+    // Пересчитываем статистику для месяца, в котором был чек
+    if (receipt) {
+      const receiptDate = new Date(receipt.date)
+      const year = receiptDate.getFullYear()
+      const month = String(receiptDate.getMonth() + 1).padStart(2, '0')
+      await this.recalculateMonthlyStats(familyId, month, year)
+    }
+  }
+
   // Работа с семьями
   static async getFamilies(): Promise<Family[]> {
     const { data, error } = await supabase
@@ -417,14 +444,15 @@ export class SupabaseService {
         })
       }
 
-      // Добавляем запись в историю покупок
+      // Добавляем запись в историю покупок с привязкой к чеку
       await this.addProductHistory({
         product_id: product.id,
         family_id: familyId,
         date: date,
         quantity: item.quantity,
         price: item.price,
-        unit_price: item.quantity > 0 ? item.price / item.quantity : item.price
+        unit_price: item.quantity > 0 ? item.price / item.quantity : item.price,
+        receipt_id: receipt.id
       })
 
       // Обновляем статистику продукта
