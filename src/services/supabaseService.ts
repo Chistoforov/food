@@ -80,30 +80,25 @@ export class SupabaseService {
     return data
   }
 
-  static async deleteReceipt(id: number, familyId: number): Promise<void> {
-    // Получаем информацию о чеке для пересчета статистики
-    const { data: receipt, error: fetchError } = await supabase
-      .from('receipts')
-      .select('date, family_id')
-      .eq('id', id)
-      .single()
+  static async deleteReceipt(id: number, _familyId: number): Promise<void> {
+    console.log('🗑️ Удаляем чек #' + id + ' из базы данных...')
+    
+    try {
+      // Удаляем чек (product_history удалится автоматически через CASCADE)
+      const { error: deleteError } = await supabase
+        .from('receipts')
+        .delete()
+        .eq('id', id)
 
-    if (fetchError) throw fetchError
+      if (deleteError) {
+        console.error('❌ Ошибка удаления чека:', deleteError)
+        throw deleteError
+      }
 
-    // Удаляем чек (product_history удалится автоматически через CASCADE)
-    const { error: deleteError } = await supabase
-      .from('receipts')
-      .delete()
-      .eq('id', id)
-
-    if (deleteError) throw deleteError
-
-    // Пересчитываем статистику для месяца, в котором был чек
-    if (receipt) {
-      const receiptDate = new Date(receipt.date)
-      const year = receiptDate.getFullYear()
-      const month = String(receiptDate.getMonth() + 1).padStart(2, '0')
-      await this.recalculateMonthlyStats(familyId, month, year)
+      console.log('✅ Чек успешно удален из базы данных')
+    } catch (error) {
+      console.error('❌ Полная ошибка удаления:', error)
+      throw error
     }
   }
 
@@ -263,28 +258,35 @@ export class SupabaseService {
     console.log('📊 Пересчитываем статистику с параметрами:', { familyId, month, year })
     
     try {
-      // Сначала пробуем RPC функцию
+      // Сначала пытаемся использовать RPC функцию
       const { error: rpcError } = await supabase.rpc('recalculate_monthly_stats', {
         p_family_id: familyId,
         p_month: month,
         p_year: year
       })
-
+      
       if (rpcError) {
-        console.warn('⚠️ RPC функция недоступна, используем альтернативный метод:', rpcError)
+        console.warn('⚠️ RPC функция недоступна, используем альтернативный метод:', rpcError.message)
+        // Используем альтернативный метод при любой ошибке RPC
         await this.recalculateMonthlyStatsAlternative(familyId, month, year)
       } else {
-        console.log('✅ RPC вызов успешен')
+        console.log('✅ Статистика пересчитана через RPC')
       }
-    } catch (error) {
-      console.error('❌ Ошибка пересчета статистики:', error)
-      throw error
+    } catch (error: any) {
+      // Если RPC не работает из-за сети или других причин, используем альтернативный метод
+      console.warn('⚠️ Ошибка RPC (возможно сеть или права доступа), используем альтернативный метод:', error?.message || error)
+      try {
+        await this.recalculateMonthlyStatsAlternative(familyId, month, year)
+      } catch (altError) {
+        console.error('❌ Ошибка альтернативного метода пересчета:', altError)
+        throw altError
+      }
     }
   }
 
   // Альтернативный метод пересчета статистики без RPC
   static async recalculateMonthlyStatsAlternative(familyId: number, month: string, year: number): Promise<void> {
-    console.log('🔄 Используем альтернативный метод пересчета статистики')
+    console.log('🔄 Используем альтернативный метод пересчета статистики для:', { month, year })
     
     // Получаем все покупки за указанный месяц
     const { data: history, error: historyError } = await supabase
@@ -292,7 +294,7 @@ export class SupabaseService {
       .select(`
         quantity,
         date,
-        products!inner(calories)
+        products(calories)
       `)
       .eq('family_id', familyId)
       .gte('date', `${year}-${month.padStart(2, '0')}-01`)
@@ -319,28 +321,48 @@ export class SupabaseService {
     // Вычисляем статистику
     const totalSpent = receipts?.reduce((sum, receipt) => sum + (receipt.total_amount || 0), 0) || 0
     const totalCalories = history?.reduce((sum, item: any) => {
-      const calories = item.products?.calories || 0
+      // Проверяем, что products существует и имеет calories
+      const calories = (item.products && typeof item.products.calories === 'number') ? item.products.calories : 0
       const quantity = item.quantity || 0
       return sum + (calories * quantity)
     }, 0) || 0
     
     const daysInMonth = new Date(year, parseInt(month), 0).getDate()
-    const avgCaloriesPerDay = Math.round(totalCalories / daysInMonth)
+    const avgCaloriesPerDay = daysInMonth > 0 ? Math.round(totalCalories / daysInMonth) : 0
     const receiptsCount = receipts?.length || 0
 
     console.log('📊 Вычисленная статистика:', {
       totalSpent,
       totalCalories,
       avgCaloriesPerDay,
-      receiptsCount
+      receiptsCount,
+      daysInMonth,
+      historyLength: history?.length || 0,
+      receiptsData: receipts?.map(r => r.total_amount),
+      historyData: history?.map((h: any) => ({ 
+        calories: h.products?.calories, 
+        quantity: h.quantity 
+      }))
     })
 
     // Обновляем или создаем запись статистики
+    const monthKey = `${year}-${month.padStart(2, '0')}`
+    
+    console.log('💾 Сохраняем статистику:', {
+      family_id: familyId,
+      month: monthKey,
+      year: year,
+      total_spent: totalSpent,
+      total_calories: totalCalories,
+      avg_calories_per_day: avgCaloriesPerDay,
+      receipts_count: receiptsCount
+    })
+    
     const { error: upsertError } = await supabase
       .from('monthly_stats')
       .upsert({
         family_id: familyId,
-        month: `${year}-${month.padStart(2, '0')}`,
+        month: monthKey,
         year: year,
         total_spent: totalSpent,
         total_calories: totalCalories,
@@ -466,5 +488,120 @@ export class SupabaseService {
     await this.recalculateMonthlyStats(familyId, month, year)
 
     return receipt
+  }
+
+  // Полный пересчет аналитики для семьи
+  static async recalculateFamilyAnalytics(familyId: number): Promise<void> {
+    console.log(`🔄 Пересчитываем всю аналитику для семьи ${familyId}`)
+    
+    try {
+      const { error } = await supabase.rpc('recalculate_family_analytics', {
+        p_family_id: familyId
+      })
+
+      if (error) {
+        console.error('❌ Ошибка пересчета аналитики семьи:', error)
+        throw error
+      }
+
+      console.log('✅ Аналитика семьи пересчитана успешно')
+    } catch (error) {
+      console.error('❌ Полная ошибка пересчета аналитики семьи:', error)
+      throw error
+    }
+  }
+
+  // Полный пересчет аналитики для всех семей
+  static async recalculateAllAnalytics(): Promise<void> {
+    console.log('🔄 Пересчитываем всю аналитику для всех семей')
+    
+    try {
+      const { error } = await supabase.rpc('recalculate_all_analytics')
+
+      if (error) {
+        console.error('❌ Ошибка пересчета всей аналитики:', error)
+        throw error
+      }
+
+      console.log('✅ Вся аналитика пересчитана успешно')
+    } catch (error) {
+      console.error('❌ Полная ошибка пересчета всей аналитики:', error)
+      throw error
+    }
+  }
+
+  // Пересчет всех месяцев с чеками для конкретной семьи
+  static async recalculateAllMonthsWithReceipts(familyId: number): Promise<void> {
+    console.log('🔄 Пересчитываем все месяцы с чеками для семьи:', familyId)
+    
+    try {
+      // Пытаемся использовать RPC функцию
+      const { error } = await supabase.rpc('recalculate_all_months_with_receipts', {
+        p_family_id: familyId
+      })
+
+      if (error) {
+        console.warn('⚠️ RPC функция недоступна, используем ручной пересчет:', error.message)
+        // Fallback: пересчитываем вручную
+        await this.recalculateAllMonthsManually(familyId)
+      } else {
+        console.log('✅ Все месяцы с чеками пересчитаны успешно через RPC')
+      }
+    } catch (error: any) {
+      // Если RPC не работает из-за сети или других причин, используем ручной пересчет
+      console.warn('⚠️ Ошибка RPC (возможно сеть), используем ручной пересчет:', error?.message || error)
+      try {
+        await this.recalculateAllMonthsManually(familyId)
+      } catch (manualError) {
+        console.error('❌ Ошибка ручного пересчета:', manualError)
+        throw manualError
+      }
+    }
+  }
+
+  // Ручной пересчет всех месяцев с чеками
+  static async recalculateAllMonthsManually(familyId: number): Promise<void> {
+    console.log('🔄 Ручной пересчет всех месяцев с чеками...')
+    
+    try {
+      // Получаем все чеки
+      const receipts = await this.getReceipts(familyId)
+      
+      if (receipts.length === 0) {
+        console.log('⚠️ Нет чеков для пересчета')
+        return
+      }
+      
+      // Группируем чеки по месяцам
+      const monthsData = new Map<string, { year: number, month: string, totalSpent: number, receiptsCount: number }>()
+      
+      receipts.forEach(receipt => {
+        const date = new Date(receipt.date)
+        const year = date.getFullYear()
+        const month = String(date.getMonth() + 1).padStart(2, '0')
+        const key = `${year}-${month}`
+        
+        if (!monthsData.has(key)) {
+          monthsData.set(key, { year, month, totalSpent: 0, receiptsCount: 0 })
+        }
+        
+        const data = monthsData.get(key)!
+        data.totalSpent += receipt.total_amount || 0
+        data.receiptsCount += 1
+      })
+      
+      console.log(`📅 Найдено ${monthsData.size} месяцев для пересчета:`, Array.from(monthsData.keys()))
+      
+      // Пересчитываем статистику для каждого месяца
+      for (const [monthKey, data] of monthsData) {
+        console.log(`🔄 Пересчитываем ${monthKey}...`)
+        await this.recalculateMonthlyStats(familyId, data.month, data.year)
+      }
+      
+      console.log('✅ Ручной пересчет завершен')
+    } catch (error) {
+      console.error('❌ Ошибка ручного пересчета:', error)
+      throw error
+    }
   }
 }
