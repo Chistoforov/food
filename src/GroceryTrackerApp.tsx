@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Camera, ShoppingCart, Home, BarChart3, Users, Plus, Clock, AlertCircle, CheckCircle, Edit2, Save, X, Upload, Loader2, XCircle, Trash2 } from 'lucide-react';
+import { Camera, ShoppingCart, Home, BarChart3, Users, Plus, Clock, AlertCircle, CheckCircle, Edit2, Save, X, Upload, Loader2, XCircle, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useProducts, useReceipts, useFamilies, useProductHistory, useMonthlyStats } from './hooks/useSupabaseData';
 import { parseReceiptImage, ReceiptItem } from './services/perplexityService';
 import { SupabaseService } from './services/supabaseService';
@@ -7,15 +7,94 @@ import { SupabaseService } from './services/supabaseService';
 const GroceryTrackerApp = () => {
   const [activeTab, setActiveTab] = useState('home');
   const [selectedFamilyId] = useState<number>(1);
+  const [selectedMonth, setSelectedMonth] = useState<{month: string, year: number} | null>(null);
 
   // Получаем данные из Supabase
   const { families, loading: familiesLoading } = useFamilies();
   const { products, loading: productsLoading, updateProduct } = useProducts(selectedFamilyId);
   const { receipts, loading: receiptsLoading, deleteReceipt } = useReceipts(selectedFamilyId);
-  const { stats: monthlyStatsData, loading: statsLoading, recalculateStats, error: statsError } = useMonthlyStats(selectedFamilyId);
+  const { stats: monthlyStatsData, loading: statsLoading, recalculateStats, recalculateAllAnalytics, error: statsError, refetch: refetchStats } = useMonthlyStats(selectedFamilyId, selectedMonth?.month, selectedMonth?.year);
 
   // Находим выбранную семью
   const selectedFamily = families.find(f => f.id === selectedFamilyId)?.name || 'Моя семья';
+
+  // Функции для навигации по месяцам
+  const getCurrentMonth = () => {
+    const now = new Date();
+    return {
+      month: String(now.getMonth() + 1).padStart(2, '0'),
+      year: now.getFullYear()
+    };
+  };
+
+  const goToPreviousMonth = () => {
+    const current = selectedMonth || getCurrentMonth();
+    const date = new Date(current.year, parseInt(current.month) - 1, 1);
+    date.setMonth(date.getMonth() - 1);
+    
+    setSelectedMonth({
+      month: String(date.getMonth() + 1).padStart(2, '0'),
+      year: date.getFullYear()
+    });
+  };
+
+  const goToNextMonth = () => {
+    const current = selectedMonth || getCurrentMonth();
+    const date = new Date(current.year, parseInt(current.month) - 1, 1);
+    date.setMonth(date.getMonth() + 1);
+    
+    setSelectedMonth({
+      month: String(date.getMonth() + 1).padStart(2, '0'),
+      year: date.getFullYear()
+    });
+  };
+
+  const goToCurrentMonth = () => {
+    setSelectedMonth(null);
+  };
+
+  const isCurrentMonth = () => {
+    if (!selectedMonth) return true;
+    const current = getCurrentMonth();
+    return selectedMonth.month === current.month && selectedMonth.year === current.year;
+  };
+
+  const canGoToNextMonth = () => {
+    return !isCurrentMonth();
+  };
+
+  // Обработчики для свайпов
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    const startX = touch.clientX;
+    const startY = touch.clientY;
+    
+    const handleTouchEnd = (e: React.TouchEvent) => {
+      const touch = e.changedTouches[0];
+      const endX = touch.clientX;
+      const endY = touch.clientY;
+      
+      const deltaX = endX - startX;
+      const deltaY = endY - startY;
+      
+      // Проверяем, что это горизонтальный свайп (не вертикальный)
+      if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
+        if (deltaX > 0) {
+          // Свайп вправо - предыдущий месяц
+          goToPreviousMonth();
+        } else {
+          // Свайп влево - следующий месяц (если возможно)
+          if (canGoToNextMonth()) {
+            goToNextMonth();
+          }
+        }
+      }
+      
+      document.removeEventListener('touchend', handleTouchEnd);
+    };
+    
+    document.addEventListener('touchend', handleTouchEnd);
+  };
 
   // Обрабатываем данные для совместимости с существующим UI
   const processedProducts = products.map(product => ({
@@ -39,11 +118,18 @@ const GroceryTrackerApp = () => {
     status: receipt.status
   }));
 
-  const monthlyStats = monthlyStatsData[0] ? {
-    totalSpent: monthlyStatsData[0].total_spent,
-    totalCalories: monthlyStatsData[0].total_calories,
-    avgCaloriesPerDay: monthlyStatsData[0].avg_calories_per_day,
-    receiptsCount: monthlyStatsData[0].receipts_count,
+  // Находим статистику за выбранный месяц или за текущий месяц
+  const targetMonth = selectedMonth || getCurrentMonth();
+  
+  const selectedStats = monthlyStatsData.find(stat => 
+    stat.month === targetMonth.month && stat.year === targetMonth.year
+  ) || null;
+  
+  const monthlyStats = selectedStats ? {
+    totalSpent: selectedStats.total_spent,
+    totalCalories: selectedStats.total_calories,
+    avgCaloriesPerDay: selectedStats.avg_calories_per_day,
+    receiptsCount: selectedStats.receipts_count,
     trends: {
       spending: 12, // % изменение - можно вычислить из данных
       calories: -8,
@@ -92,27 +178,74 @@ const GroceryTrackerApp = () => {
   const HomePage = () => (
     <div className="space-y-6">
       {/* Статистика за месяц */}
-      <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl p-6 text-white">
+      <div 
+        className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl p-6 text-white"
+        onTouchStart={handleTouchStart}
+      >
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">Статистика за октябрь</h2>
-          <button
-            onClick={async () => {
-              try {
-                await recalculateStats();
-              } catch (error) {
-                console.error('Ошибка пересчета статистики:', error);
-              }
-            }}
-            disabled={statsLoading}
-            className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-              statsLoading 
-                ? 'bg-white/10 text-white/50 cursor-not-allowed' 
-                : 'bg-white/20 hover:bg-white/30'
-            }`}
-            title="Пересчитать статистику"
-          >
-            {statsLoading ? 'Обновление...' : 'Обновить'}
-          </button>
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={goToPreviousMonth}
+              className="p-2 rounded-lg bg-white/20 hover:bg-white/30 transition-colors"
+              title="Предыдущий месяц"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            
+            <h2 className="text-lg font-semibold min-w-0 flex-1 text-center">
+              {(() => {
+                const displayMonth = selectedMonth || getCurrentMonth();
+                const monthStr = displayMonth.month.includes('-') 
+                  ? displayMonth.month.split('-')[1] 
+                  : displayMonth.month;
+                const monthName = new Date(displayMonth.year, parseInt(monthStr) - 1).toLocaleString('ru', { month: 'long' });
+                return `${monthName} ${displayMonth.year}`;
+              })()}
+            </h2>
+            
+            <button
+              onClick={goToNextMonth}
+              disabled={!canGoToNextMonth()}
+              className={`p-2 rounded-lg transition-colors ${
+                canGoToNextMonth()
+                  ? 'bg-white/20 hover:bg-white/30'
+                  : 'bg-white/10 text-white/50 cursor-not-allowed'
+              }`}
+              title={canGoToNextMonth() ? "Следующий месяц" : "Нельзя перейти в будущее"}
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          </div>
+          
+          <div className="flex items-center space-x-2">
+            {!isCurrentMonth() && (
+              <button
+                onClick={goToCurrentMonth}
+                className="px-3 py-1 rounded-lg text-sm font-medium bg-white/20 hover:bg-white/30 transition-colors"
+                title="Вернуться к текущему месяцу"
+              >
+                Сегодня
+              </button>
+            )}
+            <button
+              onClick={async () => {
+                try {
+                  await recalculateStats();
+                } catch (error) {
+                  console.error('Ошибка пересчета статистики:', error);
+                }
+              }}
+              disabled={statsLoading}
+              className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                statsLoading 
+                  ? 'bg-white/10 text-white/50 cursor-not-allowed' 
+                  : 'bg-white/20 hover:bg-white/30'
+              }`}
+              title="Пересчитать статистику"
+            >
+              {statsLoading ? 'Обновление...' : 'Обновить'}
+            </button>
+          </div>
         </div>
         {statsError && (
           <div className="bg-red-100 border border-red-300 rounded-lg p-3 mb-4">
@@ -249,6 +382,10 @@ const GroceryTrackerApp = () => {
         setParsedItems(parsedReceipt.items);
         setUploadSuccess(true);
         
+        // Обновляем статистику после добавления чека
+        console.log('🔄 Обновляем статистику после добавления чека...');
+        await refetchStats();
+        
         // Show success message for 3 seconds
         setTimeout(() => {
           setUploadSuccess(false);
@@ -278,13 +415,25 @@ const GroceryTrackerApp = () => {
     const handleDeleteReceipt = async (receiptId: number) => {
       try {
         setDeletingReceiptId(receiptId);
+        console.log('🗑️ Удаляем чек #' + receiptId);
+        
+        // Удаляем чек из базы данных
         await deleteReceipt(receiptId);
+        
+        console.log('✅ Чек успешно удален из БД');
         setDeleteConfirmId(null);
         
-        // Пересчитываем статистику после удаления
-        await recalculateStats();
+        // Пересчитываем всю аналитику после удаления
+        console.log('🔄 Пересчитываем всю аналитику...');
+        await recalculateAllAnalytics();
+        
+        // Обновляем статистику
+        console.log('🔄 Обновляем статистику...');
+        await refetchStats();
+        
+        console.log('✅ Вся аналитика пересчитана');
       } catch (error) {
-        console.error('Ошибка удаления чека:', error);
+        console.error('❌ Ошибка удаления чека:', error);
         setUploadError(
           error instanceof Error 
             ? `Ошибка удаления чека: ${error.message}` 
