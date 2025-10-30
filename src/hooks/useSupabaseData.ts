@@ -113,9 +113,20 @@ export const useReceipts = (familyId: number) => {
   const deleteReceipt = async (id: number) => {
     try {
       setError(null)
+      console.log('🗑️ Удаляем чек #' + id + ' из базы данных...')
+      
       await SupabaseService.deleteReceipt(id, familyId)
-      setReceipts(prev => prev.filter(r => r.id !== id))
+      
+      console.log('✅ Чек удален из БД, обновляем локальное состояние...')
+      setReceipts(prev => {
+        const filtered = prev.filter(r => r.id !== id)
+        console.log('📊 Чеков до удаления:', prev.length, 'после удаления:', filtered.length)
+        return filtered
+      })
+      
+      console.log('✅ Локальное состояние обновлено')
     } catch (err) {
+      console.error('❌ Ошибка удаления чека:', err)
       setError(err instanceof Error ? err.message : 'Ошибка удаления чека')
       throw err
     }
@@ -281,19 +292,47 @@ export const useMonthlyStats = (familyId: number, month?: string, year?: number)
     try {
       setError(null)
       setLoading(true) // Показываем индикатор загрузки
-      const currentDate = new Date()
-      const targetMonth = month || String(currentDate.getMonth() + 1).padStart(2, '0')
-      const targetYear = year || currentDate.getFullYear()
       
-      console.log('🔄 Пересчитываем статистику для:', { familyId, targetMonth, targetYear })
+      // Если месяц и год не указаны, пересчитываем все месяцы с чеками
+      if (!month || !year) {
+        console.log('🔄 Пересчитываем статистику для всех месяцев с чеками...')
+        await SupabaseService.recalculateAllMonthsWithReceipts(familyId)
+      } else {
+        const currentDate = new Date()
+        const targetMonth = month || String(currentDate.getMonth() + 1).padStart(2, '0')
+        const targetYear = year || currentDate.getFullYear()
+        
+        console.log('🔄 Пересчитываем статистику для:', { familyId, targetMonth, targetYear })
+        
+        await SupabaseService.recalculateMonthlyStats(familyId, targetMonth, targetYear)
+      }
       
-      await SupabaseService.recalculateMonthlyStats(familyId, targetMonth, targetYear)
       await fetchStats() // Обновляем локальные данные
       
       console.log('✅ Статистика успешно пересчитана')
     } catch (err) {
       console.error('❌ Ошибка пересчета статистики:', err)
       setError(err instanceof Error ? err.message : 'Ошибка пересчета статистики')
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const recalculateAllAnalytics = async () => {
+    try {
+      setError(null)
+      setLoading(true) // Показываем индикатор загрузки
+      
+      console.log('🔄 Пересчитываем всю аналитику для семьи:', familyId)
+      
+      await SupabaseService.recalculateFamilyAnalytics(familyId)
+      await fetchStats() // Обновляем локальные данные
+      
+      console.log('✅ Вся аналитика успешно пересчитана')
+    } catch (err) {
+      console.error('❌ Ошибка пересчета всей аналитики:', err)
+      setError(err instanceof Error ? err.message : 'Ошибка пересчета всей аналитики')
       throw err
     } finally {
       setLoading(false)
@@ -312,6 +351,7 @@ export const useMonthlyStats = (familyId: number, month?: string, year?: number)
     error,
     refetch: fetchStats,
     createOrUpdateStats,
-    recalculateStats
+    recalculateStats,
+    recalculateAllAnalytics
   }
 }

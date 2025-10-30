@@ -2,6 +2,10 @@
 // Run with: node proxy-server-local.js
 import express from 'express';
 import cors from 'cors';
+import dotenv from 'dotenv';
+
+// Load environment variables from .env.local
+dotenv.config({ path: '.env.local' });
 
 const app = express();
 
@@ -64,5 +68,13 @@ const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`🚀 Proxy server running on http://localhost:${PORT}`);
   console.log(`📡 Forwarding requests to Perplexity API`);
+  
+  // Check if API key is loaded
+  const apiKey = process.env.PERPLEXITY_API_KEY || process.env.VITE_PERPLEXITY_API_KEY;
+  if (apiKey) {
+    console.log(`✅ Perplexity API key loaded (${apiKey.substring(0, 10)}...)`);
+  } else {
+    console.log(`❌ WARNING: Perplexity API key not found in .env.local!`);
+  }
 });
 

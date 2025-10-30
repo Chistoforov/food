@@ -162,21 +162,39 @@ export class SupabaseService {
 
   // Работа со статистикой
   static async getMonthlyStats(familyId: number, month?: string, year?: number): Promise<MonthlyStats[]> {
+    // Загружаем все статистики для семьи, чтобы избежать проблем с форматом месяца
+    // Фильтрация по месяцу/году будет происходить на клиенте
     let query = supabase
       .from('monthly_stats')
       .select('*')
       .eq('family_id', familyId)
 
-    if (month) {
-      query = query.eq('month', month)
-    }
-    if (year) {
-      query = query.eq('year', year)
+    // Если передан month и year, строим формат 'YYYY-MM' для фильтрации
+    if (month && year) {
+      const monthKey = `${year}-${month.padStart(2, '0')}`
+      query = query.eq('month', monthKey)
+    } else if (month && !year) {
+      // Если передан только месяц, фильтруем по формату 'YYYY-MM' где MM совпадает
+      // Это обратная совместимость для старого формата
+      query = query.like('month', `%-${month.padStart(2, '0')}`)
+    } else if (!month && year) {
+      // Если передан только год, фильтруем по формату 'YYYY-MM'
+      query = query.like('month', `${year}-%`)
     }
 
     const { data, error } = await query.order('month', { ascending: false })
 
     if (error) throw error
+    
+    // Добавляем логирование для отладки
+    console.log('📊 Загружена статистика:', {
+      familyId,
+      month: month || 'не указан',
+      year: year || 'не указан',
+      count: data?.length || 0,
+      stats: data?.map(s => ({ month: s.month, year: s.year, spent: s.total_spent })) || []
+    })
+    
     return data || []
   }
 

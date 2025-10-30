@@ -4,19 +4,39 @@ import { useProducts, useReceipts, useFamilies, useProductHistory, useMonthlySta
 import { parseReceiptImage, ReceiptItem } from './services/perplexityService';
 import { SupabaseService } from './services/supabaseService';
 
+// Проверяем переменные окружения при загрузке
+console.log('🔍 Environment check:', {
+  VITE_SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL ? '✅ Настроен' : '❌ Отсутствует',
+  VITE_SUPABASE_ANON_KEY: import.meta.env.VITE_SUPABASE_ANON_KEY ? '✅ Настроен' : '❌ Отсутствует',
+  VITE_PERPLEXITY_API_KEY: import.meta.env.VITE_PERPLEXITY_API_KEY ? '✅ Настроен' : '❌ Отсутствует'
+});
+
 const GroceryTrackerApp = () => {
+  // Проверяем переменные окружения перед инициализацией
+  if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
+    console.error('❌ Переменные окружения Supabase не настроены!');
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-red-500 text-6xl mb-4">⚠️</div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Ошибка конфигурации</h2>
+          <p className="text-gray-600 mb-4">
+            Переменные окружения Supabase не настроены. Проверьте файл .env.local
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            className="bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 transition-colors"
+          >
+            Обновить страницу
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const [activeTab, setActiveTab] = useState('home');
   const [selectedFamilyId] = useState<number>(1);
   const [selectedMonth, setSelectedMonth] = useState<{month: string, year: number} | null>(null);
-
-  // Получаем данные из Supabase
-  const { families, loading: familiesLoading } = useFamilies();
-  const { products, loading: productsLoading, updateProduct } = useProducts(selectedFamilyId);
-  const { receipts, loading: receiptsLoading, deleteReceipt } = useReceipts(selectedFamilyId);
-  const { stats: monthlyStatsData, loading: statsLoading, recalculateStats, recalculateAllAnalytics, error: statsError, refetch: refetchStats } = useMonthlyStats(selectedFamilyId, selectedMonth?.month, selectedMonth?.year);
-
-  // Находим выбранную семью
-  const selectedFamily = families.find(f => f.id === selectedFamilyId)?.name || 'Моя семья';
 
   // Функции для навигации по месяцам
   const getCurrentMonth = () => {
@@ -27,9 +47,65 @@ const GroceryTrackerApp = () => {
     };
   };
 
+  // Получаем данные из Supabase с обработкой ошибок
+  let families, familiesLoading, products, productsLoading, updateProduct, receipts, receiptsLoading, deleteReceipt, monthlyStatsData, statsLoading, recalculateStats, recalculateAllAnalytics, statsError, refetchStats;
+  
+  try {
+    console.log('🔄 Инициализируем хуки Supabase...');
+    const familiesHook = useFamilies();
+    families = familiesHook.families;
+    familiesLoading = familiesHook.loading;
+    
+    const productsHook = useProducts(selectedFamilyId);
+    products = productsHook.products;
+    productsLoading = productsHook.loading;
+    updateProduct = productsHook.updateProduct;
+    
+    const receiptsHook = useReceipts(selectedFamilyId);
+    receipts = receiptsHook.receipts;
+    receiptsLoading = receiptsHook.loading;
+    deleteReceipt = receiptsHook.deleteReceipt;
+    
+    // Получаем текущий месяц для загрузки статистики
+    const currentMonth = selectedMonth || getCurrentMonth();
+    const statsHook = useMonthlyStats(selectedFamilyId, currentMonth.month, currentMonth.year);
+    monthlyStatsData = statsHook.stats;
+    statsLoading = statsHook.loading;
+    recalculateStats = statsHook.recalculateStats;
+    recalculateAllAnalytics = statsHook.recalculateAllAnalytics;
+    statsError = statsHook.error;
+    refetchStats = statsHook.refetch;
+    
+    console.log('✅ Хуки Supabase инициализированы успешно');
+  } catch (error) {
+    console.error('❌ Ошибка инициализации хуков Supabase:', error);
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-red-500 text-6xl mb-4">⚠️</div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Ошибка инициализации</h2>
+          <p className="text-gray-600 mb-4">
+            Не удалось инициализировать подключение к базе данных
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            className="bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 transition-colors"
+          >
+            Обновить страницу
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Находим выбранную семью
+  const selectedFamily = families.find(f => f.id === selectedFamilyId)?.name || 'Моя семья';
+
+  // Получаем текущий месяц для использования в компоненте
+  const currentMonth = selectedMonth || getCurrentMonth();
+
   const goToPreviousMonth = () => {
-    const current = selectedMonth || getCurrentMonth();
-    const date = new Date(current.year, parseInt(current.month) - 1, 1);
+    const date = new Date(currentMonth.year, parseInt(currentMonth.month) - 1, 1);
     date.setMonth(date.getMonth() - 1);
     
     setSelectedMonth({
@@ -39,8 +115,7 @@ const GroceryTrackerApp = () => {
   };
 
   const goToNextMonth = () => {
-    const current = selectedMonth || getCurrentMonth();
-    const date = new Date(current.year, parseInt(current.month) - 1, 1);
+    const date = new Date(currentMonth.year, parseInt(currentMonth.month) - 1, 1);
     date.setMonth(date.getMonth() + 1);
     
     setSelectedMonth({
@@ -115,12 +190,42 @@ const GroceryTrackerApp = () => {
     status: receipt.status
   }));
 
-  // Находим статистику за выбранный месяц или за текущий месяц
-  const targetMonth = selectedMonth || getCurrentMonth();
+  // Формат месяца в базе: 'YYYY-MM' (например '2024-12')
+  // Преобразуем currentMonth в этот формат для сравнения
+  const targetMonthKey = `${currentMonth.year}-${currentMonth.month.padStart(2, '0')}`;
   
-  const selectedStats = monthlyStatsData.find(stat => 
-    stat.month === targetMonth.month && stat.year === targetMonth.year
-  ) || null;
+  // Логируем для отладки
+  console.log('🔍 Ищем статистику:', {
+    targetMonthKey,
+    currentMonth,
+    availableStats: monthlyStatsData.map(s => ({ month: s.month, year: s.year, spent: s.total_spent }))
+  });
+  
+  const selectedStats = monthlyStatsData.find(stat => {
+    // stat.month может быть в формате 'YYYY-MM' или просто 'MM'
+    // Проверяем оба варианта для совместимости
+    if (stat.month.includes('-')) {
+      // Формат 'YYYY-MM'
+      const matches = stat.month === targetMonthKey;
+      if (matches) {
+        console.log('✅ Найдена статистика:', { month: stat.month, year: stat.year, spent: stat.total_spent });
+      }
+      return matches;
+    } else {
+      // Формат 'MM' - сравниваем отдельно
+      const matches = stat.month === currentMonth.month && stat.year === currentMonth.year;
+      if (matches) {
+        console.log('✅ Найдена статистика (старый формат):', { month: stat.month, year: stat.year, spent: stat.total_spent });
+      }
+      return matches;
+    }
+  }) || null;
+  
+  if (!selectedStats && monthlyStatsData.length > 0) {
+    console.warn('⚠️ Статистика за выбранный месяц не найдена, но есть данные за другие месяцы');
+  } else if (!selectedStats) {
+    console.warn('⚠️ Статистика отсутствует - возможно, данные еще не рассчитаны');
+  }
   
   const monthlyStats = selectedStats ? {
     totalSpent: selectedStats.total_spent,
@@ -191,12 +296,11 @@ const GroceryTrackerApp = () => {
             
             <h2 className="text-lg font-semibold min-w-0 flex-1 text-center">
               {(() => {
-                const displayMonth = selectedMonth || getCurrentMonth();
-                const monthStr = displayMonth.month.includes('-') 
-                  ? displayMonth.month.split('-')[1] 
-                  : displayMonth.month;
-                const monthName = new Date(displayMonth.year, parseInt(monthStr) - 1).toLocaleString('ru', { month: 'long' });
-                return `${monthName} ${displayMonth.year}`;
+                const monthStr = currentMonth.month.includes('-') 
+                  ? currentMonth.month.split('-')[1] 
+                  : currentMonth.month;
+                const monthName = new Date(currentMonth.year, parseInt(monthStr) - 1).toLocaleString('ru', { month: 'long' });
+                return `${monthName} ${currentMonth.year}`;
               })()}
             </h2>
             

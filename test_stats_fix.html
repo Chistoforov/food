@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест исправления статистики</title>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .error {
+            background: #fee;
+            color: #c33;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .success {
+            background: #efe;
+            color: #363;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .info {
+            background: #eef;
+            color: #336;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        pre {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        .loading {
+            color: #666;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔧 Тест исправления статистики</h1>
+    
+    <div class="container">
+        <h2>Настройка подключения</h2>
+        <div>
+            <label>Supabase URL:</label><br>
+            <input type="text" id="supabaseUrl" placeholder="https://your-project.supabase.co" style="width: 100%; margin: 5px 0; padding: 8px;">
+        </div>
+        <div>
+            <label>Supabase Anon Key:</label><br>
+            <input type="text" id="supabaseKey" placeholder="your-anon-key" style="width: 100%; margin: 5px 0; padding: 8px;">
+        </div>
+        <button onclick="initSupabase()">Подключиться к Supabase</button>
+        <div id="connectionStatus"></div>
+    </div>
+
+    <div class="container">
+        <h2>Проверка данных</h2>
+        <button onclick="checkData()" id="checkBtn">Проверить данные в базе</button>
+        <div id="dataStatus"></div>
+    </div>
+
+    <div class="container">
+        <h2>Исправление статистики</h2>
+        <button onclick="fixStats()" id="fixBtn" disabled>Исправить статистику</button>
+        <div id="fixStatus"></div>
+    </div>
+
+    <div class="container">
+        <h2>Результат</h2>
+        <div id="result"></div>
+    </div>
+
+    <script>
+        let supabase = null;
+
+        function initSupabase() {
+            const url = document.getElementById('supabaseUrl').value;
+            const key = document.getElementById('supabaseKey').value;
+            
+            if (!url || !key) {
+                showError('connectionStatus', 'Пожалуйста, введите URL и ключ Supabase');
+                return;
+            }
+
+            try {
+                supabase = window.supabase.createClient(url, key);
+                showSuccess('connectionStatus', '✅ Подключение к Supabase установлено');
+                document.getElementById('checkBtn').disabled = false;
+            } catch (error) {
+                showError('connectionStatus', '❌ Ошибка подключения: ' + error.message);
+            }
+        }
+
+        async function checkData() {
+            if (!supabase) {
+                showError('dataStatus', 'Сначала подключитесь к Supabase');
+                return;
+            }
+
+            showLoading('dataStatus', 'Проверяем данные...');
+            
+            try {
+                // Проверяем чеки
+                const { data: receipts, error: receiptsError } = await supabase
+                    .from('receipts')
+                    .select('*')
+                    .eq('family_id', 1);
+
+                if (receiptsError) throw receiptsError;
+
+                // Проверяем продукты
+                const { data: products, error: productsError } = await supabase
+                    .from('products')
+                    .select('*')
+                    .eq('family_id', 1);
+
+                if (productsError) throw productsError;
+
+                // Проверяем историю покупок
+                const { data: history, error: historyError } = await supabase
+                    .from('product_history')
+                    .select('*')
+                    .eq('family_id', 1);
+
+                if (historyError) throw historyError;
+
+                // Проверяем статистику
+                const { data: stats, error: statsError } = await supabase
+                    .from('monthly_stats')
+                    .select('*')
+                    .eq('family_id', 1);
+
+                if (statsError) throw statsError;
+
+                let html = '<h3>📊 Результаты проверки:</h3>';
+                html += `<p><strong>Чеков:</strong> ${receipts?.length || 0}</p>`;
+                html += `<p><strong>Продуктов:</strong> ${products?.length || 0}</p>`;
+                html += `<p><strong>Записей в истории:</strong> ${history?.length || 0}</p>`;
+                html += `<p><strong>Записей статистики:</strong> ${stats?.length || 0}</p>`;
+
+                if (receipts && receipts.length > 0) {
+                    html += '<h4>📅 Чеки за декабрь 2024:</h4>';
+                    const decReceipts = receipts.filter(r => {
+                        const date = new Date(r.date);
+                        return date.getFullYear() === 2024 && date.getMonth() === 11; // 11 = декабрь
+                    });
+                    html += `<p>Найдено чеков за декабрь: ${decReceipts.length}</p>`;
+                    if (decReceipts.length > 0) {
+                        html += '<pre>' + JSON.stringify(decReceipts.slice(0, 3), null, 2) + '</pre>';
+                    }
+                }
+
+                if (stats && stats.length > 0) {
+                    html += '<h4>📈 Текущая статистика:</h4>';
+                    html += '<pre>' + JSON.stringify(stats, null, 2) + '</pre>';
+                }
+
+                document.getElementById('dataStatus').innerHTML = html;
+                document.getElementById('fixBtn').disabled = false;
+
+            } catch (error) {
+                showError('dataStatus', '❌ Ошибка проверки данных: ' + error.message);
+            }
+        }
+
+        async function fixStats() {
+            if (!supabase) {
+                showError('fixStatus', 'Сначала подключитесь к Supabase');
+                return;
+            }
+
+            showLoading('fixStatus', 'Исправляем статистику...');
+            
+            try {
+                // Получаем все месяцы с чеками
+                const { data: receipts, error: receiptsError } = await supabase
+                    .from('receipts')
+                    .select('date')
+                    .eq('family_id', 1);
+
+                if (receiptsError) throw receiptsError;
+
+                // Группируем по месяцам
+                const months = new Map();
+                receipts.forEach(receipt => {
+                    const date = new Date(receipt.date);
+                    const year = date.getFullYear();
+                    const month = String(date.getMonth() + 1).padStart(2, '0');
+                    const key = `${year}-${month}`;
+                    
+                    if (!months.has(key)) {
+                        months.set(key, { year, month, receipts: [] });
+                    }
+                    months.get(key).receipts.push(receipt);
+                });
+
+                let html = '<h3>🔄 Пересчитываем статистику для месяцев:</h3>';
+                html += '<ul>';
+                for (const [key, data] of months) {
+                    html += `<li>${key}: ${data.receipts.length} чеков</li>`;
+                }
+                html += '</ul>';
+
+                // Для каждого месяца пересчитываем статистику
+                for (const [key, data] of months) {
+                    html += `<p>🔄 Обрабатываем ${key}...</p>`;
+                    
+                    // Удаляем старую статистику
+                    await supabase
+                        .from('monthly_stats')
+                        .delete()
+                        .eq('family_id', 1)
+                        .eq('month', key)
+                        .eq('year', data.year);
+
+                    // Получаем данные для пересчета
+                    const { data: monthReceipts, error: monthReceiptsError } = await supabase
+                        .from('receipts')
+                        .select('total_amount')
+                        .eq('family_id', 1)
+                        .gte('date', `${data.year}-${data.month}-01`)
+                        .lt('date', `${data.year}-${String(parseInt(data.month) + 1).padStart(2, '0')}-01`);
+
+                    if (monthReceiptsError) throw monthReceiptsError;
+
+                    const { data: monthHistory, error: monthHistoryError } = await supabase
+                        .from('product_history')
+                        .select(`
+                            quantity,
+                            products(calories)
+                        `)
+                        .eq('family_id', 1)
+                        .gte('date', `${data.year}-${data.month}-01`)
+                        .lt('date', `${data.year}-${String(parseInt(data.month) + 1).padStart(2, '0')}-01`);
+
+                    if (monthHistoryError) throw monthHistoryError;
+
+                    // Вычисляем статистику
+                    const totalSpent = monthReceipts?.reduce((sum, r) => sum + (r.total_amount || 0), 0) || 0;
+                    const totalCalories = monthHistory?.reduce((sum, h) => {
+                        const calories = h.products?.calories || 0;
+                        const quantity = h.quantity || 0;
+                        return sum + (calories * quantity);
+                    }, 0) || 0;
+                    
+                    const daysInMonth = new Date(data.year, parseInt(data.month), 0).getDate();
+                    const avgCaloriesPerDay = daysInMonth > 0 ? Math.round(totalCalories / daysInMonth) : 0;
+                    const receiptsCount = monthReceipts?.length || 0;
+
+                    // Сохраняем статистику
+                    const { error: insertError } = await supabase
+                        .from('monthly_stats')
+                        .insert({
+                            family_id: 1,
+                            month: key,
+                            year: data.year,
+                            total_spent: totalSpent,
+                            total_calories: totalCalories,
+                            avg_calories_per_day: avgCaloriesPerDay,
+                            receipts_count: receiptsCount
+                        });
+
+                    if (insertError) throw insertError;
+
+                    html += `<p>✅ ${key}: €${totalSpent.toFixed(2)}, ${totalCalories} ккал, ${receiptsCount} чеков</p>`;
+                }
+
+                // Показываем финальный результат
+                const { data: finalStats, error: finalStatsError } = await supabase
+                    .from('monthly_stats')
+                    .select('*')
+                    .eq('family_id', 1)
+                    .order('year', { ascending: false })
+                    .order('month', { ascending: false });
+
+                if (finalStatsError) throw finalStatsError;
+
+                html += '<h3>✅ Финальная статистика:</h3>';
+                html += '<pre>' + JSON.stringify(finalStats, null, 2) + '</pre>';
+
+                document.getElementById('fixStatus').innerHTML = html;
+                showSuccess('result', 'Статистика успешно исправлена!');
+
+            } catch (error) {
+                showError('fixStatus', '❌ Ошибка исправления статистики: ' + error.message);
+            }
+        }
+
+        function showError(elementId, message) {
+            document.getElementById(elementId).innerHTML = `<div class="error">${message}</div>`;
+        }
+
+        function showSuccess(elementId, message) {
+            document.getElementById(elementId).innerHTML = `<div class="success">${message}</div>`;
+        }
+
+        function showLoading(elementId, message) {
+            document.getElementById(elementId).innerHTML = `<div class="loading">${message}</div>`;
+        }
+    </script>
+</body>
+</html>

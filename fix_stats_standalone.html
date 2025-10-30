@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Исправление статистики</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .button {
+            background: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .button:hover {
+            background: #45a049;
+        }
+        .button:disabled {
+            background: #cccccc;
+            cursor: not-allowed;
+        }
+        .log {
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .error {
+            color: red;
+        }
+        .success {
+            color: green;
+        }
+        .warning {
+            color: orange;
+        }
+        input {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Исправление статистики дашборда</h1>
+        
+        <div>
+            <h3>Настройка подключения к Supabase</h3>
+            <input type="text" id="supabaseUrl" placeholder="URL вашего Supabase проекта" />
+            <input type="text" id="supabaseKey" placeholder="Anon key вашего Supabase проекта" />
+            <button class="button" onclick="testConnection()">Проверить подключение</button>
+        </div>
+        
+        <div>
+            <h3>Действия</h3>
+            <button class="button" onclick="checkCurrentStats()" id="checkBtn">Проверить текущую статистику</button>
+            <button class="button" onclick="fixMonthlyStats()" id="fixBtn" disabled>Исправить месячную статистику</button>
+            <button class="button" onclick="addTestReceipt()" id="addBtn" disabled>Добавить тестовый чек</button>
+            <button class="button" onclick="clearLog()">Очистить лог</button>
+        </div>
+        
+        <div>
+            <h3>Лог операций</h3>
+            <div id="log" class="log"></div>
+        </div>
+    </div>
+
+    <script>
+        let supabase = null;
+        
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type === 'error' ? 'error' : type === 'success' ? 'success' : type === 'warning' ? 'warning' : '';
+            logDiv.innerHTML += `<div class="${className}">[${timestamp}] ${message}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+        
+        function testConnection() {
+            const url = document.getElementById('supabaseUrl').value;
+            const key = document.getElementById('supabaseKey').value;
+            
+            if (!url || !key) {
+                log('❌ Пожалуйста, введите URL и ключ Supabase', 'error');
+                return;
+            }
+            
+            try {
+                supabase = window.supabase.createClient(url, key);
+                log('✅ Подключение к Supabase установлено', 'success');
+                
+                // Включаем кнопки
+                document.getElementById('checkBtn').disabled = false;
+                document.getElementById('fixBtn').disabled = false;
+                document.getElementById('addBtn').disabled = false;
+            } catch (error) {
+                log('❌ Ошибка подключения: ' + error.message, 'error');
+            }
+        }
+        
+        async function checkCurrentStats() {
+            if (!supabase) {
+                log('❌ Сначала установите подключение к Supabase', 'error');
+                return;
+            }
+            
+            log('🔍 Проверяем текущую статистику...');
+            
+            try {
+                // Проверяем продукты
+                const { data: products, error: productsError } = await supabase
+                    .from('products')
+                    .select('*')
+                    .eq('family_id', 1);
+                
+                if (productsError) {
+                    log('❌ Ошибка получения продуктов: ' + productsError.message, 'error');
+                } else {
+                    log(`📦 Продуктов: ${products.length}`, 'success');
+                }
+                
+                // Проверяем чеки
+                const { data: receipts, error: receiptsError } = await supabase
+                    .from('receipts')
+                    .select('*')
+                    .eq('family_id', 1);
+                
+                if (receiptsError) {
+                    log('❌ Ошибка получения чеков: ' + receiptsError.message, 'error');
+                } else {
+                    log(`🧾 Чеков: ${receipts.length}`, 'success');
+                }
+                
+                // Проверяем статистику
+                const { data: stats, error: statsError } = await supabase
+                    .from('monthly_stats')
+                    .select('*')
+                    .eq('family_id', 1)
+                    .order('year', { ascending: false })
+                    .order('month', { ascending: false });
+                
+                if (statsError) {
+                    log('❌ Ошибка получения статистики: ' + statsError.message, 'error');
+                } else {
+                    log(`📊 Записей статистики: ${stats.length}`, 'success');
+                    stats.forEach(stat => {
+                        log(`${stat.year}-${stat.month}: $${stat.total_spent}, ${stat.total_calories} калорий, ${stat.receipts_count} чеков`);
+                    });
+                }
+                
+            } catch (error) {
+                log('❌ Ошибка: ' + error.message, 'error');
+            }
+        }
+        
+        async function fixMonthlyStats() {
+            if (!supabase) {
+                log('❌ Сначала установите подключение к Supabase', 'error');
+                return;
+            }
+            
+            log('🔧 Исправляем месячную статистику...');
+            
+            try {
+                // Удаляем старую статистику
+                const { error: deleteError } = await supabase
+                    .from('monthly_stats')
+                    .delete()
+                    .eq('family_id', 1);
+                
+                if (deleteError) {
+                    log('❌ Ошибка удаления старой статистики: ' + deleteError.message, 'error');
+                    return;
+                }
+                
+                log('✅ Старая статистика удалена', 'success');
+                
+                // Пересчитываем статистику для октября 2024
+                const { data: octoberData, error: octoberError } = await supabase
+                    .rpc('recalculate_monthly_stats', {
+                        p_family_id: 1,
+                        p_month: '10',
+                        p_year: 2024
+                    });
+                
+                if (octoberError) {
+                    log('⚠️ Ошибка пересчета октября: ' + octoberError.message, 'warning');
+                } else {
+                    log('✅ Статистика за октябрь пересчитана', 'success');
+                }
+                
+                // Пересчитываем статистику для ноября 2024
+                const { data: novemberData, error: novemberError } = await supabase
+                    .rpc('recalculate_monthly_stats', {
+                        p_family_id: 1,
+                        p_month: '11',
+                        p_year: 2024
+                    });
+                
+                if (novemberError) {
+                    log('⚠️ Ошибка пересчета ноября: ' + novemberError.message, 'warning');
+                } else {
+                    log('✅ Статистика за ноябрь пересчитана', 'success');
+                }
+                
+                // Проверяем результат
+                await checkCurrentStats();
+                
+                log('🎉 Статистика исправлена! Теперь обновите страницу приложения', 'success');
+                
+            } catch (error) {
+                log('❌ Ошибка исправления статистики: ' + error.message, 'error');
+            }
+        }
+        
+        async function addTestReceipt() {
+            if (!supabase) {
+                log('❌ Сначала установите подключение к Supabase', 'error');
+                return;
+            }
+            
+            log('➕ Добавляем тестовый чек...');
+            
+            try {
+                // Создаем чек
+                const { data: receipt, error: receiptError } = await supabase
+                    .from('receipts')
+                    .insert({
+                        family_id: 1,
+                        date: '2024-11-02',
+                        items_count: 2,
+                        total_amount: 8.50,
+                        status: 'processed'
+                    })
+                    .select()
+                    .single();
+                
+                if (receiptError) {
+                    log('❌ Ошибка создания чека: ' + receiptError.message, 'error');
+                    return;
+                }
+                
+                log('✅ Чек создан: ' + receipt.id, 'success');
+                
+                // Добавляем продукты в историю
+                const { error: historyError } = await supabase
+                    .from('product_history')
+                    .insert([
+                        {
+                            product_id: 5, // Яблоки
+                            family_id: 1,
+                            date: '2024-11-02',
+                            quantity: 1,
+                            price: 2.50,
+                            unit_price: 2.50
+                        },
+                        {
+                            product_id: 6, // Бананы
+                            family_id: 1,
+                            date: '2024-11-02',
+                            quantity: 2,
+                            price: 3.60,
+                            unit_price: 1.80
+                        }
+                    ]);
+                
+                if (historyError) {
+                    log('❌ Ошибка добавления истории: ' + historyError.message, 'error');
+                    return;
+                }
+                
+                log('✅ История покупок добавлена', 'success');
+                
+                // Пересчитываем статистику
+                log('🔄 Пересчитываем статистику...');
+                await fixMonthlyStats();
+                
+            } catch (error) {
+                log('❌ Ошибка добавления чека: ' + error.message, 'error');
+            }
+        }
+        
+        // Автоматически заполняем поля из localStorage если они есть
+        window.onload = function() {
+            const savedUrl = localStorage.getItem('supabaseUrl');
+            const savedKey = localStorage.getItem('supabaseKey');
+            
+            if (savedUrl) {
+                document.getElementById('supabaseUrl').value = savedUrl;
+            }
+            if (savedKey) {
+                document.getElementById('supabaseKey').value = savedKey;
+            }
+            
+            // Сохраняем введенные данные
+            document.getElementById('supabaseUrl').addEventListener('input', function() {
+                localStorage.setItem('supabaseUrl', this.value);
+            });
+            
+            document.getElementById('supabaseKey').addEventListener('input', function() {
+                localStorage.setItem('supabaseKey', this.value);
+            });
+        };
+    </script>
+</body>
+</html>
