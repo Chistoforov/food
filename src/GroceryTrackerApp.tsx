@@ -48,7 +48,7 @@ const GroceryTrackerApp = () => {
   };
 
   // Получаем данные из Supabase с обработкой ошибок
-  let families, familiesLoading, products, productsLoading, updateProduct, receipts, receiptsLoading, deleteReceipt, monthlyStatsData, statsLoading, recalculateStats, recalculateAllAnalytics, statsError, refetchStats;
+  let families, familiesLoading, products, productsLoading, updateProduct, deleteProduct, receipts, receiptsLoading, deleteReceipt, monthlyStatsData, statsLoading, recalculateStats, recalculateAllAnalytics, statsError, refetchStats;
   
   try {
     console.log('🔄 Инициализируем хуки Supabase...');
@@ -60,6 +60,7 @@ const GroceryTrackerApp = () => {
     products = productsHook.products;
     productsLoading = productsHook.loading;
     updateProduct = productsHook.updateProduct;
+    deleteProduct = productsHook.deleteProduct;
     
     const receiptsHook = useReceipts(selectedFamilyId);
     receipts = receiptsHook.receipts;
@@ -277,7 +278,38 @@ const GroceryTrackerApp = () => {
   };
 
   // Главная страница
-  const HomePage = () => (
+  const HomePage = () => {
+    const [deleteConfirmProductId, setDeleteConfirmProductId] = useState<number | null>(null);
+    const [deletingProductId, setDeletingProductId] = useState<number | null>(null);
+
+    const handleDeleteProduct = async (productId: number) => {
+      try {
+        setDeletingProductId(productId);
+        console.log('🗑️ Удаляем товар #' + productId);
+        
+        // Удаляем товар из базы данных
+        await deleteProduct(productId);
+        
+        console.log('✅ Товар успешно удален из БД');
+        setDeleteConfirmProductId(null);
+        
+        // Пересчитываем всю аналитику после удаления
+        console.log('🔄 Пересчитываем всю аналитику...');
+        await recalculateAllAnalytics();
+        
+        // Обновляем статистику
+        console.log('🔄 Обновляем статистику...');
+        await refetchStats();
+        
+        console.log('✅ Вся аналитика пересчитана');
+      } catch (error) {
+        console.error('❌ Ошибка удаления товара:', error);
+      } finally {
+        setDeletingProductId(null);
+      }
+    };
+
+    return (
     <div className="space-y-6">
       {/* Статистика за месяц */}
       <div 
@@ -377,54 +409,97 @@ const GroceryTrackerApp = () => {
           ) : (
             processedProducts.map(product => (
               <div key={product.id} className="bg-white rounded-xl p-4 border border-gray-200 hover:shadow-md transition-shadow">
-                <div className="flex items-start justify-between mb-2">
-                  <div className="flex-1">
-                    <h4 className="font-semibold text-gray-900">{product.name}</h4>
-                    {product.originalName && (
-                      <div className="text-xs text-gray-400 mt-0.5">{product.originalName}</div>
-                    )}
-                    <div className="text-sm text-gray-500 mt-1">
-                      Куплено {product.purchaseCount} раз
+                {deleteConfirmProductId === product.id ? (
+                  // Модалка подтверждения удаления
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-red-600">
+                      <AlertCircle size={20} />
+                      <span className="font-semibold">Удалить этот товар?</span>
+                    </div>
+                    <p className="text-sm text-gray-600">
+                      Вся история покупок и данные о "{product.name}" будут удалены из базы. 
+                      Статистика будет пересчитана. Это действие нельзя отменить.
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleDeleteProduct(product.id)}
+                        disabled={deletingProductId === product.id}
+                        className="flex-1 bg-red-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {deletingProductId === product.id ? 'Удаление...' : 'Да, удалить'}
+                      </button>
+                      <button
+                        onClick={() => setDeleteConfirmProductId(null)}
+                        disabled={deletingProductId === product.id}
+                        className="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-medium hover:bg-gray-300 transition-colors disabled:opacity-50"
+                      >
+                        Отмена
+                      </button>
                     </div>
                   </div>
-                  <StatusBadge status={product.status} />
-                </div>
-                
-                <div className="grid grid-cols-3 gap-2 mt-3 text-xs text-gray-600">
-                  <div>
-                    <div className="text-gray-400">Последняя покупка</div>
-                    <div className="font-medium">{product.lastPurchase ? new Date(product.lastPurchase).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) : 'Не указано'}</div>
-                  </div>
-                  {product.avgDays ? (
-                    <>
-                      <div>
-                        <div className="text-gray-400">Частота</div>
-                        <div className="font-medium">{product.avgDays} дней</div>
+                ) : (
+                  // Обычная карточка товара
+                  <>
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-gray-900">{product.name}</h4>
+                        {product.originalName && (
+                          <div className="text-xs text-gray-400 mt-0.5">{product.originalName}</div>
+                        )}
+                        <div className="text-sm text-gray-500 mt-1">
+                          Куплено {product.purchaseCount} раз
+                        </div>
                       </div>
-                      <div>
-                        <div className="text-gray-400">Закончится</div>
-                        <div className="font-medium">{product.predictedEnd ? new Date(product.predictedEnd).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) : 'Неизвестно'}</div>
+                      <div className="flex items-center gap-2">
+                        <StatusBadge status={product.status} />
+                        <button
+                          onClick={() => setDeleteConfirmProductId(product.id)}
+                          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Удалить товар"
+                        >
+                          <Trash2 size={18} />
+                        </button>
                       </div>
-                    </>
-                  ) : (
-                    <div className="col-span-2 flex items-center text-blue-600">
-                      <Clock size={14} className="mr-1" />
-                      Собираем данные для прогноза
                     </div>
-                  )}
-                </div>
+                    
+                    <div className="grid grid-cols-3 gap-2 mt-3 text-xs text-gray-600">
+                      <div>
+                        <div className="text-gray-400">Последняя покупка</div>
+                        <div className="font-medium">{product.lastPurchase ? new Date(product.lastPurchase).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) : 'Не указано'}</div>
+                      </div>
+                      {product.avgDays ? (
+                        <>
+                          <div>
+                            <div className="text-gray-400">Частота</div>
+                            <div className="font-medium">{product.avgDays} дней</div>
+                          </div>
+                          <div>
+                            <div className="text-gray-400">Закончится</div>
+                            <div className="font-medium">{product.predictedEnd ? new Date(product.predictedEnd).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) : 'Неизвестно'}</div>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="col-span-2 flex items-center text-blue-600">
+                          <Clock size={14} className="mr-1" />
+                          Собираем данные для прогноза
+                        </div>
+                      )}
+                    </div>
 
-                <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
-                  <div className="text-sm text-gray-600">{product.calories} ккал</div>
-                  <div className="text-sm font-semibold text-gray-900">€{product.price.toFixed(2)}</div>
-                </div>
+                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
+                      <div className="text-sm text-gray-600">{product.calories} ккал</div>
+                      <div className="text-sm font-semibold text-gray-900">€{product.price.toFixed(2)}</div>
+                    </div>
+                  </>
+                )}
               </div>
             ))
           )}
         </div>
       </div>
     </div>
-  );
+    );
+  };
 
   // Страница загрузки чека
   const UploadPage = () => {
