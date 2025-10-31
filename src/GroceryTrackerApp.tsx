@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Camera, ShoppingCart, Home, BarChart3, Users, Plus, Clock, AlertCircle, CheckCircle, Edit2, Save, X, Upload, Loader2, XCircle, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useProducts, useReceipts, useFamilies, useProductHistory, useMonthlyStats } from './hooks/useSupabaseData';
-import { parseReceiptImage, ReceiptItem } from './services/perplexityService';
 import { SupabaseService } from './services/supabaseService';
 
 // Проверяем переменные окружения при загрузке
@@ -506,7 +505,6 @@ const GroceryTrackerApp = () => {
     const [isProcessing, setIsProcessing] = useState(false);
     const [uploadError, setUploadError] = useState<string | null>(null);
     const [uploadSuccess, setUploadSuccess] = useState(false);
-    const [parsedItems, setParsedItems] = useState<ReceiptItem[] | null>(null);
     const [deletingReceiptId, setDeletingReceiptId] = useState<number | null>(null);
     const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
     const [pendingReceipts, setPendingReceipts] = useState<any[]>([]);
@@ -563,7 +561,6 @@ const GroceryTrackerApp = () => {
       setIsProcessing(true);
       setUploadError(null);
       setUploadSuccess(false);
-      setParsedItems(null);
 
       try {
         // Upload image and create pending receipt (FAST - user can close app)
