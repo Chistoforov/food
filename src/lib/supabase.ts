@@ -75,3 +75,15 @@ export interface MonthlyStats {
   created_at: string
   updated_at: string
 }
+
+export interface PendingReceipt {
+  id: number
+  family_id: number
+  image_url: string
+  status: 'pending' | 'processing' | 'completed' | 'failed'
+  error_message?: string
+  parsed_data?: any
+  created_at: string
+  processed_at?: string
+  attempts: number
+}

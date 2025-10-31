@@ -21,7 +21,7 @@ BEGIN
     v_month := LPAD(EXTRACT(MONTH FROM OLD.date)::TEXT, 2, '0');
     
     -- Пересчитываем статистику для месяца удаленной покупки
-    PERFORM recalculate_monthly_stats(v_family_id, v_year || '-' || v_month, v_year);
+    PERFORM recalculate_monthly_stats(v_family_id, v_month, v_year);
     
     RETURN OLD;
 END;

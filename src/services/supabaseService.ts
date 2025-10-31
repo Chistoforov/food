@@ -1,4 +1,4 @@
-import { supabase, Product, Receipt, Family, ProductHistory, MonthlyStats } from '../lib/supabase'
+import { supabase, Product, Receipt, Family, ProductHistory, MonthlyStats, PendingReceipt } from '../lib/supabase'
 
 export class SupabaseService {
   // Работа с продуктами
@@ -653,5 +653,147 @@ export class SupabaseService {
       console.error('❌ Ошибка ручного пересчета:', error)
       throw error
     }
+  }
+
+  // === BACKGROUND RECEIPT PROCESSING ===
+  
+  /**
+   * Upload receipt image to Supabase Storage and create pending receipt
+   * Returns the pending receipt ID for tracking
+   */
+  static async uploadReceiptForProcessing(
+    familyId: number,
+    imageFile: File
+  ): Promise<PendingReceipt> {
+    try {
+      // Generate unique filename
+      const timestamp = Date.now()
+      const fileExt = imageFile.name.split('.').pop()
+      const fileName = `${familyId}/${timestamp}.${fileExt}`
+
+      console.log('📤 Uploading image to storage:', fileName)
+
+      // Upload image to Supabase Storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('receipts')
+        .upload(fileName, imageFile, {
+          cacheControl: '3600',
+          upsert: false
+        })
+
+      if (uploadError) {
+        console.error('❌ Upload error:', uploadError)
+        throw uploadError
+      }
+
+      console.log('✅ Image uploaded successfully:', uploadData.path)
+
+      // Create pending receipt record
+      const { data: pendingReceipt, error: insertError } = await supabase
+        .from('pending_receipts')
+        .insert({
+          family_id: familyId,
+          image_url: uploadData.path,
+          status: 'pending',
+          attempts: 0
+        })
+        .select()
+        .single()
+
+      if (insertError) {
+        console.error('❌ Insert error:', insertError)
+        throw insertError
+      }
+
+      console.log('✅ Pending receipt created:', pendingReceipt.id)
+
+      return pendingReceipt
+    } catch (error) {
+      console.error('❌ Error uploading receipt:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Trigger background processing of a pending receipt
+   * This is a fire-and-forget call - user doesn't wait for completion
+   */
+  static async triggerReceiptProcessing(pendingReceiptId: number): Promise<void> {
+    try {
+      console.log('🚀 Triggering background processing for receipt:', pendingReceiptId)
+
+      // Call the Vercel serverless function
+      // Don't await - fire and forget
+      fetch('/api/process-receipt', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ pendingReceiptId })
+      }).catch(error => {
+        console.error('❌ Error triggering processing (non-blocking):', error)
+      })
+
+      console.log('✅ Processing triggered (background)')
+    } catch (error) {
+      console.error('❌ Error triggering processing:', error)
+      // Don't throw - this is non-blocking
+    }
+  }
+
+  /**
+   * Get pending receipts for a family
+   */
+  static async getPendingReceipts(familyId: number): Promise<PendingReceipt[]> {
+    const { data, error } = await supabase
+      .from('pending_receipts')
+      .select('*')
+      .eq('family_id', familyId)
+      .order('created_at', { ascending: false })
+
+    if (error) throw error
+    return data || []
+  }
+
+  /**
+   * Subscribe to pending receipt updates using Realtime
+   * Returns unsubscribe function
+   */
+  static subscribeToPendingReceipts(
+    familyId: number,
+    callback: (receipt: PendingReceipt) => void
+  ): () => void {
+    const channel = supabase
+      .channel(`pending_receipts_${familyId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'pending_receipts',
+          filter: `family_id=eq.${familyId}`
+        },
+        (payload) => {
+          console.log('📡 Realtime update:', payload)
+          callback(payload.new as PendingReceipt)
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }
+
+  /**
+   * Delete a pending receipt (cleanup)
+   */
+  static async deletePendingReceipt(id: number): Promise<void> {
+    const { error } = await supabase
+      .from('pending_receipts')
+      .delete()
+      .eq('id', id)
+
+    if (error) throw error
   }
 }

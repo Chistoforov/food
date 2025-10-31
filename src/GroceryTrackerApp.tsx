@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Camera, ShoppingCart, Home, BarChart3, Users, Plus, Clock, AlertCircle, CheckCircle, Edit2, Save, X, Upload, Loader2, XCircle, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useProducts, useReceipts, useFamilies, useProductHistory, useMonthlyStats } from './hooks/useSupabaseData';
 import { parseReceiptImage, ReceiptItem } from './services/perplexityService';
@@ -509,7 +509,40 @@ const GroceryTrackerApp = () => {
     const [parsedItems, setParsedItems] = useState<ReceiptItem[] | null>(null);
     const [deletingReceiptId, setDeletingReceiptId] = useState<number | null>(null);
     const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+    const [pendingReceipts, setPendingReceipts] = useState<any[]>([]);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Load pending receipts and subscribe to updates
+    useEffect(() => {
+      loadPendingReceipts();
+      
+      // Subscribe to realtime updates
+      const unsubscribe = SupabaseService.subscribeToPendingReceipts(
+        selectedFamilyId,
+        (receipt) => {
+          console.log('📡 Pending receipt updated:', receipt);
+          loadPendingReceipts();
+          
+          // If receipt completed, refetch stats
+          if (receipt.status === 'completed') {
+            refetchStats();
+          }
+        }
+      );
+
+      return () => {
+        unsubscribe();
+      };
+    }, [selectedFamilyId]);
+
+    const loadPendingReceipts = async () => {
+      try {
+        const receipts = await SupabaseService.getPendingReceipts(selectedFamilyId);
+        setPendingReceipts(receipts);
+      } catch (error) {
+        console.error('Error loading pending receipts:', error);
+      }
+    };
 
     const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
@@ -533,36 +566,34 @@ const GroceryTrackerApp = () => {
       setParsedItems(null);
 
       try {
-        // Parse receipt using Perplexity AI
-        const parsedReceipt = await parseReceiptImage(file);
-        
-        // Process receipt and save to database
-        await SupabaseService.processReceipt(
+        // Upload image and create pending receipt (FAST - user can close app)
+        console.log('📤 Uploading receipt for background processing...');
+        const pendingReceipt = await SupabaseService.uploadReceiptForProcessing(
           selectedFamilyId,
-          parsedReceipt.items,
-          parsedReceipt.total,
-          parsedReceipt.date || new Date().toISOString().split('T')[0]
+          file
         );
 
-        setParsedItems(parsedReceipt.items);
+        console.log('✅ Receipt uploaded, triggering background processing...');
+        
+        // Trigger background processing (fire and forget)
+        await SupabaseService.triggerReceiptProcessing(pendingReceipt.id);
+        
         setUploadSuccess(true);
         
-        // Обновляем статистику после добавления чека
-        console.log('🔄 Обновляем статистику после добавления чека...');
-        await refetchStats();
+        // Load pending receipts to show the new one
+        await loadPendingReceipts();
         
-        // Show success message for 3 seconds
+        // Show success message
         setTimeout(() => {
           setUploadSuccess(false);
-          setParsedItems(null);
-        }, 5000);
+        }, 3000);
 
       } catch (error) {
-        console.error('Error processing receipt:', error);
+        console.error('Error uploading receipt:', error);
         setUploadError(
           error instanceof Error 
-            ? `Ошибка обработки чека: ${error.message}` 
-            : 'Не удалось обработать чек. Попробуйте еще раз.'
+            ? `Ошибка загрузки чека: ${error.message}` 
+            : 'Не удалось загрузить чек. Попробуйте еще раз.'
         );
       } finally {
         setIsProcessing(false);
@@ -614,23 +645,91 @@ const GroceryTrackerApp = () => {
         <h2 className="text-2xl font-bold">Загрузить чек</h2>
         
         {/* Success Message */}
-        {uploadSuccess && parsedItems && (
+        {uploadSuccess && (
           <div className="bg-green-50 border border-green-200 rounded-xl p-4">
-            <div className="flex items-start gap-3 mb-3">
-              <CheckCircle size={24} className="text-green-600 flex-shrink-0 mt-1" />
+            <div className="flex items-start gap-3">
+              <CheckCircle size={24} className="text-green-600 flex-shrink-0" />
               <div className="flex-1">
-                <div className="font-semibold text-green-900 mb-1">Чек успешно обработан!</div>
-                <div className="text-sm text-green-700 mb-2">Добавлено {parsedItems.length} товаров:</div>
-                <div className="space-y-2">
-                  {parsedItems.map((item, idx) => (
-                    <div key={idx} className="text-xs text-green-800">
-                      <div className="font-medium">{item.name}</div>
-                      <div className="text-[10px] text-green-600 opacity-75 mb-0.5">{item.originalName}</div>
-                      <div>{item.quantity} {item.unit} - €{item.price.toFixed(2)} ({item.calories} ккал)</div>
-                    </div>
-                  ))}
+                <div className="font-semibold text-green-900 mb-1">Чек загружен!</div>
+                <div className="text-sm text-green-700">
+                  Чек обрабатывается в фоновом режиме. Вы можете закрыть приложение - 
+                  обработка продолжится автоматически.
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+        
+        {/* Pending Receipts Status */}
+        {pendingReceipts.length > 0 && (
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+            <h3 className="font-semibold text-blue-900 mb-3">
+              Обрабатываемые чеки ({pendingReceipts.length})
+            </h3>
+            <div className="space-y-2">
+              {pendingReceipts.map((receipt) => (
+                <div 
+                  key={receipt.id} 
+                  className="bg-white rounded-lg p-3 flex items-center gap-3"
+                >
+                  {receipt.status === 'pending' && (
+                    <>
+                      <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
+                      <div className="flex-1">
+                        <div className="text-sm text-gray-700">Ожидает обработки...</div>
+                        <div className="text-xs text-gray-500">
+                          {new Date(receipt.created_at).toLocaleString('ru')}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                  {receipt.status === 'processing' && (
+                    <>
+                      <Loader2 size={16} className="text-blue-600 animate-spin" />
+                      <div className="flex-1">
+                        <div className="text-sm text-gray-700">Обрабатывается...</div>
+                        <div className="text-xs text-gray-500">
+                          {new Date(receipt.created_at).toLocaleString('ru')}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                  {receipt.status === 'completed' && (
+                    <>
+                      <CheckCircle size={16} className="text-green-600" />
+                      <div className="flex-1">
+                        <div className="text-sm text-green-700 font-medium">Обработан</div>
+                        <div className="text-xs text-gray-500">
+                          {receipt.parsed_data?.items?.length || 0} товаров
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => SupabaseService.deletePendingReceipt(receipt.id).then(loadPendingReceipts)}
+                        className="text-gray-400 hover:text-gray-600"
+                      >
+                        <X size={16} />
+                      </button>
+                    </>
+                  )}
+                  {receipt.status === 'failed' && (
+                    <>
+                      <XCircle size={16} className="text-red-600" />
+                      <div className="flex-1">
+                        <div className="text-sm text-red-700 font-medium">Ошибка</div>
+                        <div className="text-xs text-gray-500">
+                          {receipt.error_message || 'Не удалось обработать'}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => SupabaseService.deletePendingReceipt(receipt.id).then(loadPendingReceipts)}
+                        className="text-gray-400 hover:text-gray-600"
+                      >
+                        <X size={16} />
+                      </button>
+                    </>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
         )}
@@ -676,14 +775,17 @@ const GroceryTrackerApp = () => {
           {isProcessing ? (
             <>
               <Loader2 size={48} className="mx-auto text-indigo-600 mb-4 animate-spin" />
-              <p className="text-lg font-semibold text-gray-700 mb-2">Обрабатываем чек...</p>
-              <p className="text-sm text-gray-500">Это может занять несколько секунд</p>
+              <p className="text-lg font-semibold text-gray-700 mb-2">Загружаем чек...</p>
+              <p className="text-sm text-gray-500">Это займет всего пару секунд</p>
             </>
           ) : (
             <>
               <Camera size={48} className="mx-auto text-gray-400 mb-4" />
               <p className="text-lg font-semibold text-gray-700 mb-2">Сфотографируйте чек</p>
-              <p className="text-sm text-gray-500 mb-4">или выберите фото из галереи</p>
+              <p className="text-sm text-gray-500 mb-2">или выберите фото из галереи</p>
+              <p className="text-xs text-indigo-600 font-medium mb-4">
+                ✨ Обработка в фоне - можно закрыть приложение!
+              </p>
               <div className="flex gap-3 justify-center">
                 <button 
                   onClick={(e) => {

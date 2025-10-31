@@ -53,7 +53,7 @@ BEGIN
     v_month := LPAD(EXTRACT(MONTH FROM OLD.date)::TEXT, 2, '0');
     
     -- Пересчитываем статистику для месяца удаленного чека
-    PERFORM recalculate_monthly_stats(OLD.family_id, v_year || '-' || v_month, v_year);
+    PERFORM recalculate_monthly_stats(OLD.family_id, v_month, v_year);
     
     RAISE NOTICE 'Пересчитана статистика за %-% после удаления чека #%', v_year, v_month, OLD.id;
     
