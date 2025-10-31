@@ -44,10 +44,11 @@ CREATE TABLE product_history (
   id SERIAL PRIMARY KEY,
   product_id INTEGER REFERENCES products(id) ON DELETE CASCADE,
   date DATE NOT NULL,
-  quantity INTEGER DEFAULT 1,
+  quantity DECIMAL(10,3) DEFAULT 1,  -- Changed from INTEGER to support fractional quantities (e.g., 0.14 kg)
   price DECIMAL(10,2) NOT NULL,
   unit_price DECIMAL(10,2) NOT NULL,
   family_id INTEGER REFERENCES families(id) ON DELETE CASCADE,
+  receipt_id INTEGER REFERENCES receipts(id) ON DELETE CASCADE,  -- Link to receipt for cascade deletion
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -74,6 +75,7 @@ CREATE INDEX idx_receipts_date ON receipts(date);
 CREATE INDEX idx_product_history_product_id ON product_history(product_id);
 CREATE INDEX idx_product_history_family_id ON product_history(family_id);
 CREATE INDEX idx_product_history_date ON product_history(date);
+CREATE INDEX idx_product_history_receipt_id ON product_history(receipt_id);
 CREATE INDEX idx_monthly_stats_family_id ON monthly_stats(family_id);
 CREATE INDEX idx_monthly_stats_month ON monthly_stats(month, year);
 
