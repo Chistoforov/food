@@ -458,25 +458,26 @@ export class SupabaseService {
       if (existingProducts && existingProducts.length > 0) {
         // Обновляем существующий продукт
         product = existingProducts[0]
-        const unitPrice = item.quantity > 0 ? item.price / item.quantity : item.price
         
+        // ВАЖНО: price в чеке - это уже правильная цена за купленное количество!
+        // Не нужно делить или умножать - просто сохраняем как есть
         await this.updateProduct(product.id, {
           last_purchase: date,
-          price: unitPrice,
-          calories: Math.round(item.calories / (item.quantity || 1)), // Store per unit
+          price: item.price, // Цена из чека - уже правильная!
+          calories: item.calories, // Калории для полного количества
           purchase_count: (product.purchase_count || 0) + 1,
           original_name: item.originalName || product.original_name
         })
       } else {
         // Создаем новый продукт
-        const unitPrice = item.quantity > 0 ? item.price / item.quantity : item.price
+        // ВАЖНО: price в чеке - это уже правильная цена за купленное количество!
         product = await this.createProduct({
           name: item.name,
           original_name: item.originalName,
           family_id: familyId,
           last_purchase: date,
-          price: unitPrice,
-          calories: Math.round(item.calories / (item.quantity || 1)), // Store per unit
+          price: item.price, // Цена из чека - уже правильная!
+          calories: item.calories, // Калории для полного количества
           purchase_count: 1,
           status: 'calculating',
           avg_days: null,
