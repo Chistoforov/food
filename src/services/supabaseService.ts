@@ -80,11 +80,27 @@ export class SupabaseService {
     return data
   }
 
-  static async deleteReceipt(id: number, _familyId: number): Promise<void> {
+  static async deleteReceipt(id: number, familyId: number): Promise<void> {
     console.log('🗑️ Удаляем чек #' + id + ' из базы данных...')
     
     try {
-      // Удаляем чек (product_history удалится автоматически через CASCADE)
+      // Получаем информацию о чеке для пересчета статистики
+      const { data: receipt, error: fetchError } = await supabase
+        .from('receipts')
+        .select('date')
+        .eq('id', id)
+        .single()
+
+      if (fetchError) {
+        console.error('❌ Ошибка получения чека:', fetchError)
+        throw fetchError
+      }
+
+      // Удаляем чек
+      // CASCADE автоматически удалит:
+      // 1. Записи из product_history
+      // 2. Товары без истории (через триггер delete_products_without_history)
+      // 3. Пересчитает статистику (через триггер recalculate_stats_after_receipt_delete)
       const { error: deleteError } = await supabase
         .from('receipts')
         .delete()
@@ -96,6 +112,21 @@ export class SupabaseService {
       }
 
       console.log('✅ Чек успешно удален из базы данных')
+      console.log('🔄 Автоматическое удаление связанных товаров и пересчет статистики...')
+
+      // Дополнительный пересчет статистики на клиенте (для уверенности)
+      if (receipt?.date) {
+        const receiptDate = new Date(receipt.date)
+        const year = receiptDate.getFullYear()
+        const month = String(receiptDate.getMonth() + 1).padStart(2, '0')
+        
+        try {
+          await this.recalculateMonthlyStats(familyId, month, year)
+          console.log('✅ Статистика пересчитана на клиенте')
+        } catch (statsError) {
+          console.warn('⚠️ Ошибка пересчета статистики на клиенте (триггер БД выполнит пересчет):', statsError)
+        }
+      }
     } catch (error) {
       console.error('❌ Полная ошибка удаления:', error)
       throw error
