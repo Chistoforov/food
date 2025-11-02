@@ -47,7 +47,7 @@ const GroceryTrackerApp = () => {
   };
 
   // Получаем данные из Supabase с обработкой ошибок
-  let families, familiesLoading, products, productsLoading, updateProduct, deleteProduct, receipts, receiptsLoading, deleteReceipt, monthlyStatsData, statsLoading, recalculateStats, recalculateAllAnalytics, statsError, refetchStats;
+  let families, familiesLoading, products, productsLoading, updateProduct, deleteProduct, loadMoreProducts, loadingMoreProducts, hasMoreProducts, receipts, receiptsLoading, deleteReceipt, loadMoreReceipts, loadingMoreReceipts, hasMoreReceipts, monthlyStatsData, statsLoading, recalculateStats, recalculateAllAnalytics, statsError, refetchStats;
   
   try {
     console.log('🔄 Инициализируем хуки Supabase...');
@@ -60,11 +60,13 @@ const GroceryTrackerApp = () => {
     productsLoading = productsHook.loading;
     updateProduct = productsHook.updateProduct;
     deleteProduct = productsHook.deleteProduct;
+    const { loadMore: loadMoreProducts, loadingMore: loadingMoreProducts, hasMore: hasMoreProducts } = productsHook;
     
     const receiptsHook = useReceipts(selectedFamilyId);
     receipts = receiptsHook.receipts;
     receiptsLoading = receiptsHook.loading;
     deleteReceipt = receiptsHook.deleteReceipt;
+    const { loadMore: loadMoreReceipts, loadingMore: loadingMoreReceipts, hasMore: hasMoreReceipts } = receiptsHook;
     
     // Получаем текущий месяц для загрузки статистики
     const currentMonth = selectedMonth || getCurrentMonth();
@@ -495,6 +497,23 @@ const GroceryTrackerApp = () => {
             ))
           )}
         </div>
+        
+        {/* Кнопка "Загрузить еще" */}
+        {!productsLoading && hasMoreProducts && processedProducts.length > 0 && (
+          <div className="flex justify-center mt-4">
+            <button
+              onClick={() => loadMoreProducts(20)}
+              disabled={loadingMoreProducts}
+              className={`px-6 py-3 rounded-xl font-semibold transition-colors ${
+                loadingMoreProducts
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : 'bg-indigo-600 text-white hover:bg-indigo-700'
+              }`}
+            >
+              {loadingMoreProducts ? 'Загрузка...' : 'Загрузить еще'}
+            </button>
+          </div>
+        )}
       </div>
     </div>
     );
@@ -911,6 +930,23 @@ const GroceryTrackerApp = () => {
               ))
             )}
           </div>
+          
+          {/* Кнопка "Загрузить еще" */}
+          {!receiptsLoading && hasMoreReceipts && processedReceipts.length > 0 && (
+            <div className="flex justify-center mt-4">
+              <button
+                onClick={() => loadMoreReceipts(20)}
+                disabled={loadingMoreReceipts}
+                className={`px-6 py-3 rounded-xl font-semibold transition-colors ${
+                  loadingMoreReceipts
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                }`}
+              >
+                {loadingMoreReceipts ? 'Загрузка...' : 'Загрузить еще'}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -958,19 +994,30 @@ const GroceryTrackerApp = () => {
 
               {showProductSelect && (
                 <div className="absolute z-10 w-full mt-2 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                  {processedProducts.filter(p => p.purchaseCount >= 3).map(product => (
-                    <button
-                      key={product.id}
-                      onClick={() => {
-                        setSelectedProduct(product.id);
-                        setShowProductSelect(false);
-                      }}
-                      className="w-full text-left p-3 hover:bg-gray-50 border-b border-gray-100 last:border-0"
-                    >
-                      <div className="font-medium text-gray-900">{product.name}</div>
-                      <div className="text-sm text-gray-500">{product.purchaseCount} покупок</div>
-                    </button>
-                  ))}
+                  {processedProducts.length === 0 ? (
+                    <div className="p-4 text-center text-gray-500">
+                      <p>Нет продуктов для отображения</p>
+                      <p className="text-sm mt-1">Добавьте чеки, чтобы увидеть продукты</p>
+                    </div>
+                  ) : (
+                    processedProducts
+                      .sort((a, b) => b.purchaseCount - a.purchaseCount)
+                      .map(product => (
+                        <button
+                          key={product.id}
+                          onClick={() => {
+                            setSelectedProduct(product.id);
+                            setShowProductSelect(false);
+                          }}
+                          className="w-full text-left p-3 hover:bg-gray-50 border-b border-gray-100 last:border-0"
+                        >
+                          <div className="font-medium text-gray-900">{product.name}</div>
+                          <div className="text-sm text-gray-500">
+                            {product.purchaseCount} {product.purchaseCount === 1 ? 'покупка' : product.purchaseCount < 5 ? 'покупки' : 'покупок'}
+                          </div>
+                        </button>
+                      ))
+                  )}
                 </div>
               )}
             </div>

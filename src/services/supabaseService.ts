@@ -2,12 +2,22 @@ import { supabase, Product, Receipt, Family, ProductHistory, MonthlyStats, Pendi
 
 export class SupabaseService {
   // Работа с продуктами
-  static async getProducts(familyId: number): Promise<Product[]> {
-    const { data, error } = await supabase
+  static async getProducts(familyId: number, limit?: number, offset?: number): Promise<Product[]> {
+    let query = supabase
       .from('products')
       .select('*')
       .eq('family_id', familyId)
       .order('created_at', { ascending: false })
+
+    if (limit !== undefined) {
+      query = query.limit(limit)
+    }
+
+    if (offset !== undefined) {
+      query = query.range(offset, offset + (limit || 10) - 1)
+    }
+
+    const { data, error } = await query
 
     if (error) throw error
     return data || []
@@ -46,12 +56,22 @@ export class SupabaseService {
   }
 
   // Работа с чеками
-  static async getReceipts(familyId: number): Promise<Receipt[]> {
-    const { data, error } = await supabase
+  static async getReceipts(familyId: number, limit?: number, offset?: number): Promise<Receipt[]> {
+    let query = supabase
       .from('receipts')
       .select('*')
       .eq('family_id', familyId)
       .order('date', { ascending: false })
+
+    if (limit !== undefined) {
+      query = query.limit(limit)
+    }
+
+    if (offset !== undefined) {
+      query = query.range(offset, offset + (limit || 10) - 1)
+    }
+
+    const { data, error } = await query
 
     if (error) throw error
     return data || []

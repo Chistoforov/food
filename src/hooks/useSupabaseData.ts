@@ -7,18 +7,40 @@ export const useProducts = (familyId: number) => {
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [hasMore, setHasMore] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
 
-  const fetchProducts = async () => {
+  const fetchProducts = async (limit?: number, offset?: number, append: boolean = false) => {
     try {
-      setLoading(true)
+      if (append) {
+        setLoadingMore(true)
+      } else {
+        setLoading(true)
+      }
       setError(null)
-      const data = await SupabaseService.getProducts(familyId)
-      setProducts(data)
+      const data = await SupabaseService.getProducts(familyId, limit, offset)
+      
+      if (append) {
+        setProducts(prev => [...prev, ...data])
+      } else {
+        setProducts(data)
+      }
+      
+      // Если вернулось меньше, чем limit, значит это последняя страница
+      if (limit !== undefined && data.length < limit) {
+        setHasMore(false)
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ошибка загрузки продуктов')
     } finally {
       setLoading(false)
+      setLoadingMore(false)
     }
+  }
+
+  const loadMore = async (limit: number) => {
+    if (!hasMore || loadingMore) return
+    await fetchProducts(limit, products.length, true)
   }
 
   const updateProduct = async (id: number, updates: Partial<Product>) => {
@@ -64,15 +86,19 @@ export const useProducts = (familyId: number) => {
 
   useEffect(() => {
     if (familyId) {
-      fetchProducts()
+      // Загружаем первые 15 продуктов при инициализации
+      fetchProducts(15, 0, false)
     }
   }, [familyId])
 
   return {
     products,
     loading,
+    loadingMore,
+    hasMore,
     error,
     refetch: fetchProducts,
+    loadMore,
     updateProduct,
     createProduct,
     deleteProduct
@@ -84,18 +110,40 @@ export const useReceipts = (familyId: number) => {
   const [receipts, setReceipts] = useState<Receipt[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [hasMore, setHasMore] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
 
-  const fetchReceipts = async () => {
+  const fetchReceipts = async (limit?: number, offset?: number, append: boolean = false) => {
     try {
-      setLoading(true)
+      if (append) {
+        setLoadingMore(true)
+      } else {
+        setLoading(true)
+      }
       setError(null)
-      const data = await SupabaseService.getReceipts(familyId)
-      setReceipts(data)
+      const data = await SupabaseService.getReceipts(familyId, limit, offset)
+      
+      if (append) {
+        setReceipts(prev => [...prev, ...data])
+      } else {
+        setReceipts(data)
+      }
+      
+      // Если вернулось меньше, чем limit, значит это последняя страница
+      if (limit !== undefined && data.length < limit) {
+        setHasMore(false)
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ошибка загрузки чеков')
     } finally {
       setLoading(false)
+      setLoadingMore(false)
     }
+  }
+
+  const loadMore = async (limit: number) => {
+    if (!hasMore || loadingMore) return
+    await fetchReceipts(limit, receipts.length, true)
   }
 
   const createReceipt = async (receipt: Omit<Receipt, 'id' | 'created_at'>) => {
@@ -134,15 +182,19 @@ export const useReceipts = (familyId: number) => {
 
   useEffect(() => {
     if (familyId) {
-      fetchReceipts()
+      // Загружаем первые 20 чеков при инициализации
+      fetchReceipts(20, 0, false)
     }
   }, [familyId])
 
   return {
     receipts,
     loading,
+    loadingMore,
+    hasMore,
     error,
     refetch: fetchReceipts,
+    loadMore,
     createReceipt,
     deleteReceipt
   }
