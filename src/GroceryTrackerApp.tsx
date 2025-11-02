@@ -830,25 +830,47 @@ const GroceryTrackerApp = () => {
       };
     }, []);
 
-    // Load pending receipts and poll for updates
-    // Note: Realtime is disabled because it's not available in the current Supabase plan
+    // Subscribe to Realtime updates for pending receipts
+    // Primary update mechanism - works instantly even when app is in background
     useEffect(() => {
-      console.log('🔄 UploadPage: Загружаем pending receipts и запускаем polling');
+      console.log('🔔 UploadPage: Подписываемся на realtime обновления pending_receipts');
+      
+      const unsubscribe = SupabaseService.subscribeToPendingReceipts(
+        selectedFamilyId,
+        (receipt) => {
+          console.log('📡 UploadPage: Получено realtime обновление чека:', receipt.id, receipt.status);
+          
+          // Reload pending receipts to update UI
+          loadPendingReceipts();
+          
+          // Update stats when receipt is completed
+          if (receipt.status === 'completed') {
+            console.log('✅ UploadPage: Чек обработан, обновляем статистику');
+            refetchStats();
+          }
+        }
+      );
+
+      return () => {
+        console.log('🔕 UploadPage: Отписываемся от realtime обновлений');
+        unsubscribe();
+      };
+    }, [selectedFamilyId]);
+
+    // Load pending receipts and poll for updates (fallback for Realtime)
+    useEffect(() => {
+      console.log('🔄 UploadPage: Загружаем pending receipts и запускаем polling (fallback)');
       loadPendingReceipts();
       
       // Store previous receipts to detect changes
       let previousReceipts: any[] = [];
       
-      // Polling: check pending receipts every 1 second for responsive updates
-      // This ensures updates work without Realtime and works well in PWA
-      console.log('⏲️ UploadPage: Запускаем polling (каждую секунду)');
+      // Polling: check pending receipts every 5 seconds as fallback
+      // Realtime is the primary mechanism, polling is backup
+      console.log('⏲️ UploadPage: Запускаем polling fallback (каждые 5 секунд)');
       const pollingInterval = setInterval(async () => {
-        // Skip polling if page is not visible (PWA in background)
-        if (document.hidden) {
-          return;
-        }
-        
-        console.log('🔄 Polling: Проверяем статус pending receipts');
+        // Continue polling even if page is hidden (PWA needs this on mobile)
+        console.log('🔄 Polling fallback: Проверяем статус pending receipts');
         const receipts = await loadPendingReceipts();
         
         if (!receipts || receipts.length === 0) {
@@ -891,7 +913,7 @@ const GroceryTrackerApp = () => {
         }
         
         previousReceipts = receipts;
-      }, 1000); // Poll every 1 second for responsive updates
+      }, 5000); // Poll every 5 seconds as fallback (Realtime is primary)
 
       return () => {
         console.log('🔕 UploadPage: Размонтируем компонент, останавливаем polling');
