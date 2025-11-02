@@ -1579,24 +1579,26 @@ const GroceryTrackerApp = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="h-full flex flex-col bg-gray-50">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4 sticky top-0 z-10">
+      <div className="bg-white border-b border-gray-200 px-6 py-4 flex-shrink-0 z-10">
         <div className="max-w-md mx-auto">
           <h1 className="text-xl font-bold text-gray-900">Grocery Tracker</h1>
         </div>
       </div>
 
       {/* Content */}
-      <div className="max-w-md mx-auto px-6 py-6 pb-24">
-        {activeTab === 'home' && <HomePage />}
-        {activeTab === 'upload' && <UploadPage />}
-        {activeTab === 'products' && <ProductsPage />}
-        {activeTab === 'analytics' && <AnalyticsPage />}
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-md mx-auto px-6 py-6 pb-24">
+          {activeTab === 'home' && <HomePage />}
+          {activeTab === 'upload' && <UploadPage />}
+          {activeTab === 'products' && <ProductsPage />}
+          {activeTab === 'analytics' && <AnalyticsPage />}
+        </div>
       </div>
 
       {/* Bottom Navigation */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-6 py-3 z-50 shadow-lg">
+      <div className="bg-white border-t border-gray-200 px-6 py-3 flex-shrink-0 z-50 shadow-lg">
         <div className="max-w-md mx-auto flex items-center justify-around">
           <button 
             onClick={() => setActiveTab('home')}
