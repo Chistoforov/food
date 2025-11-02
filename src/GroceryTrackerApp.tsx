@@ -792,50 +792,45 @@ const GroceryTrackerApp = () => {
     const cameraInputRef = useRef<HTMLInputElement>(null);
     const galleryInputRef = useRef<HTMLInputElement>(null);
 
-    // Load pending receipts and subscribe to updates
+    // Load pending receipts and poll for updates
+    // Note: Realtime is disabled because it's not available in the current Supabase plan
     useEffect(() => {
-      console.log('🔄 UploadPage: Загружаем pending receipts и подписываемся на обновления');
+      console.log('🔄 UploadPage: Загружаем pending receipts и запускаем polling');
       loadPendingReceipts();
       
-      // Subscribe to realtime updates
-      const unsubscribe = SupabaseService.subscribeToPendingReceipts(
-        selectedFamilyId,
-        (receipt) => {
-          console.log('📡 UploadPage: Получено обновление чека:', {
-            id: receipt.id,
-            status: receipt.status,
-            created_at: receipt.created_at
-          });
-          
-          // Перезагружаем список pending receipts
-          loadPendingReceipts();
-          
-          // If receipt completed, refetch stats
-          if (receipt.status === 'completed') {
-            console.log('✅ UploadPage: Чек обработан, обновляем статистику');
-            refetchStats();
-          }
-        }
-      );
-
-      // Polling fallback: check pending receipts every 3 seconds
-      // This ensures updates work even if Realtime is not enabled
-      console.log('⏲️ UploadPage: Запускаем polling fallback (каждые 3 секунды)');
-      const pollingInterval = setInterval(() => {
+      // Store previous receipts to detect changes
+      let previousReceipts: any[] = [];
+      
+      // Polling: check pending receipts every 1 second for responsive updates
+      // This ensures updates work without Realtime
+      console.log('⏲️ UploadPage: Запускаем polling (каждую секунду)');
+      const pollingInterval = setInterval(async () => {
         console.log('🔄 Polling: Проверяем статус pending receipts');
-        loadPendingReceipts().then((receipts) => {
-          // Check if any receipts were completed since last check
-          const completedReceipts = receipts?.filter((r: any) => r.status === 'completed') || [];
-          if (completedReceipts.length > 0) {
-            console.log('✅ Polling: Найдены завершенные чеки, обновляем статистику');
-            refetchStats();
-          }
+        const receipts = await loadPendingReceipts();
+        
+        if (!receipts || receipts.length === 0) {
+          previousReceipts = [];
+          return;
+        }
+        
+        // Check if any receipts changed to completed status
+        const newlyCompleted = receipts.filter((r: any) => {
+          const wasProcessing = previousReceipts.find((prev: any) => 
+            prev.id === r.id && prev.status === 'processing'
+          );
+          return r.status === 'completed' && wasProcessing;
         });
-      }, 3000); // Poll every 3 seconds
+        
+        if (newlyCompleted.length > 0) {
+          console.log('✅ Polling: Найдены новые завершенные чеки:', newlyCompleted.map((r: any) => r.id));
+          refetchStats();
+        }
+        
+        previousReceipts = receipts;
+      }, 1000); // Poll every 1 second for responsive updates
 
       return () => {
-        console.log('🔕 UploadPage: Размонтируем компонент, отписываемся');
-        unsubscribe();
+        console.log('🔕 UploadPage: Размонтируем компонент, останавливаем polling');
         clearInterval(pollingInterval);
       };
     }, [selectedFamilyId]);
