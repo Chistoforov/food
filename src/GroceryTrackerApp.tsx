@@ -859,19 +859,22 @@ const GroceryTrackerApp = () => {
 
     // Load pending receipts and poll for updates (fallback for Realtime)
     useEffect(() => {
-      console.log('🔄 UploadPage: Загружаем pending receipts и запускаем polling (fallback)');
+      console.log('🔄 [POLLING] Загружаем pending receipts и запускаем polling (fallback)');
       loadPendingReceipts();
       
       // Store previous receipts to detect changes
       let previousReceipts: any[] = [];
       
-      // Polling: check pending receipts every 5 seconds as fallback
+      // Polling: check pending receipts every 3 seconds as fallback
       // Realtime is the primary mechanism, polling is backup
-      console.log('⏲️ UploadPage: Запускаем polling fallback (каждые 5 секунд)');
+      console.log('⏲️ [POLLING] Запускаем polling fallback (каждые 3 секунды, ВСЕГДА активен для PWA)');
       const pollingInterval = setInterval(async () => {
-        // Continue polling even if page is hidden (PWA needs this on mobile)
-        console.log('🔄 Polling fallback: Проверяем статус pending receipts');
+        const timestamp = new Date().toISOString();
+        console.log(`🔄 [POLLING] ${timestamp} - Проверяем статус pending receipts`);
+        console.log(`🔄 [POLLING] Page visible: ${!document.hidden}`);
+        
         const receipts = await loadPendingReceipts();
+        console.log(`🔄 [POLLING] Получено чеков: ${receipts?.length || 0}`);
         
         if (!receipts || receipts.length === 0) {
           previousReceipts = [];
@@ -913,10 +916,10 @@ const GroceryTrackerApp = () => {
         }
         
         previousReceipts = receipts;
-      }, 5000); // Poll every 5 seconds as fallback (Realtime is primary)
+      }, 3000); // Poll every 3 seconds as fallback (Realtime is primary)
 
       return () => {
-        console.log('🔕 UploadPage: Размонтируем компонент, останавливаем polling');
+        console.log('🔕 [POLLING] Размонтируем компонент, останавливаем polling');
         clearInterval(pollingInterval);
       };
     }, [selectedFamilyId]);
@@ -1035,11 +1038,17 @@ const GroceryTrackerApp = () => {
 
     const loadPendingReceipts = async () => {
       try {
+        console.log('[LOAD] Запрос pending receipts для family:', selectedFamilyId);
         const receipts = await SupabaseService.getPendingReceipts(selectedFamilyId);
+        console.log('[LOAD] Получено чеков:', receipts.length);
+        receipts.forEach(r => {
+          console.log(`[LOAD] - Чек ${r.id}: статус=${r.status}, created=${r.created_at}`);
+        });
         setPendingReceipts(receipts);
+        console.log('[LOAD] State обновлен, UI должен обновиться');
         return receipts;
       } catch (error) {
-        console.error('Error loading pending receipts:', error);
+        console.error('[LOAD] Ошибка загрузки pending receipts:', error);
         return [];
       }
     };

@@ -12,7 +12,18 @@ if (!supabaseAnonKey) {
   throw new Error('VITE_SUPABASE_ANON_KEY is required. Please check your environment variables.')
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+// Create Supabase client with Realtime configuration optimized for PWA
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  realtime: {
+    params: {
+      eventsPerSecond: 10
+    }
+  },
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+  }
+})
 
 // Типы данных для TypeScript
 export interface Product {

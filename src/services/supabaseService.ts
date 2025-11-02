@@ -749,12 +749,17 @@ export class SupabaseService {
     familyId: number,
     callback: (receipt: PendingReceipt) => void
   ): () => void {
-    console.log('🔔 Создаем realtime подписку на pending_receipts для family:', familyId)
+    console.log('🔔 [REALTIME] Создаем подписку на pending_receipts для family:', familyId)
+    console.log('🔔 [REALTIME] Время создания:', new Date().toISOString())
+    
+    const channelName = `pending_receipts_${familyId}_${Date.now()}`
+    console.log('🔔 [REALTIME] Имя канала:', channelName)
     
     const channel = supabase
-      .channel(`pending_receipts_${familyId}`, {
+      .channel(channelName, {
         config: {
-          broadcast: { self: true }
+          broadcast: { self: true },
+          presence: { key: '' }
         }
       })
       .on(
@@ -766,31 +771,47 @@ export class SupabaseService {
           filter: `family_id=eq.${familyId}`
         },
         (payload) => {
-          console.log('📡 Realtime событие получено:', {
-            type: payload.eventType,
-            old: payload.old,
-            new: payload.new
-          })
+          console.log('📡 [REALTIME] ===== СОБЫТИЕ ПОЛУЧЕНО =====')
+          console.log('📡 [REALTIME] Время:', new Date().toISOString())
+          console.log('📡 [REALTIME] Тип события:', payload.eventType)
+          console.log('📡 [REALTIME] Старые данные:', payload.old)
+          console.log('📡 [REALTIME] Новые данные:', payload.new)
+          console.log('📡 [REALTIME] =============================')
           
           // Обрабатываем все типы событий (INSERT, UPDATE, DELETE)
           if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
-            console.log('✅ Вызываем callback с данными:', payload.new)
+            console.log('✅ [REALTIME] Вызываем callback с данными:', payload.new)
             callback(payload.new as PendingReceipt)
           }
         }
       )
       .subscribe((status, err) => {
-        console.log('📡 Статус подписки:', status)
+        console.log('📡 [REALTIME] ----- ИЗМЕНЕНИЕ СТАТУСА ПОДПИСКИ -----')
+        console.log('📡 [REALTIME] Новый статус:', status)
+        console.log('📡 [REALTIME] Время:', new Date().toISOString())
         if (err) {
-          console.error('❌ Ошибка подписки:', err)
+          console.error('❌ [REALTIME] ОШИБКА:', err)
+          console.error('❌ [REALTIME] Детали ошибки:', JSON.stringify(err, null, 2))
         }
         if (status === 'SUBSCRIBED') {
-          console.log('✅ Успешно подписались на realtime обновления pending_receipts')
+          console.log('✅ [REALTIME] УСПЕШНО ПОДПИСАЛИСЬ!')
+          console.log('✅ [REALTIME] Канал:', channelName)
+          console.log('✅ [REALTIME] Family ID:', familyId)
         }
+        if (status === 'CHANNEL_ERROR') {
+          console.error('❌ [REALTIME] ОШИБКА КАНАЛА!')
+        }
+        if (status === 'TIMED_OUT') {
+          console.error('❌ [REALTIME] ТАЙМАУТ ПОДКЛЮЧЕНИЯ!')
+        }
+        if (status === 'CLOSED') {
+          console.warn('⚠️ [REALTIME] КАНАЛ ЗАКРЫТ')
+        }
+        console.log('📡 [REALTIME] ---------------------------------------')
       })
 
     return () => {
-      console.log('🔕 Отписываемся от realtime канала')
+      console.log('🔕 [REALTIME] Отписываемся от канала:', channelName)
       supabase.removeChannel(channel)
     }
   }
