@@ -70,3 +70,15 @@ body {
   animation: fadeOut 0.5s ease-in forwards;
 }
 
+/* Pull-to-refresh support */
+body {
+  overscroll-behavior-y: contain;
+}
+
+/* Улучшенная поддержка pull-to-refresh для мобильных устройств */
+@supports (-webkit-touch-callout: none) {
+  body {
+    overscroll-behavior-y: none;
+  }
+}
+

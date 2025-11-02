@@ -36,16 +36,117 @@ const GroceryTrackerApp = () => {
 
   // Восстанавливаем сохраненную вкладку из localStorage или используем 'home' по умолчанию
   const [activeTab, setActiveTab] = useState(() => {
-    const savedTab = localStorage.getItem('activeTab');
-    return savedTab || 'home';
+    try {
+      // Миграция: проверяем старый ключ и переносим на новый
+      const oldTab = localStorage.getItem('activeTab');
+      if (oldTab) {
+        console.log('🔄 [MIGRATION] Найден старый ключ activeTab:', oldTab);
+        localStorage.setItem('groceryTrackerActiveTab', oldTab);
+        localStorage.removeItem('activeTab');
+        console.log('✅ [MIGRATION] Перенесли на новый ключ');
+      }
+
+      const savedTab = localStorage.getItem('groceryTrackerActiveTab');
+      console.log('🔄 [INIT] Восстанавливаем вкладку из localStorage:', savedTab);
+      
+      // Проверяем, что сохраненная вкладка является допустимой
+      const validTabs = ['home', 'upload', 'products', 'analytics'];
+      if (savedTab && validTabs.includes(savedTab)) {
+        console.log('✅ [INIT] Вкладка валидна, восстанавливаем:', savedTab);
+        return savedTab;
+      } else {
+        console.log('⚠️ [INIT] Вкладка невалидна или отсутствует, используем home. SavedTab:', savedTab);
+      }
+    } catch (error) {
+      console.error('❌ [INIT] Ошибка при восстановлении вкладки:', error);
+    }
+    console.log('🏠 [INIT] Возвращаем home по умолчанию');
+    return 'home';
   });
+  
   const [selectedFamilyId] = useState<number>(1);
   const [selectedMonth, setSelectedMonth] = useState<{month: string, year: number} | null>(null);
+  const [showRestoredMessage, setShowRestoredMessage] = useState(false);
+
+  // Обертка для setActiveTab с логированием
+  const handleTabChange = (newTab: string) => {
+    console.log('🔄 [CHANGE] Переключаем вкладку:', {
+      from: activeTab,
+      to: newTab,
+      timestamp: new Date().toISOString()
+    });
+    setActiveTab(newTab);
+  };
+
+  // Логируем при каждом монтировании компонента
+  useEffect(() => {
+    console.log('🚀 [MOUNT] Компонент смонтирован, текущая вкладка:', activeTab);
+    const stored = localStorage.getItem('groceryTrackerActiveTab');
+    console.log('📦 [MOUNT] Значение в localStorage:', stored);
+  }, []);
+
+  // Показываем уведомление при восстановлении вкладки после обновления страницы
+  useEffect(() => {
+    try {
+      const savedTab = localStorage.getItem('groceryTrackerActiveTab');
+      const wasRestored = localStorage.getItem('groceryTrackerWasRestored');
+      
+      // Если вкладка была восстановлена и это не домашняя страница, показываем уведомление
+      if (savedTab && savedTab !== 'home' && wasRestored !== 'shown') {
+        setShowRestoredMessage(true);
+        localStorage.setItem('groceryTrackerWasRestored', 'shown');
+        
+        // Скрываем уведомление через 3 секунды
+        setTimeout(() => {
+          setShowRestoredMessage(false);
+          localStorage.removeItem('groceryTrackerWasRestored');
+        }, 3000);
+      }
+    } catch (error) {
+      console.error('❌ Ошибка при показе уведомления:', error);
+    }
+  }, []);
 
   // Сохраняем текущую вкладку в localStorage при каждом изменении
   useEffect(() => {
-    localStorage.setItem('activeTab', activeTab);
-    console.log('💾 Сохранили текущую вкладку:', activeTab);
+    try {
+      console.log('💾 [SAVE] Сохраняем текущую вкладку в localStorage:', activeTab);
+      localStorage.setItem('groceryTrackerActiveTab', activeTab);
+      console.log('✅ [SAVE] Вкладка сохранена успешно');
+    } catch (error) {
+      console.error('❌ [SAVE] Ошибка при сохранении вкладки:', error);
+    }
+  }, [activeTab]);
+
+  // Сохраняем состояние перед выгрузкой страницы (для pull-to-refresh и обычной перезагрузки)
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      try {
+        localStorage.setItem('groceryTrackerActiveTab', activeTab);
+        console.log('💾 Сохранили вкладку перед выгрузкой:', activeTab);
+      } catch (error) {
+        console.error('❌ Ошибка при сохранении перед выгрузкой:', error);
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    // Также обрабатываем событие pagehide для iOS Safari
+    const handlePageHide = () => {
+      try {
+        localStorage.setItem('groceryTrackerActiveTab', activeTab);
+        console.log('💾 Сохранили вкладку при pagehide:', activeTab);
+      } catch (error) {
+        console.error('❌ Ошибка при сохранении при pagehide:', error);
+      }
+    };
+
+    window.addEventListener('pagehide', handlePageHide);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('pagehide', handlePageHide);
+    };
   }, [activeTab]);
 
   // Функции для навигации по месяцам
@@ -1580,6 +1681,22 @@ const GroceryTrackerApp = () => {
 
   return (
     <div className="h-full flex flex-col bg-gray-50">
+      {/* Уведомление о восстановлении вкладки */}
+      {showRestoredMessage && (
+        <div className="fixed top-0 left-0 right-0 z-50 message-fade-in">
+          <div className="max-w-md mx-auto px-6 pt-4">
+            <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 shadow-lg">
+              <div className="flex items-center gap-2">
+                <RefreshCw size={18} className="text-indigo-600 flex-shrink-0" />
+                <div className="text-sm text-indigo-800 font-medium">
+                  Раздел восстановлен после обновления
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-6 py-4 flex-shrink-0 z-10">
         <div className="max-w-md mx-auto">
@@ -1601,28 +1718,28 @@ const GroceryTrackerApp = () => {
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-6 py-3 z-50 shadow-lg safe-area-bottom">
         <div className="max-w-md mx-auto flex items-center justify-around">
           <button 
-            onClick={() => setActiveTab('home')}
+            onClick={() => handleTabChange('home')}
             className={`flex flex-col items-center gap-1 p-2 ${activeTab === 'home' ? 'text-indigo-600' : 'text-gray-400'}`}
           >
             <Home size={22} />
             <span className="text-xs font-medium">Главная</span>
           </button>
           <button 
-            onClick={() => setActiveTab('upload')}
+            onClick={() => handleTabChange('upload')}
             className={`flex flex-col items-center gap-1 p-2 ${activeTab === 'upload' ? 'text-indigo-600' : 'text-gray-400'}`}
           >
             <Camera size={22} />
             <span className="text-xs font-medium">Чек</span>
           </button>
           <button 
-            onClick={() => setActiveTab('products')}
+            onClick={() => handleTabChange('products')}
             className={`flex flex-col items-center gap-1 p-2 ${activeTab === 'products' ? 'text-indigo-600' : 'text-gray-400'}`}
           >
             <ShoppingCart size={22} />
             <span className="text-xs font-medium">Продукты</span>
           </button>
           <button 
-            onClick={() => setActiveTab('analytics')}
+            onClick={() => handleTabChange('analytics')}
             className={`flex flex-col items-center gap-1 p-2 ${activeTab === 'analytics' ? 'text-indigo-600' : 'text-gray-400'}`}
           >
             <BarChart3 size={22} />

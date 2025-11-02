@@ -1,4 +1,4 @@
-const CACHE_NAME = 'grocery-tracker-v1';
+const CACHE_NAME = 'grocery-tracker-v2';
 const urlsToCache = [
   '/',
   '/index.html',
