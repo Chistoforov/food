@@ -60,13 +60,17 @@ const GroceryTrackerApp = () => {
     productsLoading = productsHook.loading;
     updateProduct = productsHook.updateProduct;
     deleteProduct = productsHook.deleteProduct;
-    const { loadMore: loadMoreProducts, loadingMore: loadingMoreProducts, hasMore: hasMoreProducts } = productsHook;
+    loadMoreProducts = productsHook.loadMore;
+    loadingMoreProducts = productsHook.loadingMore;
+    hasMoreProducts = productsHook.hasMore;
     
     const receiptsHook = useReceipts(selectedFamilyId);
     receipts = receiptsHook.receipts;
     receiptsLoading = receiptsHook.loading;
     deleteReceipt = receiptsHook.deleteReceipt;
-    const { loadMore: loadMoreReceipts, loadingMore: loadingMoreReceipts, hasMore: hasMoreReceipts } = receiptsHook;
+    loadMoreReceipts = receiptsHook.loadMore;
+    loadingMoreReceipts = receiptsHook.loadingMore;
+    hasMoreReceipts = receiptsHook.hasMore;
     
     // Получаем текущий месяц для загрузки статистики
     const currentMonth = selectedMonth || getCurrentMonth();
@@ -499,7 +503,7 @@ const GroceryTrackerApp = () => {
         </div>
         
         {/* Кнопка "Загрузить еще" */}
-        {!productsLoading && hasMoreProducts && processedProducts.length > 0 && (
+        {!productsLoading && hasMoreProducts && processedProducts.length > 0 && loadMoreProducts && (
           <div className="flex justify-center mt-4">
             <button
               onClick={() => loadMoreProducts(20)}
@@ -932,7 +936,7 @@ const GroceryTrackerApp = () => {
           </div>
           
           {/* Кнопка "Загрузить еще" */}
-          {!receiptsLoading && hasMoreReceipts && processedReceipts.length > 0 && (
+          {!receiptsLoading && hasMoreReceipts && processedReceipts.length > 0 && loadMoreReceipts && (
             <div className="flex justify-center mt-4">
               <button
                 onClick={() => loadMoreReceipts(20)}
