@@ -788,6 +788,7 @@ const GroceryTrackerApp = () => {
     const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
     const [selectedReceiptId, setSelectedReceiptId] = useState<number | null>(null);
     const [pendingReceipts, setPendingReceipts] = useState<any[]>([]);
+    const [completedReceiptTimers, setCompletedReceiptTimers] = useState<Record<number, number>>({});
     const cameraInputRef = useRef<HTMLInputElement>(null);
     const galleryInputRef = useRef<HTMLInputElement>(null);
 
@@ -817,26 +818,69 @@ const GroceryTrackerApp = () => {
         }
       );
 
+      // Polling fallback: check pending receipts every 3 seconds
+      // This ensures updates work even if Realtime is not enabled
+      console.log('⏲️ UploadPage: Запускаем polling fallback (каждые 3 секунды)');
+      const pollingInterval = setInterval(() => {
+        console.log('🔄 Polling: Проверяем статус pending receipts');
+        loadPendingReceipts().then((receipts) => {
+          // Check if any receipts were completed since last check
+          const completedReceipts = receipts?.filter((r: any) => r.status === 'completed') || [];
+          if (completedReceipts.length > 0) {
+            console.log('✅ Polling: Найдены завершенные чеки, обновляем статистику');
+            refetchStats();
+          }
+        });
+      }, 3000); // Poll every 3 seconds
+
       return () => {
         console.log('🔕 UploadPage: Размонтируем компонент, отписываемся');
         unsubscribe();
+        clearInterval(pollingInterval);
       };
     }, [selectedFamilyId]);
 
-    // Auto-close completed receipts after 3 seconds
+    // Auto-close completed receipts after 3 seconds with countdown
     useEffect(() => {
       const timers: NodeJS.Timeout[] = [];
+      const countdownIntervals: NodeJS.Timeout[] = [];
+      const newTimers: Record<number, number> = {};
 
       // Find all completed receipts and set timers to auto-remove them
       pendingReceipts.forEach((receipt) => {
-        if (receipt.status === 'completed') {
+        if (receipt.status === 'completed' && !completedReceiptTimers[receipt.id]) {
           console.log('⏱️ Запускаем таймер автоудаления для чека:', receipt.id);
           
+          // Initialize countdown at 3 seconds
+          newTimers[receipt.id] = 3;
+          
+          // Update countdown every second
+          const countdownInterval = setInterval(() => {
+            setCompletedReceiptTimers(prev => {
+              const current = prev[receipt.id];
+              if (current && current > 0) {
+                return { ...prev, [receipt.id]: current - 1 };
+              }
+              return prev;
+            });
+          }, 1000);
+          
+          countdownIntervals.push(countdownInterval);
+          
+          // Auto-delete after 3 seconds
           const timer = setTimeout(async () => {
             console.log('🗑️ Автоматически удаляем завершенный чек:', receipt.id);
             try {
               await SupabaseService.deletePendingReceipt(receipt.id);
               console.log('✅ Чек успешно удален');
+              
+              // Remove from countdown timers
+              setCompletedReceiptTimers(prev => {
+                const newTimers = { ...prev };
+                delete newTimers[receipt.id];
+                return newTimers;
+              });
+              
               loadPendingReceipts();
               
               // Обновляем статистику после удаления чека
@@ -851,6 +895,11 @@ const GroceryTrackerApp = () => {
         }
       });
 
+      // Set initial countdown values
+      if (Object.keys(newTimers).length > 0) {
+        setCompletedReceiptTimers(prev => ({ ...prev, ...newTimers }));
+      }
+
       if (timers.length > 0) {
         console.log(`⏱️ Запущено ${timers.length} таймеров для автоудаления`);
       }
@@ -861,6 +910,7 @@ const GroceryTrackerApp = () => {
           console.log(`🧹 Очищаем ${timers.length} таймеров`);
           timers.forEach(timer => clearTimeout(timer));
         }
+        countdownIntervals.forEach(interval => clearInterval(interval));
       };
     }, [pendingReceipts]);
 
@@ -868,8 +918,10 @@ const GroceryTrackerApp = () => {
       try {
         const receipts = await SupabaseService.getPendingReceipts(selectedFamilyId);
         setPendingReceipts(receipts);
+        return receipts;
       } catch (error) {
         console.error('Error loading pending receipts:', error);
+        return [];
       }
     };
 
@@ -1048,14 +1100,29 @@ const GroceryTrackerApp = () => {
                     <>
                       <CheckCircle size={16} className="text-green-600" />
                       <div className="flex-1">
-                        <div className="text-sm text-green-700 font-medium">Обработан</div>
+                        <div className="text-sm text-green-700 font-medium">
+                          Обработан ✅
+                          {completedReceiptTimers[receipt.id] !== undefined && (
+                            <span className="ml-2 text-xs text-green-600">
+                              (закрытие через {completedReceiptTimers[receipt.id]}с)
+                            </span>
+                          )}
+                        </div>
                         <div className="text-xs text-gray-500">
-                          {receipt.parsed_data?.items?.length || 0} товаров
+                          {receipt.parsed_data?.items?.length || 0} товаров добавлено
                         </div>
                       </div>
                       <button
-                        onClick={() => SupabaseService.deletePendingReceipt(receipt.id).then(loadPendingReceipts)}
+                        onClick={() => {
+                          setCompletedReceiptTimers(prev => {
+                            const newTimers = { ...prev };
+                            delete newTimers[receipt.id];
+                            return newTimers;
+                          });
+                          SupabaseService.deletePendingReceipt(receipt.id).then(loadPendingReceipts);
+                        }}
                         className="text-gray-400 hover:text-gray-600"
+                        title="Закрыть уведомление"
                       >
                         <X size={16} />
                       </button>

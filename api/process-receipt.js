@@ -356,16 +356,29 @@ export default async function handler(req, res) {
     await processReceipt(pendingReceipt.family_id, parsedData);
 
     // Update pending receipt status to completed
-    await supabase
+    console.log('✅ Updating pending receipt status to completed:', pendingReceiptId);
+    const { data: updatedReceipt, error: updateError } = await supabase
       .from('pending_receipts')
       .update({
         status: 'completed',
         parsed_data: parsedData,
         processed_at: new Date().toISOString()
       })
-      .eq('id', pendingReceiptId);
+      .eq('id', pendingReceiptId)
+      .select()
+      .single();
 
-    console.log('Receipt processed successfully:', pendingReceiptId);
+    if (updateError) {
+      console.error('❌ Error updating pending receipt status:', updateError);
+      throw updateError;
+    }
+
+    console.log('✅ Receipt status updated successfully:', {
+      id: updatedReceipt.id,
+      status: updatedReceipt.status,
+      itemsCount: parsedData?.items?.length || 0
+    });
+    console.log('📡 Realtime should now notify all subscribers about this change');
     
     return res.status(200).json({
       success: true,
