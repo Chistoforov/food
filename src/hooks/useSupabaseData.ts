@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { SupabaseService } from '../services/supabaseService'
-import { Product, Receipt, Family, ProductHistory, MonthlyStats } from '../lib/supabase'
+import { Product, Receipt, ProductHistory, MonthlyStats } from '../lib/supabase'
 
 // Хук для работы с продуктами
 export const useProducts = (familyId: number) => {
@@ -197,63 +197,6 @@ export const useReceipts = (familyId: number) => {
     loadMore,
     createReceipt,
     deleteReceipt
-  }
-}
-
-// Хук для работы с семьями
-export const useFamilies = () => {
-  const [families, setFamilies] = useState<Family[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  const fetchFamilies = async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      const data = await SupabaseService.getFamilies()
-      setFamilies(data)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Ошибка загрузки семей')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const createFamily = async (family: Omit<Family, 'id' | 'created_at' | 'updated_at'>) => {
-    try {
-      setError(null)
-      const newFamily = await SupabaseService.createFamily(family)
-      setFamilies(prev => [newFamily, ...prev])
-      return newFamily
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Ошибка создания семьи')
-      throw err
-    }
-  }
-
-  const updateFamily = async (id: number, updates: Partial<Family>) => {
-    try {
-      setError(null)
-      const updatedFamily = await SupabaseService.updateFamily(id, updates)
-      setFamilies(prev => prev.map(f => f.id === id ? updatedFamily : f))
-      return updatedFamily
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Ошибка обновления семьи')
-      throw err
-    }
-  }
-
-  useEffect(() => {
-    fetchFamilies()
-  }, [])
-
-  return {
-    families,
-    loading,
-    error,
-    refetch: fetchFamilies,
-    createFamily,
-    updateFamily
   }
 }
 

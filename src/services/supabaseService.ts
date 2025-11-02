@@ -1,4 +1,4 @@
-import { supabase, Product, Receipt, Family, ProductHistory, MonthlyStats, PendingReceipt } from '../lib/supabase'
+import { supabase, Product, Receipt, ProductHistory, MonthlyStats, PendingReceipt } from '../lib/supabase'
 
 export class SupabaseService {
   // Работа с продуктами
@@ -151,40 +151,6 @@ export class SupabaseService {
       console.error('❌ Полная ошибка удаления:', error)
       throw error
     }
-  }
-
-  // Работа с семьями
-  static async getFamilies(): Promise<Family[]> {
-    const { data, error } = await supabase
-      .from('families')
-      .select('*')
-      .order('created_at', { ascending: false })
-
-    if (error) throw error
-    return data || []
-  }
-
-  static async createFamily(family: Omit<Family, 'id' | 'created_at' | 'updated_at'>): Promise<Family> {
-    const { data, error } = await supabase
-      .from('families')
-      .insert([family])
-      .select()
-      .single()
-
-    if (error) throw error
-    return data
-  }
-
-  static async updateFamily(id: number, updates: Partial<Family>): Promise<Family> {
-    const { data, error } = await supabase
-      .from('families')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single()
-
-    if (error) throw error
-    return data
   }
 
   // Работа с историей продуктов
@@ -815,5 +781,142 @@ export class SupabaseService {
       .eq('id', id)
 
     if (error) throw error
+  }
+
+  // === RECEIPT DETAILS AND DATE EDITING ===
+  
+  /**
+   * Get all products from a receipt with their details
+   */
+  static async getReceiptProducts(receiptId: number, familyId: number): Promise<Array<ProductHistory & { product?: Product }>> {
+    const { data, error } = await supabase
+      .from('product_history')
+      .select(`
+        *,
+        products (*)
+      `)
+      .eq('receipt_id', receiptId)
+      .eq('family_id', familyId)
+      .order('created_at', { ascending: true })
+
+    if (error) throw error
+    
+    // Transform the data to include product details
+    return (data || []).map(item => ({
+      ...item,
+      product: item.products as unknown as Product
+    }))
+  }
+
+  /**
+   * Update receipt date and all associated product_history dates
+   * This will automatically trigger recalculation of monthly stats for both old and new months
+   */
+  static async updateReceiptDate(
+    receiptId: number, 
+    familyId: number, 
+    newDate: string
+  ): Promise<void> {
+    console.log('📅 Обновляем дату чека #' + receiptId + ' на ' + newDate)
+    
+    try {
+      // Get the old receipt date first for stats recalculation
+      const { data: oldReceipt, error: fetchError } = await supabase
+        .from('receipts')
+        .select('date')
+        .eq('id', receiptId)
+        .eq('family_id', familyId)
+        .single()
+
+      if (fetchError) {
+        console.error('❌ Ошибка получения чека:', fetchError)
+        throw fetchError
+      }
+
+      const oldDate = oldReceipt.date
+      
+      // Update the receipt date
+      const { error: receiptError } = await supabase
+        .from('receipts')
+        .update({ date: newDate })
+        .eq('id', receiptId)
+        .eq('family_id', familyId)
+
+      if (receiptError) {
+        console.error('❌ Ошибка обновления даты чека:', receiptError)
+        throw receiptError
+      }
+
+      console.log('✅ Дата чека обновлена')
+
+      // Update all product_history entries for this receipt
+      const { error: historyError } = await supabase
+        .from('product_history')
+        .update({ date: newDate })
+        .eq('receipt_id', receiptId)
+        .eq('family_id', familyId)
+
+      if (historyError) {
+        console.error('❌ Ошибка обновления истории продуктов:', historyError)
+        throw historyError
+      }
+
+      console.log('✅ История продуктов обновлена')
+
+      // Update last_purchase date for all products in this receipt
+      const { data: productHistoryItems, error: phError } = await supabase
+        .from('product_history')
+        .select('product_id')
+        .eq('receipt_id', receiptId)
+
+      if (phError) {
+        console.error('❌ Ошибка получения списка продуктов:', phError)
+        throw phError
+      }
+
+      // For each product, update last_purchase if this was their latest purchase
+      for (const item of productHistoryItems || []) {
+        // Get the latest purchase date for this product
+        const { data: latestPurchase } = await supabase
+          .from('product_history')
+          .select('date')
+          .eq('product_id', item.product_id)
+          .order('date', { ascending: false })
+          .limit(1)
+          .single()
+
+        if (latestPurchase) {
+          await supabase
+            .from('products')
+            .update({ last_purchase: latestPurchase.date })
+            .eq('id', item.product_id)
+        }
+      }
+
+      console.log('✅ Даты последних покупок обновлены')
+
+      // Recalculate stats for both old and new months
+      const oldReceiptDate = new Date(oldDate)
+      const oldYear = oldReceiptDate.getFullYear()
+      const oldMonth = String(oldReceiptDate.getMonth() + 1).padStart(2, '0')
+
+      const newReceiptDate = new Date(newDate)
+      const newYear = newReceiptDate.getFullYear()
+      const newMonth = String(newReceiptDate.getMonth() + 1).padStart(2, '0')
+
+      console.log('🔄 Пересчитываем статистику для старого месяца:', oldMonth, oldYear)
+      await this.recalculateMonthlyStats(familyId, oldMonth, oldYear)
+
+      // Only recalculate new month if it's different from old month
+      if (oldMonth !== newMonth || oldYear !== newYear) {
+        console.log('🔄 Пересчитываем статистику для нового месяца:', newMonth, newYear)
+        await this.recalculateMonthlyStats(familyId, newMonth, newYear)
+      }
+
+      console.log('✅ Дата чека успешно обновлена и статистика пересчитана')
+    } catch (error) {
+      console.error('❌ Полная ошибка обновления даты чека:', error)
+      throw error
+    }
   }
 }

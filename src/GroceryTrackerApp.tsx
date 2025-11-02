@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
-import { Camera, ShoppingCart, Home, BarChart3, Users, Plus, Clock, AlertCircle, CheckCircle, Edit2, Save, X, Upload, Loader2, XCircle, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
-import { useProducts, useReceipts, useFamilies, useProductHistory, useMonthlyStats } from './hooks/useSupabaseData';
+import { Camera, ShoppingCart, Home, BarChart3, Plus, Clock, AlertCircle, CheckCircle, Edit2, Save, X, Upload, Loader2, XCircle, Trash2, ChevronLeft, ChevronRight, Eye, Calendar, RefreshCw, AlertTriangle, Info, Sparkles } from 'lucide-react';
+import { useProducts, useReceipts, useProductHistory, useMonthlyStats } from './hooks/useSupabaseData';
 import { SupabaseService } from './services/supabaseService';
+import type { ProductHistory, Product } from './lib/supabase';
 
 // Проверяем переменные окружения при загрузке
 console.log('🔍 Environment check:', {
@@ -17,7 +18,7 @@ const GroceryTrackerApp = () => {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="text-red-500 text-6xl mb-4">⚠️</div>
+          <AlertTriangle className="text-red-500 mx-auto mb-4" size={64} />
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Ошибка конфигурации</h2>
           <p className="text-gray-600 mb-4">
             Переменные окружения Supabase не настроены. Проверьте файл .env.local
@@ -47,13 +48,10 @@ const GroceryTrackerApp = () => {
   };
 
   // Получаем данные из Supabase с обработкой ошибок
-  let families, familiesLoading, products, productsLoading, updateProduct, deleteProduct, loadMoreProducts, loadingMoreProducts, hasMoreProducts, receipts, receiptsLoading, deleteReceipt, loadMoreReceipts, loadingMoreReceipts, hasMoreReceipts, monthlyStatsData, statsLoading, recalculateStats, recalculateAllAnalytics, statsError, refetchStats;
+  let products, productsLoading, updateProduct, deleteProduct, loadMoreProducts, loadingMoreProducts, hasMoreProducts, receipts, receiptsLoading, deleteReceipt, loadMoreReceipts, loadingMoreReceipts, hasMoreReceipts, monthlyStatsData, statsLoading, recalculateStats, recalculateAllAnalytics, statsError, refetchStats;
   
   try {
     console.log('🔄 Инициализируем хуки Supabase...');
-    const familiesHook = useFamilies();
-    families = familiesHook.families;
-    familiesLoading = familiesHook.loading;
     
     const productsHook = useProducts(selectedFamilyId);
     products = productsHook.products;
@@ -88,7 +86,7 @@ const GroceryTrackerApp = () => {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="text-red-500 text-6xl mb-4">⚠️</div>
+          <AlertTriangle className="text-red-500 mx-auto mb-4" size={64} />
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Ошибка инициализации</h2>
           <p className="text-gray-600 mb-4">
             Не удалось инициализировать подключение к базе данных
@@ -126,9 +124,6 @@ const GroceryTrackerApp = () => {
       unsubscribe();
     };
   }, [selectedFamilyId, refetchStats]);
-
-  // Находим выбранную семью
-  const selectedFamily = families.find(f => f.id === selectedFamilyId)?.name || 'Моя семья';
 
   // Получаем текущий месяц для использования в компоненте
   const currentMonth = selectedMonth || getCurrentMonth();
@@ -396,7 +391,17 @@ const GroceryTrackerApp = () => {
             }`}
             title="Пересчитать статистику"
           >
-            {statsLoading ? '⏳ Обновление...' : '🔄 Обновить статистику'}
+            {statsLoading ? (
+              <span className="flex items-center justify-center gap-2">
+                <Loader2 className="animate-spin" size={16} />
+                Обновление...
+              </span>
+            ) : (
+              <span className="flex items-center justify-center gap-2">
+                <RefreshCw size={16} />
+                Обновить статистику
+              </span>
+            )}
           </button>
         </div>
         {statsError && (
@@ -548,6 +553,222 @@ const GroceryTrackerApp = () => {
     );
   };
 
+  // Receipt Detail Modal Component
+  const ReceiptDetailModal = ({ 
+    receiptId, 
+    onClose, 
+    onDateUpdated 
+  }: { 
+    receiptId: number, 
+    onClose: () => void,
+    onDateUpdated: () => void 
+  }) => {
+    const [products, setProducts] = useState<Array<ProductHistory & { product?: Product }>>([]);
+    const [loading, setLoading] = useState(true);
+    const [editingDate, setEditingDate] = useState(false);
+    const [newDate, setNewDate] = useState('');
+    const [updating, setUpdating] = useState(false);
+    const [receipt, setReceipt] = useState<any>(null);
+
+    useEffect(() => {
+      loadReceiptDetails();
+    }, [receiptId]);
+
+    const loadReceiptDetails = async () => {
+      try {
+        setLoading(true);
+        
+        // Get receipt info
+        const receiptData = receipts.find(r => r.id === receiptId);
+        setReceipt(receiptData);
+        setNewDate(receiptData?.date || '');
+        
+        // Get products from this receipt
+        const receiptProducts = await SupabaseService.getReceiptProducts(receiptId, selectedFamilyId);
+        setProducts(receiptProducts);
+      } catch (error) {
+        console.error('Error loading receipt details:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const handleUpdateDate = async () => {
+      try {
+        setUpdating(true);
+        await SupabaseService.updateReceiptDate(receiptId, selectedFamilyId, newDate);
+        
+        // Refresh data
+        await loadReceiptDetails();
+        onDateUpdated();
+        setEditingDate(false);
+      } catch (error) {
+        console.error('Error updating date:', error);
+      } finally {
+        setUpdating(false);
+      }
+    };
+
+    if (loading) {
+      return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-lg w-full">
+            <div className="text-center py-8">
+              <Loader2 size={48} className="mx-auto text-indigo-600 mb-4 animate-spin" />
+              <p className="text-gray-600">Загрузка чека...</p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+          {/* Header */}
+          <div className="sticky top-0 bg-white border-b border-gray-200 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-gray-900">Детали чека</h2>
+              <button
+                onClick={onClose}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            {/* Date Section */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-gray-600">
+                  <Calendar size={20} />
+                  <span className="font-medium">Дата покупки:</span>
+                </div>
+                {!editingDate && (
+                  <button
+                    onClick={() => setEditingDate(true)}
+                    className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                    title="Изменить дату"
+                  >
+                    <Edit2 size={18} />
+                  </button>
+                )}
+              </div>
+
+              {editingDate ? (
+                <div className="space-y-2">
+                  <input
+                    type="date"
+                    value={newDate}
+                    onChange={(e) => setNewDate(e.target.value)}
+                    max={new Date().toISOString().split('T')[0]}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleUpdateDate}
+                      disabled={updating || !newDate || newDate === receipt?.date}
+                      className="flex-1 bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {updating ? 'Обновление...' : 'Сохранить'}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setEditingDate(false);
+                        setNewDate(receipt?.date || '');
+                      }}
+                      disabled={updating}
+                      className="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-medium hover:bg-gray-300 transition-colors"
+                    >
+                      Отмена
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500 flex items-center gap-1">
+                    <Info size={14} className="flex-shrink-0" />
+                    При изменении даты будет пересчитана статистика для старого и нового месяца
+                  </p>
+                </div>
+              ) : (
+                <div className="text-lg font-semibold text-gray-900">
+                  {receipt ? new Date(receipt.date).toLocaleDateString('ru-RU', { 
+                    day: 'numeric', 
+                    month: 'long', 
+                    year: 'numeric' 
+                  }) : '—'}
+                </div>
+              )}
+            </div>
+
+            {/* Receipt Summary */}
+            <div className="mt-4 grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
+              <div>
+                <div className="text-sm text-gray-500">Товаров</div>
+                <div className="text-xl font-bold text-gray-900">{products.length}</div>
+              </div>
+              <div>
+                <div className="text-sm text-gray-500">Сумма</div>
+                <div className="text-xl font-bold text-indigo-600">
+                  €{receipt?.total_amount?.toFixed(2) || '0.00'}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Products List */}
+          <div className="p-6 space-y-3">
+            <h3 className="font-semibold text-gray-900 mb-4">Продукты в чеке:</h3>
+            {products.length === 0 ? (
+              <div className="text-center py-8 text-gray-400">
+                <ShoppingCart size={48} className="mx-auto mb-3 opacity-50" />
+                <p>Нет продуктов в чеке</p>
+              </div>
+            ) : (
+              products.map((item, index) => (
+                <div 
+                  key={index} 
+                  className="bg-gray-50 rounded-lg p-4 border border-gray-200"
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex-1">
+                      <h4 className="font-semibold text-gray-900">
+                        {item.product?.name || 'Неизвестный товар'}
+                      </h4>
+                      {item.product?.original_name && (
+                        <div className="text-xs text-gray-400 mt-0.5">
+                          {item.product.original_name}
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-lg font-bold text-indigo-600">
+                      €{item.price.toFixed(2)}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-3 mt-3 text-sm">
+                    <div>
+                      <div className="text-gray-500">Количество</div>
+                      <div className="font-medium text-gray-900">{item.quantity}</div>
+                    </div>
+                    <div>
+                      <div className="text-gray-500">Цена за ед.</div>
+                      <div className="font-medium text-gray-900">€{item.unit_price.toFixed(2)}</div>
+                    </div>
+                    <div>
+                      <div className="text-gray-500">Калории</div>
+                      <div className="font-medium text-gray-900">
+                        {item.product?.calories || 0} ккал
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // Страница загрузки чека
   const UploadPage = () => {
     const [isProcessing, setIsProcessing] = useState(false);
@@ -555,6 +776,7 @@ const GroceryTrackerApp = () => {
     const [uploadSuccess, setUploadSuccess] = useState(false);
     const [deletingReceiptId, setDeletingReceiptId] = useState<number | null>(null);
     const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+    const [selectedReceiptId, setSelectedReceiptId] = useState<number | null>(null);
     const [pendingReceipts, setPendingReceipts] = useState<any[]>([]);
     const cameraInputRef = useRef<HTMLInputElement>(null);
     const galleryInputRef = useRef<HTMLInputElement>(null);
@@ -693,8 +915,23 @@ const GroceryTrackerApp = () => {
       }
     };
 
+    const handleDateUpdated = async () => {
+      // Reload receipts and stats after date update
+      await refetchStats();
+      // The receipts will be automatically refreshed by the hook
+    };
+
     return (
       <div className="space-y-6">
+        {/* Receipt Detail Modal */}
+        {selectedReceiptId && (
+          <ReceiptDetailModal
+            receiptId={selectedReceiptId}
+            onClose={() => setSelectedReceiptId(null)}
+            onDateUpdated={handleDateUpdated}
+          />
+        )}
+
         <h2 className="text-2xl font-bold">Загрузить чек</h2>
         
         {/* Success Message */}
@@ -846,8 +1083,9 @@ const GroceryTrackerApp = () => {
               <Camera size={48} className="mx-auto text-gray-400 mb-4" />
               <p className="text-lg font-semibold text-gray-700 mb-2">Сфотографируйте чек</p>
               <p className="text-sm text-gray-500 mb-2">или выберите фото из галереи</p>
-              <p className="text-xs text-indigo-600 font-medium mb-4">
-                ✨ Обработка в фоне - можно закрыть приложение!
+              <p className="text-xs text-indigo-600 font-medium mb-4 flex items-center justify-center gap-1">
+                <Sparkles size={14} className="flex-shrink-0" />
+                Обработка в фоне - можно закрыть приложение!
               </p>
               <div className="flex gap-3 justify-center">
                 <button 
@@ -933,7 +1171,10 @@ const GroceryTrackerApp = () => {
                     </div>
                   ) : (
                     <div className="flex items-center justify-between">
-                      <div className="flex-1">
+                      <div 
+                        className="flex-1 cursor-pointer"
+                        onClick={() => setSelectedReceiptId(receipt.id)}
+                      >
                         <div className="font-semibold text-gray-900">{new Date(receipt.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}</div>
                         <div className="text-sm text-gray-500">{receipt.items} товаров</div>
                       </div>
@@ -945,6 +1186,13 @@ const GroceryTrackerApp = () => {
                             Обработан
                           </div>
                         </div>
+                        <button
+                          onClick={() => setSelectedReceiptId(receipt.id)}
+                          className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                          title="Просмотреть чек"
+                        >
+                          <Eye size={20} />
+                        </button>
                         <button
                           onClick={() => setDeleteConfirmId(receipt.id)}
                           className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
@@ -1245,53 +1493,6 @@ const GroceryTrackerApp = () => {
     );
   };
 
-  // Страница семей
-  const FamiliesPage = () => (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">Семьи</h2>
-        <button className="bg-indigo-600 text-white p-2 rounded-xl hover:bg-indigo-700 transition-colors">
-          <Plus size={24} />
-        </button>
-      </div>
-
-      <div className="space-y-3">
-        {familiesLoading ? (
-          <div className="text-center py-8 text-gray-500">Загрузка семей...</div>
-        ) : (
-          families.map(family => (
-            <div key={family.id} className={`bg-white rounded-xl p-5 border-2 ${family.is_active ? 'border-indigo-500' : 'border-gray-200 opacity-60'}`}>
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-3">
-                  <div className={`p-3 rounded-full ${family.is_active ? 'bg-indigo-100' : 'bg-gray-100'}`}>
-                    <Users size={24} className={family.is_active ? 'text-indigo-600' : 'text-gray-400'} />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900">{family.name}</h3>
-                    <p className="text-sm text-gray-500">{family.member_count} участника</p>
-                  </div>
-                </div>
-                {family.is_active && (
-                  <div className="bg-indigo-100 text-indigo-600 px-3 py-1 rounded-full text-xs font-semibold">
-                    Активна
-                  </div>
-                )}
-              </div>
-              <div className="text-sm text-gray-600">
-                Расход за месяц: <span className="font-semibold">€{monthlyStats.totalSpent.toFixed(2)}</span>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-
-      <button className="w-full bg-gray-100 text-gray-700 py-4 rounded-xl font-semibold hover:bg-gray-200 transition-colors flex items-center justify-center gap-2">
-        <Plus size={20} />
-        Создать новую семью
-      </button>
-    </div>
-  );
-
   // Страница продуктов
   const ProductsPage = () => {
     const [editingId, setEditingId] = useState<number | null>(null);
@@ -1461,12 +1662,8 @@ const GroceryTrackerApp = () => {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-6 py-4 sticky top-0 z-10">
-        <div className="max-w-md mx-auto flex items-center justify-between">
+        <div className="max-w-md mx-auto">
           <h1 className="text-xl font-bold text-gray-900">Grocery Tracker</h1>
-          <div className="flex items-center gap-2 bg-gray-100 px-3 py-2 rounded-lg text-sm">
-            <Users size={16} className="text-gray-600" />
-            <span className="font-medium text-gray-700">{selectedFamily}</span>
-          </div>
         </div>
       </div>
 
@@ -1476,7 +1673,6 @@ const GroceryTrackerApp = () => {
         {activeTab === 'upload' && <UploadPage />}
         {activeTab === 'products' && <ProductsPage />}
         {activeTab === 'analytics' && <AnalyticsPage />}
-        {activeTab === 'families' && <FamiliesPage />}
       </div>
 
       {/* Bottom Navigation */}
@@ -1509,13 +1705,6 @@ const GroceryTrackerApp = () => {
           >
             <BarChart3 size={22} />
             <span className="text-xs font-medium">Аналитика</span>
-          </button>
-          <button 
-            onClick={() => setActiveTab('families')}
-            className={`flex flex-col items-center gap-1 p-2 ${activeTab === 'families' ? 'text-indigo-600' : 'text-gray-400'}`}
-          >
-            <Users size={22} />
-            <span className="text-xs font-medium">Семьи</span>
           </button>
         </div>
       </div>
