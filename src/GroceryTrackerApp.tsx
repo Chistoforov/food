@@ -783,14 +783,53 @@ const GroceryTrackerApp = () => {
   const UploadPage = () => {
     const [isProcessing, setIsProcessing] = useState(false);
     const [uploadError, setUploadError] = useState<string | null>(null);
+    const [uploadErrorClosing, setUploadErrorClosing] = useState(false);
     const [uploadSuccess, setUploadSuccess] = useState(false);
+    const [uploadSuccessClosing, setUploadSuccessClosing] = useState(false);
     const [deletingReceiptId, setDeletingReceiptId] = useState<number | null>(null);
     const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
     const [selectedReceiptId, setSelectedReceiptId] = useState<number | null>(null);
     const [pendingReceipts, setPendingReceipts] = useState<any[]>([]);
     const [completedReceiptTimers, setCompletedReceiptTimers] = useState<Record<number, number>>({});
+    const [receiptStatusAnimations, setReceiptStatusAnimations] = useState<Record<number, string>>({});
+    const [previousReceiptStatuses, setPreviousReceiptStatuses] = useState<Record<number, string>>({});
     const cameraInputRef = useRef<HTMLInputElement>(null);
     const galleryInputRef = useRef<HTMLInputElement>(null);
+    const autoCloseTimersRef = useRef<Record<number, number>>({});
+    const lastVisibleTimeRef = useRef<number>(Date.now());
+
+    // Handle page visibility for PWA (pause/resume timers when app goes to background)
+    useEffect(() => {
+      const handleVisibilityChange = () => {
+        if (document.hidden) {
+          // App went to background
+          console.log('📱 PWA: Приложение ушло в фон');
+          lastVisibleTimeRef.current = Date.now();
+        } else {
+          // App came back to foreground
+          console.log('📱 PWA: Приложение вернулось на передний план');
+          const timeInBackground = Date.now() - lastVisibleTimeRef.current;
+          console.log(`⏱️ PWA: Время в фоне: ${timeInBackground}ms`);
+          
+          // Immediately check for updates when app comes back
+          loadPendingReceipts().then((receipts) => {
+            if (receipts) {
+              const completedReceipts = receipts.filter((r: any) => r.status === 'completed');
+              if (completedReceipts.length > 0) {
+                console.log('✅ PWA: Найдены завершенные чеки после возврата');
+                refetchStats();
+              }
+            }
+          });
+        }
+      };
+
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+      
+      return () => {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      };
+    }, []);
 
     // Load pending receipts and poll for updates
     // Note: Realtime is disabled because it's not available in the current Supabase plan
@@ -802,9 +841,14 @@ const GroceryTrackerApp = () => {
       let previousReceipts: any[] = [];
       
       // Polling: check pending receipts every 1 second for responsive updates
-      // This ensures updates work without Realtime
+      // This ensures updates work without Realtime and works well in PWA
       console.log('⏲️ UploadPage: Запускаем polling (каждую секунду)');
       const pollingInterval = setInterval(async () => {
+        // Skip polling if page is not visible (PWA in background)
+        if (document.hidden) {
+          return;
+        }
+        
         console.log('🔄 Polling: Проверяем статус pending receipts');
         const receipts = await loadPendingReceipts();
         
@@ -812,6 +856,27 @@ const GroceryTrackerApp = () => {
           previousReceipts = [];
           return;
         }
+        
+        // Detect status changes and trigger animations
+        receipts.forEach((receipt: any) => {
+          const prevReceipt = previousReceipts.find((prev: any) => prev.id === receipt.id);
+          if (prevReceipt && prevReceipt.status !== receipt.status) {
+            console.log(`🔄 Статус изменился для чека ${receipt.id}: ${prevReceipt.status} → ${receipt.status}`);
+            // Trigger flip animation on status change
+            setReceiptStatusAnimations(prev => ({
+              ...prev,
+              [receipt.id]: 'receipt-status-change'
+            }));
+            // Clear animation class after animation completes
+            setTimeout(() => {
+              setReceiptStatusAnimations(prev => {
+                const newAnims = { ...prev };
+                delete newAnims[receipt.id];
+                return newAnims;
+              });
+            }, 600);
+          }
+        });
         
         // Check if any receipts changed to completed status
         const newlyCompleted = receipts.filter((r: any) => {
@@ -836,78 +901,116 @@ const GroceryTrackerApp = () => {
     }, [selectedFamilyId]);
 
     // Auto-close completed receipts after 3 seconds with countdown
+    // Enhanced for PWA: uses timestamp tracking instead of just timers
     useEffect(() => {
-      const timers: NodeJS.Timeout[] = [];
+      const AUTO_CLOSE_DELAY = 3000; // 3 seconds
       const countdownIntervals: NodeJS.Timeout[] = [];
-      const newTimers: Record<number, number> = {};
 
-      // Find all completed receipts and set timers to auto-remove them
+      // Process each completed receipt
       pendingReceipts.forEach((receipt) => {
-        if (receipt.status === 'completed' && !completedReceiptTimers[receipt.id]) {
-          console.log('⏱️ Запускаем таймер автоудаления для чека:', receipt.id);
-          
-          // Initialize countdown at 3 seconds
-          newTimers[receipt.id] = 3;
-          
-          // Update countdown every second
-          const countdownInterval = setInterval(() => {
-            setCompletedReceiptTimers(prev => {
-              const current = prev[receipt.id];
-              if (current && current > 0) {
-                return { ...prev, [receipt.id]: current - 1 };
-              }
-              return prev;
-            });
-          }, 1000);
-          
-          countdownIntervals.push(countdownInterval);
-          
-          // Auto-delete after 3 seconds
-          const timer = setTimeout(async () => {
+        if (receipt.status === 'completed') {
+          // Initialize start time if not exists
+          if (!autoCloseTimersRef.current[receipt.id]) {
+            console.log('⏱️ Инициализируем таймер автоудаления для чека:', receipt.id);
+            autoCloseTimersRef.current[receipt.id] = Date.now();
+            
+            // Set initial countdown
+            setCompletedReceiptTimers(prev => ({
+              ...prev,
+              [receipt.id]: 3
+            }));
+          }
+
+          // Calculate remaining time
+          const startTime = autoCloseTimersRef.current[receipt.id];
+          const elapsed = Date.now() - startTime;
+          const remaining = Math.max(0, AUTO_CLOSE_DELAY - elapsed);
+          const remainingSeconds = Math.ceil(remaining / 1000);
+
+          // Update countdown display
+          if (remainingSeconds > 0 && !completedReceiptTimers[receipt.id]) {
+            setCompletedReceiptTimers(prev => ({
+              ...prev,
+              [receipt.id]: remainingSeconds
+            }));
+          }
+
+          // Auto-delete if time has passed
+          if (remaining <= 0) {
             console.log('🗑️ Автоматически удаляем завершенный чек:', receipt.id);
-            try {
-              await SupabaseService.deletePendingReceipt(receipt.id);
-              console.log('✅ Чек успешно удален');
-              
-              // Remove from countdown timers
-              setCompletedReceiptTimers(prev => {
-                const newTimers = { ...prev };
-                delete newTimers[receipt.id];
-                return newTimers;
-              });
-              
-              loadPendingReceipts();
-              
-              // Обновляем статистику после удаления чека
-              console.log('🔄 Обновляем статистику после удаления чека');
-              refetchStats();
-            } catch (error) {
-              console.error('❌ Ошибка автоудаления чека:', error);
-            }
-          }, 3000); // 3 seconds
-          
-          timers.push(timer);
+            handleAutoDeleteReceipt(receipt.id);
+          }
         }
       });
 
-      // Set initial countdown values
-      if (Object.keys(newTimers).length > 0) {
-        setCompletedReceiptTimers(prev => ({ ...prev, ...newTimers }));
-      }
-
-      if (timers.length > 0) {
-        console.log(`⏱️ Запущено ${timers.length} таймеров для автоудаления`);
-      }
-
-      // Cleanup: clear all timers when component unmounts or pendingReceipts changes
-      return () => {
-        if (timers.length > 0) {
-          console.log(`🧹 Очищаем ${timers.length} таймеров`);
-          timers.forEach(timer => clearTimeout(timer));
+      // Update countdown every second
+      const countdownInterval = setInterval(() => {
+        // Skip if page is not visible (PWA in background)
+        if (document.hidden) {
+          return;
         }
+
+        const updates: Record<number, number> = {};
+        let hasChanges = false;
+
+        pendingReceipts.forEach((receipt) => {
+          if (receipt.status === 'completed' && autoCloseTimersRef.current[receipt.id]) {
+            const startTime = autoCloseTimersRef.current[receipt.id];
+            const elapsed = Date.now() - startTime;
+            const remaining = Math.max(0, AUTO_CLOSE_DELAY - elapsed);
+            const remainingSeconds = Math.ceil(remaining / 1000);
+
+            if (remainingSeconds !== completedReceiptTimers[receipt.id]) {
+              updates[receipt.id] = remainingSeconds;
+              hasChanges = true;
+            }
+
+            // Auto-delete if time has passed
+            if (remaining <= 0) {
+              console.log('🗑️ Автоматически удаляем завершенный чек:', receipt.id);
+              handleAutoDeleteReceipt(receipt.id);
+            }
+          }
+        });
+
+        if (hasChanges) {
+          setCompletedReceiptTimers(prev => ({ ...prev, ...updates }));
+        }
+      }, 100); // Check every 100ms for smoother countdown in PWA
+
+      countdownIntervals.push(countdownInterval);
+
+      // Cleanup
+      return () => {
         countdownIntervals.forEach(interval => clearInterval(interval));
       };
-    }, [pendingReceipts]);
+    }, [pendingReceipts, completedReceiptTimers]);
+
+    // Helper function to handle auto-deletion
+    const handleAutoDeleteReceipt = async (receiptId: number) => {
+      try {
+        // Clean up timer reference
+        delete autoCloseTimersRef.current[receiptId];
+        
+        // Remove from countdown display
+        setCompletedReceiptTimers(prev => {
+          const newTimers = { ...prev };
+          delete newTimers[receiptId];
+          return newTimers;
+        });
+
+        await SupabaseService.deletePendingReceipt(receiptId);
+        console.log('✅ Чек успешно удален');
+        
+        loadPendingReceipts();
+        
+        // Обновляем статистику после удаления чека
+        console.log('🔄 Обновляем статистику после удаления чека');
+        refetchStats();
+      } catch (error) {
+        console.error('❌ Ошибка автоудаления чека:', error);
+      }
+    };
 
     const loadPendingReceipts = async () => {
       try {
@@ -954,13 +1057,21 @@ const GroceryTrackerApp = () => {
         await SupabaseService.triggerReceiptProcessing(pendingReceipt.id);
         
         setUploadSuccess(true);
+        setUploadSuccessClosing(false);
         
         // Load pending receipts to show the new one
         await loadPendingReceipts();
         
-        // Show success message
+        // Show success message with smooth closing animation
+        // Start closing animation 500ms before hiding
+        setTimeout(() => {
+          setUploadSuccessClosing(true);
+        }, 2500);
+        
+        // Hide message after animation completes
         setTimeout(() => {
           setUploadSuccess(false);
+          setUploadSuccessClosing(false);
         }, 3000);
 
       } catch (error) {
@@ -1043,9 +1154,11 @@ const GroceryTrackerApp = () => {
         
         {/* Success Message */}
         {uploadSuccess && (
-          <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+          <div className={`bg-green-50 border border-green-200 rounded-xl p-4 transition-all ${
+            uploadSuccessClosing ? 'message-fade-out' : 'message-fade-in'
+          }`}>
             <div className="flex items-start gap-3">
-              <CheckCircle size={24} className="text-green-600 flex-shrink-0" />
+              <CheckCircle size={24} className="text-green-600 flex-shrink-0 animate-bounce" style={{ animationIterationCount: '2' }} />
               <div className="flex-1">
                 <div className="font-semibold text-green-900 mb-1">Чек загружен!</div>
                 <div className="text-sm text-green-700">
@@ -1059,7 +1172,7 @@ const GroceryTrackerApp = () => {
         
         {/* Pending Receipts Status */}
         {pendingReceipts.length > 0 && (
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 receipt-slide-in">
             <h3 className="font-semibold text-blue-900 mb-3">
               Обрабатываемые чеки ({pendingReceipts.length})
             </h3>
@@ -1067,11 +1180,17 @@ const GroceryTrackerApp = () => {
               {pendingReceipts.map((receipt) => (
                 <div 
                   key={receipt.id} 
-                  className="bg-white rounded-lg p-3 flex items-center gap-3"
+                  className={`bg-white rounded-lg p-3 flex items-center gap-3 transition-all duration-300 ${
+                    receiptStatusAnimations[receipt.id] || ''
+                  }`}
+                  style={{ 
+                    transformStyle: 'preserve-3d',
+                    backfaceVisibility: 'hidden'
+                  }}
                 >
                   {receipt.status === 'pending' && (
                     <>
-                      <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
+                      <div className="w-2 h-2 rounded-full bg-yellow-500 status-pulse"></div>
                       <div className="flex-1">
                         <div className="text-sm text-gray-700">Ожидает обработки...</div>
                         <div className="text-xs text-gray-500">
@@ -1084,7 +1203,7 @@ const GroceryTrackerApp = () => {
                     <>
                       <Loader2 size={16} className="text-blue-600 animate-spin" />
                       <div className="flex-1">
-                        <div className="text-sm text-gray-700">Обрабатывается...</div>
+                        <div className="text-sm text-gray-700 font-medium">Обрабатывается...</div>
                         <div className="text-xs text-gray-500">
                           {new Date(receipt.created_at).toLocaleString('ru')}
                         </div>
@@ -1093,12 +1212,12 @@ const GroceryTrackerApp = () => {
                   )}
                   {receipt.status === 'completed' && (
                     <>
-                      <CheckCircle size={16} className="text-green-600" />
+                      <CheckCircle size={16} className="text-green-600 animate-bounce" style={{ animationIterationCount: '3' }} />
                       <div className="flex-1">
                         <div className="text-sm text-green-700 font-medium">
                           Обработан ✅
-                          {completedReceiptTimers[receipt.id] !== undefined && (
-                            <span className="ml-2 text-xs text-green-600">
+                          {completedReceiptTimers[receipt.id] !== undefined && completedReceiptTimers[receipt.id] > 0 && (
+                            <span className="ml-2 text-xs text-green-600 font-normal">
                               (закрытие через {completedReceiptTimers[receipt.id]}с)
                             </span>
                           )}
@@ -1109,14 +1228,9 @@ const GroceryTrackerApp = () => {
                       </div>
                       <button
                         onClick={() => {
-                          setCompletedReceiptTimers(prev => {
-                            const newTimers = { ...prev };
-                            delete newTimers[receipt.id];
-                            return newTimers;
-                          });
-                          SupabaseService.deletePendingReceipt(receipt.id).then(loadPendingReceipts);
+                          handleAutoDeleteReceipt(receipt.id);
                         }}
-                        className="text-gray-400 hover:text-gray-600"
+                        className="text-gray-400 hover:text-gray-600 transition-colors"
                         title="Закрыть уведомление"
                       >
                         <X size={16} />
@@ -1133,8 +1247,11 @@ const GroceryTrackerApp = () => {
                         </div>
                       </div>
                       <button
-                        onClick={() => SupabaseService.deletePendingReceipt(receipt.id).then(loadPendingReceipts)}
-                        className="text-gray-400 hover:text-gray-600"
+                        onClick={() => {
+                          delete autoCloseTimersRef.current[receipt.id];
+                          SupabaseService.deletePendingReceipt(receipt.id).then(loadPendingReceipts);
+                        }}
+                        className="text-gray-400 hover:text-gray-600 transition-colors"
                       >
                         <X size={16} />
                       </button>
@@ -1148,7 +1265,9 @@ const GroceryTrackerApp = () => {
 
         {/* Error Message */}
         {uploadError && (
-          <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+          <div className={`bg-red-50 border border-red-200 rounded-xl p-4 transition-all ${
+            uploadErrorClosing ? 'message-fade-out' : 'message-fade-in'
+          }`}>
             <div className="flex items-start gap-3">
               <XCircle size={24} className="text-red-600 flex-shrink-0" />
               <div className="flex-1">
@@ -1156,8 +1275,14 @@ const GroceryTrackerApp = () => {
                 <div className="text-sm text-red-700">{uploadError}</div>
               </div>
               <button 
-                onClick={() => setUploadError(null)}
-                className="text-red-400 hover:text-red-600"
+                onClick={() => {
+                  setUploadErrorClosing(true);
+                  setTimeout(() => {
+                    setUploadError(null);
+                    setUploadErrorClosing(false);
+                  }, 500);
+                }}
+                className="text-red-400 hover:text-red-600 transition-colors"
               >
                 <X size={20} />
               </button>
