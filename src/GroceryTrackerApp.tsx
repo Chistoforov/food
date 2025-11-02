@@ -508,7 +508,8 @@ const GroceryTrackerApp = () => {
     const [deletingReceiptId, setDeletingReceiptId] = useState<number | null>(null);
     const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
     const [pendingReceipts, setPendingReceipts] = useState<any[]>([]);
-    const fileInputRef = useRef<HTMLInputElement>(null);
+    const cameraInputRef = useRef<HTMLInputElement>(null);
+    const galleryInputRef = useRef<HTMLInputElement>(null);
 
     // Load pending receipts and subscribe to updates
     useEffect(() => {
@@ -594,15 +595,22 @@ const GroceryTrackerApp = () => {
         );
       } finally {
         setIsProcessing(false);
-        // Reset file input
-        if (fileInputRef.current) {
-          fileInputRef.current.value = '';
+        // Reset file inputs
+        if (cameraInputRef.current) {
+          cameraInputRef.current.value = '';
+        }
+        if (galleryInputRef.current) {
+          galleryInputRef.current.value = '';
         }
       }
     };
 
-    const triggerFileInput = () => {
-      fileInputRef.current?.click();
+    const triggerCameraInput = () => {
+      cameraInputRef.current?.click();
+    };
+
+    const triggerGalleryInput = () => {
+      galleryInputRef.current?.click();
     };
 
     const handleDeleteReceipt = async (receiptId: number) => {
@@ -752,18 +760,28 @@ const GroceryTrackerApp = () => {
 
         {/* Upload Area */}
         <div 
-          onClick={!isProcessing ? triggerFileInput : undefined}
           className={`border-2 border-dashed rounded-2xl p-12 text-center transition-all ${
             isProcessing 
               ? 'border-indigo-300 bg-indigo-50 cursor-not-allowed' 
-              : 'border-gray-300 bg-gray-50 hover:bg-gray-100 hover:border-indigo-400 cursor-pointer'
+              : 'border-gray-300 bg-gray-50'
           }`}
         >
+          {/* Input для камеры (с capture) */}
           <input
-            ref={fileInputRef}
+            ref={cameraInputRef}
             type="file"
             accept="image/*"
             capture="environment"
+            onChange={handleFileSelect}
+            className="hidden"
+            disabled={isProcessing}
+          />
+          
+          {/* Input для галереи (без capture) */}
+          <input
+            ref={galleryInputRef}
+            type="file"
+            accept="image/*"
             onChange={handleFileSelect}
             className="hidden"
             disabled={isProcessing}
@@ -787,7 +805,7 @@ const GroceryTrackerApp = () => {
                 <button 
                   onClick={(e) => {
                     e.stopPropagation();
-                    triggerFileInput();
+                    triggerCameraInput();
                   }}
                   className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-semibold hover:bg-indigo-700 transition-colors flex items-center gap-2"
                 >
@@ -797,7 +815,7 @@ const GroceryTrackerApp = () => {
                 <button 
                   onClick={(e) => {
                     e.stopPropagation();
-                    triggerFileInput();
+                    triggerGalleryInput();
                   }}
                   className="bg-white text-indigo-600 border-2 border-indigo-600 px-6 py-3 rounded-xl font-semibold hover:bg-indigo-50 transition-colors flex items-center gap-2"
                 >
