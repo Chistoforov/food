@@ -34,9 +34,19 @@ const GroceryTrackerApp = () => {
     );
   }
 
-  const [activeTab, setActiveTab] = useState('home');
+  // Восстанавливаем сохраненную вкладку из localStorage или используем 'home' по умолчанию
+  const [activeTab, setActiveTab] = useState(() => {
+    const savedTab = localStorage.getItem('activeTab');
+    return savedTab || 'home';
+  });
   const [selectedFamilyId] = useState<number>(1);
   const [selectedMonth, setSelectedMonth] = useState<{month: string, year: number} | null>(null);
+
+  // Сохраняем текущую вкладку в localStorage при каждом изменении
+  useEffect(() => {
+    localStorage.setItem('activeTab', activeTab);
+    console.log('💾 Сохранили текущую вкладку:', activeTab);
+  }, [activeTab]);
 
   // Функции для навигации по месяцам
   const getCurrentMonth = () => {
@@ -783,23 +793,32 @@ const GroceryTrackerApp = () => {
 
     // Load pending receipts and subscribe to updates
     useEffect(() => {
+      console.log('🔄 UploadPage: Загружаем pending receipts и подписываемся на обновления');
       loadPendingReceipts();
       
       // Subscribe to realtime updates
       const unsubscribe = SupabaseService.subscribeToPendingReceipts(
         selectedFamilyId,
         (receipt) => {
-          console.log('📡 Pending receipt updated:', receipt);
+          console.log('📡 UploadPage: Получено обновление чека:', {
+            id: receipt.id,
+            status: receipt.status,
+            created_at: receipt.created_at
+          });
+          
+          // Перезагружаем список pending receipts
           loadPendingReceipts();
           
           // If receipt completed, refetch stats
           if (receipt.status === 'completed') {
+            console.log('✅ UploadPage: Чек обработан, обновляем статистику');
             refetchStats();
           }
         }
       );
 
       return () => {
+        console.log('🔕 UploadPage: Размонтируем компонент, отписываемся');
         unsubscribe();
       };
     }, [selectedFamilyId]);
@@ -811,13 +830,20 @@ const GroceryTrackerApp = () => {
       // Find all completed receipts and set timers to auto-remove them
       pendingReceipts.forEach((receipt) => {
         if (receipt.status === 'completed') {
+          console.log('⏱️ Запускаем таймер автоудаления для чека:', receipt.id);
+          
           const timer = setTimeout(async () => {
-            console.log('🗑️ Auto-removing completed receipt:', receipt.id);
+            console.log('🗑️ Автоматически удаляем завершенный чек:', receipt.id);
             try {
               await SupabaseService.deletePendingReceipt(receipt.id);
+              console.log('✅ Чек успешно удален');
               loadPendingReceipts();
+              
+              // Обновляем статистику после удаления чека
+              console.log('🔄 Обновляем статистику после удаления чека');
+              refetchStats();
             } catch (error) {
-              console.error('Error auto-removing receipt:', error);
+              console.error('❌ Ошибка автоудаления чека:', error);
             }
           }, 3000); // 3 seconds
           
@@ -825,9 +851,16 @@ const GroceryTrackerApp = () => {
         }
       });
 
+      if (timers.length > 0) {
+        console.log(`⏱️ Запущено ${timers.length} таймеров для автоудаления`);
+      }
+
       // Cleanup: clear all timers when component unmounts or pendingReceipts changes
       return () => {
-        timers.forEach(timer => clearTimeout(timer));
+        if (timers.length > 0) {
+          console.log(`🧹 Очищаем ${timers.length} таймеров`);
+          timers.forEach(timer => clearTimeout(timer));
+        }
       };
     }, [pendingReceipts]);
 

@@ -749,8 +749,14 @@ export class SupabaseService {
     familyId: number,
     callback: (receipt: PendingReceipt) => void
   ): () => void {
+    console.log('🔔 Создаем realtime подписку на pending_receipts для family:', familyId)
+    
     const channel = supabase
-      .channel(`pending_receipts_${familyId}`)
+      .channel(`pending_receipts_${familyId}`, {
+        config: {
+          broadcast: { self: true }
+        }
+      })
       .on(
         'postgres_changes',
         {
@@ -760,13 +766,31 @@ export class SupabaseService {
           filter: `family_id=eq.${familyId}`
         },
         (payload) => {
-          console.log('📡 Realtime update:', payload)
-          callback(payload.new as PendingReceipt)
+          console.log('📡 Realtime событие получено:', {
+            type: payload.eventType,
+            old: payload.old,
+            new: payload.new
+          })
+          
+          // Обрабатываем все типы событий (INSERT, UPDATE, DELETE)
+          if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
+            console.log('✅ Вызываем callback с данными:', payload.new)
+            callback(payload.new as PendingReceipt)
+          }
         }
       )
-      .subscribe()
+      .subscribe((status, err) => {
+        console.log('📡 Статус подписки:', status)
+        if (err) {
+          console.error('❌ Ошибка подписки:', err)
+        }
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ Успешно подписались на realtime обновления pending_receipts')
+        }
+      })
 
     return () => {
+      console.log('🔕 Отписываемся от realtime канала')
       supabase.removeChannel(channel)
     }
   }
