@@ -804,6 +804,33 @@ const GroceryTrackerApp = () => {
       };
     }, [selectedFamilyId]);
 
+    // Auto-close completed receipts after 3 seconds
+    useEffect(() => {
+      const timers: NodeJS.Timeout[] = [];
+
+      // Find all completed receipts and set timers to auto-remove them
+      pendingReceipts.forEach((receipt) => {
+        if (receipt.status === 'completed') {
+          const timer = setTimeout(async () => {
+            console.log('🗑️ Auto-removing completed receipt:', receipt.id);
+            try {
+              await SupabaseService.deletePendingReceipt(receipt.id);
+              loadPendingReceipts();
+            } catch (error) {
+              console.error('Error auto-removing receipt:', error);
+            }
+          }, 3000); // 3 seconds
+          
+          timers.push(timer);
+        }
+      });
+
+      // Cleanup: clear all timers when component unmounts or pendingReceipts changes
+      return () => {
+        timers.forEach(timer => clearTimeout(timer));
+      };
+    }, [pendingReceipts]);
+
     const loadPendingReceipts = async () => {
       try {
         const receipts = await SupabaseService.getPendingReceipts(selectedFamilyId);
