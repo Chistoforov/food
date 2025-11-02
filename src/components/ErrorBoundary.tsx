@@ -1,4 +1,5 @@
 import React, { Component, ReactNode } from 'react';
+import { AlertTriangle } from 'lucide-react';
 
 interface Props {
   children: ReactNode;
@@ -31,7 +32,7 @@ class ErrorBoundary extends Component<Props, State> {
       return this.props.fallback || (
         <div className="min-h-screen bg-gray-50 flex items-center justify-center">
           <div className="text-center">
-            <div className="text-red-500 text-6xl mb-4">⚠️</div>
+            <AlertTriangle className="text-red-500 mx-auto mb-4" size={64} />
             <h2 className="text-2xl font-bold text-gray-900 mb-2">Что-то пошло не так</h2>
             <p className="text-gray-600 mb-4">
               Произошла ошибка при загрузке приложения. Попробуйте обновить страницу.
