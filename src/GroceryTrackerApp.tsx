@@ -792,7 +792,6 @@ const GroceryTrackerApp = () => {
     const [pendingReceipts, setPendingReceipts] = useState<any[]>([]);
     const [completedReceiptTimers, setCompletedReceiptTimers] = useState<Record<number, number>>({});
     const [receiptStatusAnimations, setReceiptStatusAnimations] = useState<Record<number, string>>({});
-    const [previousReceiptStatuses, setPreviousReceiptStatuses] = useState<Record<number, string>>({});
     const cameraInputRef = useRef<HTMLInputElement>(null);
     const galleryInputRef = useRef<HTMLInputElement>(null);
     const autoCloseTimersRef = useRef<Record<number, number>>({});
