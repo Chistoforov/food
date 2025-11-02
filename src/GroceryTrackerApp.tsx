@@ -104,6 +104,29 @@ const GroceryTrackerApp = () => {
     );
   }
 
+  // Подписка на обновления pending receipts для автоматического обновления статистики
+  useEffect(() => {
+    console.log('🔔 Подписываемся на обновления чеков для автообновления статистики');
+    
+    const unsubscribe = SupabaseService.subscribeToPendingReceipts(
+      selectedFamilyId,
+      (receipt) => {
+        console.log('📡 Получено обновление чека:', receipt.status);
+        
+        // Когда чек успешно обработан, автоматически обновляем статистику
+        if (receipt.status === 'completed') {
+          console.log('✅ Чек обработан, автоматически обновляем статистику');
+          refetchStats();
+        }
+      }
+    );
+
+    return () => {
+      console.log('🔕 Отписываемся от обновлений чеков');
+      unsubscribe();
+    };
+  }, [selectedFamilyId, refetchStats]);
+
   // Находим выбранную семью
   const selectedFamily = families.find(f => f.id === selectedFamilyId)?.name || 'Моя семья';
 
@@ -321,40 +344,42 @@ const GroceryTrackerApp = () => {
         className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl p-6 text-white"
         onTouchStart={handleTouchStart}
       >
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center space-x-3">
-            <button
-              onClick={goToPreviousMonth}
-              className="p-2 rounded-lg bg-white/20 hover:bg-white/30 transition-colors"
-              title="Предыдущий месяц"
-            >
-              <ChevronLeft className="w-5 h-5" />
-            </button>
-            
-            <h2 className="text-lg font-semibold min-w-0 flex-1 text-center">
-              {(() => {
-                const monthStr = currentMonth.month.includes('-') 
-                  ? currentMonth.month.split('-')[1] 
-                  : currentMonth.month;
-                const monthName = new Date(currentMonth.year, parseInt(monthStr) - 1).toLocaleString('ru', { month: 'long' });
-                return `${monthName} ${currentMonth.year}`;
-              })()}
-            </h2>
-            
-            <button
-              onClick={goToNextMonth}
-              disabled={!canGoToNextMonth()}
-              className={`p-2 rounded-lg transition-colors ${
-                canGoToNextMonth()
-                  ? 'bg-white/20 hover:bg-white/30'
-                  : 'bg-white/10 text-white/50 cursor-not-allowed'
-              }`}
-              title={canGoToNextMonth() ? "Следующий месяц" : "Нельзя перейти в будущее"}
-            >
-              <ChevronRight className="w-5 h-5" />
-            </button>
-          </div>
+        {/* Навигация по месяцам */}
+        <div className="flex items-center justify-center space-x-4 mb-4">
+          <button
+            onClick={goToPreviousMonth}
+            className="p-2.5 rounded-lg bg-white/20 hover:bg-white/30 transition-colors"
+            title="Предыдущий месяц"
+          >
+            <ChevronLeft className="w-6 h-6" />
+          </button>
           
+          <h2 className="text-xl font-bold px-4">
+            {(() => {
+              const monthStr = currentMonth.month.includes('-') 
+                ? currentMonth.month.split('-')[1] 
+                : currentMonth.month;
+              const monthName = new Date(currentMonth.year, parseInt(monthStr) - 1).toLocaleString('ru', { month: 'long' });
+              return `${monthName} ${currentMonth.year}`;
+            })()}
+          </h2>
+          
+          <button
+            onClick={goToNextMonth}
+            disabled={!canGoToNextMonth()}
+            className={`p-2.5 rounded-lg transition-colors ${
+              canGoToNextMonth()
+                ? 'bg-white/20 hover:bg-white/30'
+                : 'bg-white/10 text-white/50 cursor-not-allowed'
+            }`}
+            title={canGoToNextMonth() ? "Следующий месяц" : "Нельзя перейти в будущее"}
+          >
+            <ChevronRight className="w-6 h-6" />
+          </button>
+        </div>
+
+        {/* Кнопка обновления */}
+        <div className="mb-4">
           <button
             onClick={async () => {
               try {
@@ -364,14 +389,14 @@ const GroceryTrackerApp = () => {
               }
             }}
             disabled={statsLoading}
-            className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+            className={`w-full py-2 rounded-lg text-sm font-medium transition-colors ${
               statsLoading 
                 ? 'bg-white/10 text-white/50 cursor-not-allowed' 
-                : 'bg-white/20 hover:bg-white/30'
+                : 'bg-white/20 hover:bg-white/30 active:bg-white/40'
             }`}
             title="Пересчитать статистику"
           >
-            {statsLoading ? 'Обновление...' : 'Обновить'}
+            {statsLoading ? '⏳ Обновление...' : '🔄 Обновить статистику'}
           </button>
         </div>
         {statsError && (
