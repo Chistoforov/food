@@ -20,6 +20,23 @@ body {
   overflow: hidden;
 }
 
+/* PWA Safe Area Support for notched devices */
+.safe-area-bottom {
+  padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+}
+
+/* Prevent viewport resizing on mobile when address bar hides */
+@supports (-webkit-touch-callout: none) {
+  body {
+    height: 100vh;
+    height: -webkit-fill-available;
+  }
+  
+  html {
+    height: -webkit-fill-available;
+  }
+}
+
 /* Fade out animation for closing messages */
 @keyframes fadeOut {
   from {
