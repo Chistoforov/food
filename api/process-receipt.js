@@ -145,7 +145,47 @@ async function parseReceiptWithPerplexity(imageUrl) {
     }
   }
 
-  const parsedData = JSON.parse(jsonText);
+  // Parse JSON with error handling
+  let parsedData;
+  try {
+    parsedData = JSON.parse(jsonText);
+  } catch (parseError) {
+    console.error('Failed to parse JSON:', jsonText.substring(0, 500));
+    console.error('Parse error details:', parseError);
+    
+    // Try to extract valid JSON by finding the first { and matching closing }
+    // This handles cases where there's extra text after the JSON
+    try {
+      const firstBrace = jsonText.indexOf('{');
+      if (firstBrace !== -1) {
+        let braceCount = 0;
+        let endIndex = -1;
+        
+        for (let i = firstBrace; i < jsonText.length; i++) {
+          if (jsonText[i] === '{') braceCount++;
+          if (jsonText[i] === '}') braceCount--;
+          
+          if (braceCount === 0) {
+            endIndex = i + 1;
+            break;
+          }
+        }
+        
+        if (endIndex !== -1) {
+          const extractedJson = jsonText.substring(firstBrace, endIndex);
+          console.log('Attempting to parse extracted JSON:', extractedJson.substring(0, 200));
+          parsedData = JSON.parse(extractedJson);
+          console.log('Successfully parsed extracted JSON');
+        } else {
+          throw parseError;
+        }
+      } else {
+        throw parseError;
+      }
+    } catch (secondError) {
+      throw new Error(`Failed to parse API response. Received text: ${jsonText.substring(0, 200)}... Error: ${parseError.message || 'Unknown error'}`);
+    }
+  }
 
   if (!parsedData.items || !Array.isArray(parsedData.items)) {
     throw new Error('Invalid response structure: missing items array');
