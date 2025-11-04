@@ -547,6 +547,78 @@ const GroceryTrackerApp = () => {
         )}
       </div>
 
+      {/* Обзор по типам продуктов */}
+      {!productsLoading && processedProducts.length > 0 && (() => {
+        // Группируем продукты по типам
+        const productsByType = processedProducts.reduce((acc, product) => {
+          const type = product.product_type || 'Без категории';
+          if (!acc[type]) {
+            acc[type] = {
+              total: 0,
+              endingSoon: 0,
+              ok: 0,
+              calculating: 0
+            };
+          }
+          acc[type].total += 1;
+          if (product.status === 'ending-soon') acc[type].endingSoon += 1;
+          else if (product.status === 'ok') acc[type].ok += 1;
+          else acc[type].calculating += 1;
+          return acc;
+        }, {} as Record<string, { total: number; endingSoon: number; ok: number; calculating: number }>);
+
+        // Сортируем типы: сначала те, где есть ending-soon
+        const sortedTypes = Object.entries(productsByType).sort(([, a], [, b]) => {
+          if (a.endingSoon !== b.endingSoon) return b.endingSoon - a.endingSoon;
+          return b.total - a.total;
+        });
+
+        return sortedTypes.length > 0 && (
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold mb-3">Обзор по категориям</h3>
+            <div className="grid grid-cols-2 gap-3">
+              {sortedTypes.map(([type, stats]) => (
+                <div key={type} className="bg-white rounded-xl p-4 border border-gray-200 hover:shadow-md transition-shadow">
+                  <div className="mb-2">
+                    <h4 className="font-semibold text-gray-900 text-sm mb-1 capitalize">{type}</h4>
+                    <div className="text-xs text-gray-500">Всего: {stats.total}</div>
+                  </div>
+                  <div className="space-y-1">
+                    {stats.endingSoon > 0 && (
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="flex items-center gap-1 text-orange-600">
+                          <AlertCircle size={12} />
+                          <span>Заканчивается</span>
+                        </span>
+                        <span className="font-semibold text-orange-600">{stats.endingSoon}</span>
+                      </div>
+                    )}
+                    {stats.ok > 0 && (
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="flex items-center gap-1 text-green-600">
+                          <CheckCircle size={12} />
+                          <span>В наличии</span>
+                        </span>
+                        <span className="font-semibold text-green-600">{stats.ok}</span>
+                      </div>
+                    )}
+                    {stats.calculating > 0 && (
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="flex items-center gap-1 text-blue-600">
+                          <Clock size={12} />
+                          <span>Расчет...</span>
+                        </span>
+                        <span className="font-semibold text-blue-600">{stats.calculating}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Список продуктов с напоминаниями */}
       <div>
         <h3 className="text-lg font-semibold mb-3">Мои продукты</h3>
