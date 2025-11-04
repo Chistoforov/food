@@ -282,6 +282,9 @@ async function processReceipt(familyId, parsedData) {
 
   if (receiptError) throw receiptError;
 
+  // Массив для сохранения ID затронутых продуктов
+  const affectedProductIds = [];
+
   // Process each item
   for (const item of items) {
     // Check cache first for this original name
@@ -390,6 +393,24 @@ async function processReceipt(familyId, parsedData) {
       });
 
     if (historyError) throw historyError;
+    
+    // Сохраняем ID продукта для последующего пересчета статусов
+    affectedProductIds.push(product.id);
+  }
+
+  // Пересчитываем статусы для всех затронутых продуктов
+  console.log(`🔄 Пересчитываем статусы для ${affectedProductIds.length} продуктов...`);
+  for (const productId of affectedProductIds) {
+    try {
+      await supabase.rpc('update_product_analytics', {
+        p_product_id: productId,
+        p_family_id: familyId
+      });
+      console.log(`✅ Статус продукта #${productId} обновлен`);
+    } catch (error) {
+      console.error(`❌ Ошибка обновления статуса продукта #${productId}:`, error);
+      // Продолжаем выполнение даже при ошибке
+    }
   }
 
   // Recalculate monthly stats

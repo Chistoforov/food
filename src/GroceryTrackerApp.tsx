@@ -1447,8 +1447,7 @@ const GroceryTrackerApp = () => {
     const [editedProductType, setEditedProductType] = useState<string>('');
     const [showSuccessMessage, setShowSuccessMessage] = useState(false);
     const [successMessage, setSuccessMessage] = useState<string>('');
-    const [isReprocessing, setIsReprocessing] = useState(false);
-    const [reprocessProgress, setReprocessProgress] = useState<string>('');
+    const [isClearingCache, setIsClearingCache] = useState(false);
 
     const startEditing = (product: typeof processedProducts[0]) => {
       setEditingId(product.id);
@@ -1510,42 +1509,65 @@ const GroceryTrackerApp = () => {
       }
     };
 
-    const handleReprocessReceipts = async () => {
-      if (!confirm('Повторно обработать все чеки через AI для определения типов продуктов?\n\nЭто может занять несколько минут.')) {
+    const handleClearCache = async () => {
+      if (!confirm('Очистить кэш приложения и пересчитать всю аналитику?\n\nЭто обновит приложение до последней версии без переустановки PWA.')) {
         return;
       }
 
       try {
-        setIsReprocessing(true);
-        setReprocessProgress('Отправляем чеки на обработку...');
-        
-        console.log('🔄 Запускаем повторную обработку чеков...');
-        const result = await SupabaseService.reprocessReceipts(selectedFamilyId);
-        
-        if (result.success) {
-          setReprocessProgress('Обработка завершена!');
-          setSuccessMessage(
-            `Обработано ${result.receiptsProcessed} чеков. ` +
-            `Обновлено типов: ${result.productsUpdated}. ` +
-            `Прогнозы пересчитаны!`
-          );
-          setShowSuccessMessage(true);
-          
-          // Скрываем сообщение через 7 секунд
-          setTimeout(() => {
-            setShowSuccessMessage(false);
-            setReprocessProgress('');
-          }, 7000);
-        } else {
-          setReprocessProgress('Ошибка обработки');
-          alert('Ошибка при повторной обработке чеков');
+        setIsClearingCache(true);
+        console.log('🧹 Начинаем очистку кэша...');
+
+        // 1. Очищаем все кэши браузера
+        if ('caches' in window) {
+          const cacheNames = await caches.keys();
+          console.log('📦 Найдено кэшей:', cacheNames.length);
+          await Promise.all(cacheNames.map(name => {
+            console.log('🗑️ Удаляем кэш:', name);
+            return caches.delete(name);
+          }));
+          console.log('✅ Все кэши удалены');
         }
+
+        // 2. Очищаем localStorage (кроме критичных данных)
+        const savedTab = localStorage.getItem('groceryTrackerActiveTab');
+        console.log('🧹 Очищаем localStorage...');
+        localStorage.clear();
+        // Восстанавливаем только текущую вкладку
+        if (savedTab) {
+          localStorage.setItem('groceryTrackerActiveTab', savedTab);
+        }
+        console.log('✅ localStorage очищен');
+
+        // 3. Пересчитываем всю аналитику
+        console.log('📊 Пересчитываем аналитику...');
+        await recalculateAllAnalytics();
+        console.log('✅ Аналитика пересчитана');
+
+        // 4. Обновляем Service Worker
+        if ('serviceWorker' in navigator) {
+          console.log('🔄 Обновляем Service Worker...');
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          for (const registration of registrations) {
+            await registration.update();
+          }
+          console.log('✅ Service Worker обновлен');
+        }
+
+        setSuccessMessage('Кэш очищен! Аналитика пересчитана. Приложение обновлено.');
+        setShowSuccessMessage(true);
+        
+        // Перезагружаем страницу через 2 секунды
+        setTimeout(() => {
+          console.log('🔄 Перезагружаем страницу...');
+          window.location.reload();
+        }, 2000);
+        
       } catch (error) {
-        console.error('Ошибка повторной обработки:', error);
-        setReprocessProgress('');
+        console.error('❌ Ошибка очистки кэша:', error);
         alert('Ошибка: ' + (error instanceof Error ? error.message : 'Неизвестная ошибка'));
       } finally {
-        setIsReprocessing(false);
+        setIsClearingCache(false);
       }
     };
 
@@ -1554,45 +1576,32 @@ const GroceryTrackerApp = () => {
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-bold">Мои продукты</h2>
           
-          {/* Кнопка повторной обработки */}
+          {/* Кнопка очистки кэша */}
           <button
-            onClick={handleReprocessReceipts}
-            disabled={isReprocessing}
+            onClick={handleClearCache}
+            disabled={isClearingCache}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
-              isReprocessing
+              isClearingCache
                 ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                : 'bg-purple-600 text-white hover:bg-purple-700'
+                : 'bg-red-600 text-white hover:bg-red-700'
             }`}
-            title="Определить типы продуктов из существующих чеков"
+            title="Очистить кэш и обновить приложение"
           >
-            {isReprocessing ? (
+            {isClearingCache ? (
               <>
                 <Loader2 className="animate-spin" size={18} />
-                Обработка...
+                Очистка...
               </>
             ) : (
               <>
-                <Sparkles size={18} />
-                AI Типы
+                <RefreshCw size={18} />
+                Сброс кэша
               </>
             )}
           </button>
         </div>
-
-        {/* Индикатор прогресса */}
-        {isReprocessing && reprocessProgress && (
-          <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-            <div className="flex items-center gap-3">
-              <Loader2 className="animate-spin text-purple-600" size={24} />
-              <div>
-                <div className="font-medium text-purple-900">{reprocessProgress}</div>
-                <div className="text-sm text-purple-600">Пожалуйста, подождите...</div>
-              </div>
-            </div>
-          </div>
-        )}
         
-        {/* Уведомление о пересчете статистики */}
+        {/* Уведомление об успехе */}
         {showSuccessMessage && (
           <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3">
             <CheckCircle size={20} className="text-green-600" />
@@ -1603,13 +1612,13 @@ const GroceryTrackerApp = () => {
           </div>
         )}
 
-        {/* Информация о функции */}
+        {/* Информация о сбросе кэша */}
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <div className="flex items-start gap-3">
             <Info size={20} className="text-blue-600 flex-shrink-0 mt-0.5" />
             <div className="text-sm text-blue-800">
-              <p className="font-semibold mb-1">Что делает кнопка "AI Типы"?</p>
-              <p>Повторно обрабатывает все загруженные чеки через AI, чтобы автоматически определить типы продуктов (молоко, хлеб, сыр и т.д.). Это улучшит точность прогнозов на 40-60%!</p>
+              <p className="font-semibold mb-1">Что делает кнопка "Сброс кэша"?</p>
+              <p>Полностью очищает кэш приложения, обновляет все данные и пересчитывает аналитику. Используйте это после внесения изменений в приложение, чтобы не переустанавливать PWA.</p>
             </div>
           </div>
         </div>

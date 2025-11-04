@@ -324,11 +324,25 @@ export class SupabaseService {
 
     // Определяем статус
     const today = new Date()
+    today.setHours(0, 0, 0, 0) // Обнуляем время для корректного сравнения дат
+    
+    const lastPurchaseDate = new Date(lastPurchase)
+    lastPurchaseDate.setHours(0, 0, 0, 0)
+    
+    const daysSincePurchase = Math.floor((today.getTime() - lastPurchaseDate.getTime()) / (1000 * 60 * 60 * 24))
     const daysUntilEnd = Math.floor((predictedEnd.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
     
     let status: 'ending-soon' | 'ok' | 'calculating' = 'ok'
-    if (daysUntilEnd <= 2) {
+    
+    // Если продукт куплен недавно (меньше 2 дней назад), статус всегда "ok"
+    // независимо от прогноза. Это предотвращает ситуацию, когда только что 
+    // купленный продукт сразу помечается как "заканчивается"
+    if (daysSincePurchase < 2) {
+      status = 'ok'
+      console.log(`✅ Продукт куплен ${daysSincePurchase === 0 ? 'сегодня' : 'вчера'}, статус = ok`)
+    } else if (daysUntilEnd <= 2) {
       status = 'ending-soon'
+      console.log(`⚠️  До окончания ${daysUntilEnd} дней, статус = ending-soon`)
     }
 
     return {
