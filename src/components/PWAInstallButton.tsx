@@ -3,7 +3,7 @@ import { Download, X, Share, Plus, Smartphone } from 'lucide-react';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 
 const PWAInstallButton = () => {
-  const { isInstallable, isIOS, isStandalone, installPWA, canShowInstallButton } = usePWAInstall();
+  const { isIOS, isStandalone, installPWA, canShowInstallButton } = usePWAInstall();
   const [showIOSInstructions, setShowIOSInstructions] = useState(false);
   const [isInstalling, setIsInstalling] = useState(false);
 
