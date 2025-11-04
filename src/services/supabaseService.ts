@@ -1304,4 +1304,70 @@ export class SupabaseService {
       throw error
     }
   }
+
+  // Удаление типа продукта (очистка product_type для всех продуктов этого типа)
+  static async deleteProductType(productType: string, familyId: number): Promise<void> {
+    console.log(`🗑️ Удаляем тип продукта "${productType}" для семьи ${familyId}`)
+    
+    try {
+      // Находим все продукты с этим типом
+      const { data: products, error: fetchError } = await supabase
+        .from('products')
+        .select('id')
+        .eq('family_id', familyId)
+        .eq('product_type', productType)
+
+      if (fetchError) {
+        console.error('❌ Ошибка получения продуктов:', fetchError)
+        throw fetchError
+      }
+
+      if (!products || products.length === 0) {
+        console.log('⚠️ Нет продуктов с таким типом')
+        return
+      }
+
+      console.log(`📦 Найдено ${products.length} продуктов с типом "${productType}"`)
+
+      // Очищаем product_type для всех продуктов
+      const { error: updateError } = await supabase
+        .from('products')
+        .update({ product_type: null })
+        .eq('family_id', familyId)
+        .eq('product_type', productType)
+
+      if (updateError) {
+        console.error('❌ Ошибка обновления продуктов:', updateError)
+        throw updateError
+      }
+
+      console.log('✅ Тип продукта удален у всех продуктов')
+
+      // Удаляем кэшированную статистику для этого типа
+      const { error: deleteStatsError } = await supabase
+        .from('product_type_stats')
+        .delete()
+        .eq('family_id', familyId)
+        .eq('product_type', productType)
+
+      if (deleteStatsError) {
+        console.warn('⚠️ Ошибка удаления статистики типа (не критично):', deleteStatsError)
+      }
+
+      // Пересчитываем статусы для всех затронутых продуктов
+      console.log('🔄 Пересчитываем статусы для затронутых продуктов...')
+      for (const product of products) {
+        try {
+          await this.updateProductStats(product.id, familyId)
+        } catch (err) {
+          console.warn(`⚠️ Не удалось пересчитать статистику для продукта #${product.id}:`, err)
+        }
+      }
+
+      console.log(`✅ Тип продукта "${productType}" успешно удален`)
+    } catch (error) {
+      console.error('❌ Ошибка удаления типа продукта:', error)
+      throw error
+    }
+  }
 }

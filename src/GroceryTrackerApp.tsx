@@ -3,6 +3,7 @@ import { Camera, ShoppingCart, Home, BarChart3, Clock, AlertCircle, CheckCircle,
 import { useProducts, useReceipts, useProductHistory, useMonthlyStats } from './hooks/useSupabaseData';
 import { SupabaseService } from './services/supabaseService';
 import type { ProductHistory, Product } from './lib/supabase';
+import ConfirmationModal from './components/ConfirmationModal';
 
 // Проверяем переменные окружения при загрузке
 console.log('🔍 Environment check:', {
@@ -393,6 +394,8 @@ const GroceryTrackerApp = () => {
       productCount: number
     }>>({})
     const [loadingTypeStats, setLoadingTypeStats] = useState(false)
+    const [deleteTypeConfirm, setDeleteTypeConfirm] = useState<string | null>(null)
+    const [deletingType, setDeletingType] = useState(false)
 
     // Загружаем статистику по типам продуктов из КЭША (быстро!)
     // Кэш автоматически обновляется триггерами при изменениях
@@ -415,8 +418,44 @@ const GroceryTrackerApp = () => {
       }
     }, [activeTab, selectedFamilyId]) // Убрали products.length - кэш обновляется автоматически
 
+    const handleDeleteProductType = async () => {
+      if (!deleteTypeConfirm) return
+      
+      try {
+        setDeletingType(true)
+        console.log('🗑️ Удаляем тип продукта:', deleteTypeConfirm)
+        
+        await SupabaseService.deleteProductType(deleteTypeConfirm, selectedFamilyId)
+        
+        // Обновляем статистику типов
+        const stats = await SupabaseService.getProductTypeStats(selectedFamilyId)
+        setProductTypeStats(stats)
+        
+        console.log('✅ Тип продукта успешно удален')
+        setDeleteTypeConfirm(null)
+      } catch (error) {
+        console.error('❌ Ошибка удаления типа продукта:', error)
+        alert('Ошибка удаления типа продукта. Попробуйте еще раз.')
+      } finally {
+        setDeletingType(false)
+      }
+    }
+
     return (
     <div className="space-y-6">
+      {/* Модалка подтверждения удаления типа */}
+      <ConfirmationModal
+        isOpen={!!deleteTypeConfirm}
+        onClose={() => setDeleteTypeConfirm(null)}
+        onConfirm={handleDeleteProductType}
+        title="Удалить тип продукта?"
+        message={`Вы уверены, что хотите удалить тип продукта "${deleteTypeConfirm}"?\n\nУ всех продуктов этого типа будет очищен тип, и они перестанут отслеживаться как группа.\n\nЭто действие нельзя отменить.`}
+        confirmText="Да, удалить"
+        cancelText="Отмена"
+        isLoading={deletingType}
+        variant="danger"
+      />
+      
       {/* Статистика за месяц */}
       <div 
         className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl p-6 text-white"
@@ -541,7 +580,7 @@ const GroceryTrackerApp = () => {
                 return (
                   <div 
                     key={type} 
-                    className={`rounded-xl p-4 border-2 transition-all ${
+                    className={`rounded-xl p-4 border-2 transition-all relative ${
                       typeStatus === 'ending-soon' 
                         ? 'bg-orange-50 border-orange-300' 
                         : typeStatus === 'ok'
@@ -549,7 +588,16 @@ const GroceryTrackerApp = () => {
                           : 'bg-blue-50 border-blue-300'
                     }`}
                   >
-                    <div className="flex items-center justify-between">
+                    {/* Кнопка удаления */}
+                    <button
+                      onClick={() => setDeleteTypeConfirm(type)}
+                      className="absolute top-2 right-2 p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Удалить тип продукта"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                    
+                    <div className="flex items-center justify-between pr-6">
                       <h4 className="font-bold text-gray-900 capitalize">{type}</h4>
                       {typeStatus === 'ending-soon' && (
                         <AlertCircle size={20} className="text-orange-600 flex-shrink-0" />
@@ -571,6 +619,9 @@ const GroceryTrackerApp = () => {
                       {typeStatus === 'ending-soon' && 'Заканчивается'}
                       {typeStatus === 'ok' && 'В наличии'}
                       {typeStatus === 'calculating' && 'Расчет...'}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      {typeData.productCount} {typeData.productCount === 1 ? 'продукт' : typeData.productCount < 5 ? 'продукта' : 'продуктов'}
                     </div>
                   </div>
                 );
@@ -1442,6 +1493,7 @@ const GroceryTrackerApp = () => {
     const [showSuccessMessage, setShowSuccessMessage] = useState(false);
     const [successMessage, setSuccessMessage] = useState<string>('');
     const [isClearingCache, setIsClearingCache] = useState(false);
+    const [showClearCacheModal, setShowClearCacheModal] = useState(false);
 
     const startEditing = (product: typeof processedProducts[0]) => {
       setEditingId(product.id);
@@ -1504,12 +1556,9 @@ const GroceryTrackerApp = () => {
     };
 
     const handleClearCache = async () => {
-      if (!confirm('Очистить кэш приложения и пересчитать всю аналитику?\n\nЭто обновит приложение до последней версии без переустановки PWA.')) {
-        return;
-      }
-
       try {
         setIsClearingCache(true);
+        setShowClearCacheModal(false);
         console.log('🧹 Начинаем очистку кэша...');
 
         // 1. Очищаем все кэши браузера
@@ -1567,12 +1616,25 @@ const GroceryTrackerApp = () => {
 
     return (
       <div className="space-y-6">
+        {/* Модалка подтверждения сброса кэша */}
+        <ConfirmationModal
+          isOpen={showClearCacheModal}
+          onClose={() => setShowClearCacheModal(false)}
+          onConfirm={handleClearCache}
+          title="Очистить кэш приложения?"
+          message="Это действие выполнит следующее:\n\n• Удалит все кэшированные данные приложения\n• Пересчитает всю аналитику\n• Обновит приложение до последней версии\n• Перезагрузит страницу\n\nВаши данные в базе не будут удалены. Это займет несколько секунд."
+          confirmText="Да, очистить"
+          cancelText="Отмена"
+          isLoading={isClearingCache}
+          variant="warning"
+        />
+        
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-bold">Мои продукты</h2>
           
           {/* Кнопка очистки кэша */}
           <button
-            onClick={handleClearCache}
+            onClick={() => setShowClearCacheModal(true)}
             disabled={isClearingCache}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
               isClearingCache
