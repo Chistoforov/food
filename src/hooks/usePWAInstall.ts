@@ -15,17 +15,35 @@ export const usePWAInstall = () => {
     // Проверяем, является ли устройство iOS
     const checkIsIOS = () => {
       const userAgent = window.navigator.userAgent.toLowerCase();
-      return /iphone|ipad|ipod/.test(userAgent);
+      const result = /iphone|ipad|ipod/.test(userAgent);
+      console.log('🔍 [PWA] Checking iOS:', { userAgent, isIOS: result });
+      return result;
     };
 
     // Проверяем, запущено ли приложение в standalone режиме (уже установлено)
     const checkIsStandalone = () => {
-      return window.matchMedia('(display-mode: standalone)').matches ||
-             (window.navigator as any).standalone === true;
+      const displayMode = window.matchMedia('(display-mode: standalone)').matches;
+      const navigatorStandalone = (window.navigator as any).standalone === true;
+      const result = displayMode || navigatorStandalone;
+      console.log('🔍 [PWA] Checking standalone:', { 
+        displayMode, 
+        navigatorStandalone, 
+        isStandalone: result 
+      });
+      return result;
     };
 
-    setIsIOS(checkIsIOS());
-    setIsStandalone(checkIsStandalone());
+    const iosCheck = checkIsIOS();
+    const standaloneCheck = checkIsStandalone();
+    
+    setIsIOS(iosCheck);
+    setIsStandalone(standaloneCheck);
+    
+    console.log('📱 [PWA] Initial state:', {
+      isIOS: iosCheck,
+      isStandalone: standaloneCheck,
+      canShowButton: !standaloneCheck && (false || (iosCheck && !standaloneCheck))
+    });
 
     // Для Android и других Chromium браузеров
     const handleBeforeInstallPrompt = (e: Event) => {
@@ -78,12 +96,21 @@ export const usePWAInstall = () => {
     }
   };
 
+  const canShowButton = (isInstallable || (isIOS && !isStandalone));
+  
+  console.log('🎯 [PWA] Hook returning:', {
+    isInstallable,
+    isIOS,
+    isStandalone,
+    canShowInstallButton: canShowButton
+  });
+
   return {
     isInstallable,
     isIOS,
     isStandalone,
     installPWA,
-    canShowInstallButton: (isInstallable || (isIOS && !isStandalone))
+    canShowInstallButton: canShowButton
   };
 };
 

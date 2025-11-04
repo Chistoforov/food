@@ -1,16 +1,82 @@
-import { useState } from 'react';
-import { Download, X, Share, Plus, Smartphone } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Download, X, Share, Plus, Smartphone, Info } from 'lucide-react';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 
 const PWAInstallButton = () => {
-  const { isIOS, isStandalone, installPWA, canShowInstallButton } = usePWAInstall();
+  const { isIOS, isStandalone, installPWA, canShowInstallButton, isInstallable } = usePWAInstall();
   const [showIOSInstructions, setShowIOSInstructions] = useState(false);
   const [isInstalling, setIsInstalling] = useState(false);
+  const [showDebugInfo, setShowDebugInfo] = useState(false);
+  const debugRef = useRef<HTMLDivElement>(null);
 
-  // Не показываем кнопку если приложение уже установлено
-  if (isStandalone || !canShowInstallButton) {
-    return null;
+  // Закрываем отладочную панель при клике вне её
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (debugRef.current && !debugRef.current.contains(event.target as Node)) {
+        setShowDebugInfo(false);
+      }
+    };
+
+    if (showDebugInfo) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showDebugInfo]);
+
+  // Логируем состояние компонента
+  console.log('🔘 [PWA Button] Component state:', {
+    isIOS,
+    isStandalone,
+    isInstallable,
+    canShowInstallButton,
+    willShow: !isStandalone && canShowInstallButton
+  });
+
+  // Если приложение уже установлено - показываем информацию об этом
+  if (isStandalone) {
+    console.log('⏹️ [PWA Button] Hidden: App is already installed (standalone mode)');
+    return (
+      <div className="flex items-center gap-2 px-3 py-2 bg-green-100 text-green-700 rounded-lg text-sm font-medium">
+        <Smartphone size={16} />
+        <span>Установлено</span>
+      </div>
+    );
   }
+  
+  // Если кнопку нельзя показать - показываем отладочную информацию
+  if (!canShowInstallButton) {
+    console.log('⏹️ [PWA Button] Hidden: Cannot show install button (canShowInstallButton=false)');
+    return (
+      <div className="relative" ref={debugRef}>
+        <button
+          onClick={() => setShowDebugInfo(!showDebugInfo)}
+          className="flex items-center gap-2 px-3 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors"
+          title="Информация о PWA"
+        >
+          <Info size={16} />
+          <span>PWA</span>
+        </button>
+        
+        {showDebugInfo && (
+          <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-lg shadow-xl border border-gray-200 p-4 z-50 text-xs">
+            <div className="font-semibold mb-2">Отладка PWA:</div>
+            <div className="space-y-1 text-gray-600">
+              <div>iOS: {isIOS ? '✅ Да' : '❌ Нет'}</div>
+              <div>Standalone: {isStandalone ? '✅ Да' : '❌ Нет'}</div>
+              <div>Installable: {isInstallable ? '✅ Да' : '❌ Нет'}</div>
+              <div className="pt-2 mt-2 border-t border-gray-200 text-gray-500">
+                {isIOS 
+                  ? 'На iOS используйте Safari: кнопка "Поделиться" → "На экран Домой"'
+                  : 'Подождите несколько секунд или откройте меню браузера → "Установить приложение"'}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+  
+  console.log('✅ [PWA Button] Showing install button!');
 
   const handleInstallClick = async () => {
     if (isIOS) {
@@ -35,10 +101,10 @@ const PWAInstallButton = () => {
       <button
         onClick={handleInstallClick}
         disabled={isInstalling}
-        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
+        className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg font-semibold hover:from-indigo-700 hover:to-purple-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 whitespace-nowrap"
       >
-        <Download size={18} />
-        {isInstalling ? 'Установка...' : 'Установить приложение'}
+        <Download size={18} className="animate-bounce" style={{ animationIterationCount: '3' }} />
+        {isInstalling ? 'Установка...' : 'Установить'}
       </button>
 
       {/* Модалка с инструкциями для iOS */}
