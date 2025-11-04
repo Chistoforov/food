@@ -166,6 +166,31 @@ export class SupabaseService {
     return data || []
   }
 
+  // Получить историю всех продуктов с одинаковым product_type
+  static async getProductTypeHistory(productType: string, familyId: number): Promise<ProductHistory[]> {
+    // Сначала получаем все продукты с таким же типом
+    const { data: products, error: productsError } = await supabase
+      .from('products')
+      .select('id')
+      .eq('family_id', familyId)
+      .eq('product_type', productType)
+
+    if (productsError) throw productsError
+    if (!products || products.length === 0) return []
+
+    // Получаем историю для всех этих продуктов
+    const productIds = products.map(p => p.id)
+    const { data, error } = await supabase
+      .from('product_history')
+      .select('*')
+      .in('product_id', productIds)
+      .eq('family_id', familyId)
+      .order('date', { ascending: true })
+
+    if (error) throw error
+    return data || []
+  }
+
   static async addProductHistory(history: Omit<ProductHistory, 'id' | 'created_at'>): Promise<ProductHistory> {
     const { data, error } = await supabase
       .from('product_history')
@@ -235,7 +260,27 @@ export class SupabaseService {
     predictedEnd: string | null
     status: 'ending-soon' | 'ok' | 'calculating'
   }> {
-    const history = await this.getProductHistory(productId, familyId)
+    // Получаем информацию о продукте для определения его типа
+    const { data: product, error: productError } = await supabase
+      .from('products')
+      .select('product_type, last_purchase')
+      .eq('id', productId)
+      .single()
+
+    if (productError) throw productError
+
+    // Выбираем историю в зависимости от наличия product_type
+    let history: ProductHistory[]
+    
+    if (product.product_type) {
+      // Если у продукта указан тип, используем историю ВСЕХ продуктов этого типа
+      console.log(`📊 Используем групповую историю для типа "${product.product_type}"`)
+      history = await this.getProductTypeHistory(product.product_type, familyId)
+    } else {
+      // Если тип не указан, используем только историю конкретного продукта
+      console.log(`📊 Используем индивидуальную историю для продукта #${productId}`)
+      history = await this.getProductHistory(productId, familyId)
+    }
     
     if (history.length < 2) {
       return {
@@ -251,15 +296,29 @@ export class SupabaseService {
       const prevDate = new Date(history[i - 1].date)
       const currDate = new Date(history[i].date)
       const daysDiff = Math.floor((currDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24))
-      daysBetweenPurchases.push(daysDiff)
+      // Игнорируем слишком маленькие интервалы (покупки в один день)
+      if (daysDiff > 0) {
+        daysBetweenPurchases.push(daysDiff)
+      }
+    }
+
+    // Если нет валидных интервалов, возвращаем статус "calculating"
+    if (daysBetweenPurchases.length === 0) {
+      return {
+        avgDays: null,
+        predictedEnd: null,
+        status: 'calculating'
+      }
     }
 
     const avgDays = Math.round(
       daysBetweenPurchases.reduce((sum, days) => sum + days, 0) / daysBetweenPurchases.length
     )
 
-    // Предсказываем дату окончания
-    const lastPurchase = new Date(history[history.length - 1].date)
+    console.log(`📊 Рассчитано среднее: ${avgDays} дней (на основе ${history.length} покупок, ${daysBetweenPurchases.length} интервалов)`)
+
+    // Предсказываем дату окончания на основе последней покупки ЭТОГО конкретного продукта
+    const lastPurchase = new Date(product.last_purchase)
     const predictedEnd = new Date(lastPurchase.getTime() + avgDays * 24 * 60 * 60 * 1000)
     const predictedEndString = predictedEnd.toISOString().split('T')[0]
 
@@ -961,6 +1020,62 @@ export class SupabaseService {
       console.log('✅ Дата чека успешно обновлена и статистика пересчитана')
     } catch (error) {
       console.error('❌ Полная ошибка обновления даты чека:', error)
+      throw error
+    }
+  }
+
+  // Повторная обработка чеков для определения типов продуктов
+  static async reprocessReceipts(familyId: number, receiptIds?: number[]): Promise<{
+    success: boolean
+    receiptsProcessed: number
+    productsUpdated: number
+    results: any[]
+  }> {
+    try {
+      const response = await fetch('/api/reprocess-receipts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          familyId,
+          receiptIds
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to reprocess receipts')
+      }
+
+      const data = await response.json()
+      
+      // После успешной обработки пересчитываем статистику для всех продуктов
+      if (data.success && data.productsUpdated > 0) {
+        console.log('🔄 Пересчитываем статистику для обновленных продуктов...')
+        
+        const { data: products } = await supabase
+          .from('products')
+          .select('id')
+          .eq('family_id', familyId)
+        
+        if (products) {
+          // Пересчитываем по батчам, чтобы не перегружать систему
+          for (const product of products) {
+            try {
+              await this.updateProductStats(product.id, familyId)
+            } catch (err) {
+              console.warn(`⚠️ Не удалось пересчитать статистику для продукта #${product.id}:`, err)
+            }
+          }
+        }
+        
+        console.log('✅ Статистика пересчитана')
+      }
+
+      return data
+    } catch (error) {
+      console.error('❌ Ошибка повторной обработки чеков:', error)
       throw error
     }
   }

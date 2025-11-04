@@ -30,6 +30,7 @@ export interface Product {
   id: number
   name: string
   original_name?: string
+  product_type?: string  // Generic product category (e.g., "молоко", "хлеб", "сыр плавленный")
   last_purchase: string
   avg_days: number | null
   predicted_end: string | null

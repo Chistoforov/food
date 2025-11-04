@@ -29,6 +29,7 @@ async function parseReceiptWithPerplexity(imageUrl) {
     {
       "name": "русское название продукта (понятное и читаемое)",
       "originalName": "оригинальное название с чека (как написано в магазине)",
+      "productType": "общая категория продукта (см. правила ниже)",
       "quantity": число (сколько единиц товара куплено),
       "unit": "единица измерения (кг, л, шт, г, мл)",
       "price": цена (число - ТОЧНАЯ цена из чека),
@@ -43,6 +44,33 @@ async function parseReceiptWithPerplexity(imageUrl) {
 - "name" - это красивое русское название (например: "Молоко 3.2% 1L", "Хлеб белый", "Яблоки")
 - "originalName" - это точное название с чека как оно написано (например: "MILK 3.2% 1L", "BREAD WHITE", "APPLES")
 - Если чек на русском, то оба поля могут быть одинаковыми
+
+КРИТИЧЕСКИ ВАЖНО про productType:
+- "productType" - это ОБЩАЯ КАТЕГОРИЯ продукта, БЕЗ брендов и конкретных названий
+- Это поле используется для группировки похожих продуктов разных брендов
+- Примеры правильных типов:
+  * "молоко" (для любого молока: "Простоквашино", "Parmalat", "Домик в деревне" и т.д.)
+  * "хлеб белый" (для всех белых хлебов, независимо от бренда)
+  * "хлеб черный" (для всех черных хлебов)
+  * "сыр плавленный" (для "Дружба", "Филадельфия", "Viola" и т.д.)
+  * "сыр твердый" (для Гауда, Чеддер и т.д.)
+  * "яблоки" (для всех яблок, независимо от сорта)
+  * "апельсины" (для всех апельсинов)
+  * "йогурт" (для всех йогуртов)
+  * "масло сливочное" (для всех сливочных масел)
+  * "масло растительное" (для подсолнечного, оливкового и т.д.)
+  * "курица" (для любых частей курицы)
+  * "говядина" (для любых частей говядины)
+  * "рис" (для всех видов риса)
+  * "макароны" (для всех видов пасты)
+  * "яйца" (для всех яиц)
+  * "сахар" (для всех видов сахара)
+  * "соль" (для всех видов соли)
+  * "вода" (для всех видов воды)
+- ВСЕГДА используй строчные буквы для productType
+- НИКОГДА не включай бренд в productType
+- Если можешь уточнить тип (например "хлеб белый" вместо просто "хлеб") - уточни
+- Для похожих продуктов используй ОДИНАКОВЫЙ productType
 
 КРИТИЧЕСКИ ВАЖНО про quantity и price:
 - "quantity" - это количество купленного товара в ЕДИНИЦАХ ИЗМЕРЕНИЯ
@@ -239,7 +267,8 @@ async function processReceipt(familyId, parsedData) {
           price: item.price,
           calories: item.calories,
           purchase_count: (product.purchase_count || 0) + 1,
-          original_name: item.originalName || product.original_name
+          original_name: item.originalName || product.original_name,
+          product_type: item.productType || product.product_type  // Update product type if provided
         })
         .eq('id', product.id);
 
@@ -251,6 +280,7 @@ async function processReceipt(familyId, parsedData) {
         .insert({
           name: item.name,
           original_name: item.originalName,
+          product_type: item.productType,  // Save product type from AI
           family_id: familyId,
           last_purchase: receiptDate,
           price: item.price,
