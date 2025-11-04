@@ -159,7 +159,7 @@ const GroceryTrackerApp = () => {
   };
 
   // Получаем данные из Supabase с обработкой ошибок
-  let products, productsLoading, updateProduct, deleteProduct, loadMoreProducts, loadingMoreProducts, hasMoreProducts, receipts, receiptsLoading, deleteReceipt, loadMoreReceipts, loadingMoreReceipts, hasMoreReceipts, monthlyStatsData, statsLoading, recalculateStats, recalculateAllAnalytics, statsError, refetchStats;
+  let products, productsLoading, updateProduct, loadMoreProducts, loadingMoreProducts, hasMoreProducts, receipts, receiptsLoading, deleteReceipt, loadMoreReceipts, loadingMoreReceipts, hasMoreReceipts, monthlyStatsData, statsLoading, recalculateStats, recalculateAllAnalytics, statsError, refetchStats;
   
   try {
     console.log('🔄 Инициализируем хуки Supabase...');
@@ -168,7 +168,6 @@ const GroceryTrackerApp = () => {
     products = productsHook.products;
     productsLoading = productsHook.loading;
     updateProduct = productsHook.updateProduct;
-    deleteProduct = productsHook.deleteProduct;
     loadMoreProducts = productsHook.loadMore;
     loadingMoreProducts = productsHook.loadingMore;
     hasMoreProducts = productsHook.hasMore;
@@ -385,31 +384,6 @@ const GroceryTrackerApp = () => {
     receiptsCount: 0,
     trends: { spending: 0, calories: 0, receipts: 0 },
     highlights: []
-  };
-
-  const StatusBadge = ({ status }: { status: string }) => {
-    if (status === 'ending-soon') {
-      return (
-        <div className="flex items-center gap-1 text-orange-600 bg-orange-50 px-2 py-1 rounded text-xs">
-          <AlertCircle size={12} />
-          <span>Скоро закончится</span>
-        </div>
-      );
-    }
-    if (status === 'calculating') {
-      return (
-        <div className="flex items-center gap-1 text-blue-600 bg-blue-50 px-2 py-1 rounded text-xs">
-          <Clock size={12} />
-          <span>Calculating...</span>
-        </div>
-      );
-    }
-    return (
-      <div className="flex items-center gap-1 text-green-600 bg-green-50 px-2 py-1 rounded text-xs">
-        <CheckCircle size={12} />
-        <span>В наличии</span>
-      </div>
-    );
   };
 
   // Главная страница
