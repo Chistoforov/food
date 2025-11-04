@@ -1538,7 +1538,7 @@ const GroceryTrackerApp = () => {
       setEditedCalories(product.calories.toString());
     };
 
-    const startEditingType = (product: Product) => {
+    const startEditingType = (product: typeof processedProducts[0]) => {
       setEditingTypeId(product.id);
       setEditedProductType(product.product_type || '');
     };
@@ -1576,7 +1576,7 @@ const GroceryTrackerApp = () => {
         // Приводим к нижнему регистру и убираем лишние пробелы
         const normalizedType = editedProductType.trim().toLowerCase();
         
-        await updateProduct(productId, { product_type: normalizedType || null });
+        await updateProduct(productId, { product_type: normalizedType || undefined });
         
         // Пересчитываем статистику для этого продукта
         await SupabaseService.updateProductStats(productId, selectedFamilyId);
