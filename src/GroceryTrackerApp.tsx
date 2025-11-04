@@ -4,6 +4,7 @@ import { useProducts, useReceipts, useProductHistory, useMonthlyStats } from './
 import { SupabaseService } from './services/supabaseService';
 import type { ProductHistory, Product } from './lib/supabase';
 import ConfirmationModal from './components/ConfirmationModal';
+import PWAInstallButton from './components/PWAInstallButton';
 
 // Проверяем переменные окружения при загрузке
 console.log('🔍 Environment check:', {
@@ -1901,8 +1902,9 @@ const GroceryTrackerApp = () => {
       
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-6 py-4 flex-shrink-0 z-10">
-        <div className="max-w-md mx-auto">
+        <div className="max-w-md mx-auto flex items-center justify-between gap-4">
           <h1 className="text-xl font-bold text-gray-900">Grocery Tracker</h1>
+          <PWAInstallButton />
         </div>
       </div>
 
