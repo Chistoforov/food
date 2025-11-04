@@ -1024,6 +1024,66 @@ export class SupabaseService {
     }
   }
 
+  // Получить агрегированную статистику по типам продуктов (для главной страницы)
+  static async getProductTypeStats(familyId: number): Promise<Record<string, {
+    total: number
+    endingSoon: number
+    ok: number
+    calculating: number
+  }>> {
+    try {
+      // Получаем ВСЕ продукты семьи (без пагинации)
+      const { data: products, error } = await supabase
+        .from('products')
+        .select('product_type, status')
+        .eq('family_id', familyId)
+
+      if (error) throw error
+
+      // Группируем по типам
+      const stats: Record<string, {
+        total: number
+        endingSoon: number
+        ok: number
+        calculating: number
+      }> = {}
+
+      products?.forEach(product => {
+        const type = product.product_type || 'Без категории'
+        
+        if (!stats[type]) {
+          stats[type] = {
+            total: 0,
+            endingSoon: 0,
+            ok: 0,
+            calculating: 0
+          }
+        }
+
+        stats[type].total += 1
+        
+        if (product.status === 'ending-soon') {
+          stats[type].endingSoon += 1
+        } else if (product.status === 'ok') {
+          stats[type].ok += 1
+        } else {
+          stats[type].calculating += 1
+        }
+      })
+
+      console.log('📊 Статистика по категориям (все продукты):', {
+        totalProducts: products?.length || 0,
+        categories: Object.keys(stats).length,
+        stats
+      })
+
+      return stats
+    } catch (error) {
+      console.error('❌ Ошибка получения статистики по категориям:', error)
+      throw error
+    }
+  }
+
   // Повторная обработка чеков для определения типов продуктов
   static async reprocessReceipts(familyId: number, receiptIds?: number[]): Promise<{
     success: boolean

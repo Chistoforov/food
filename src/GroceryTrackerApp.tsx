@@ -388,6 +388,47 @@ const GroceryTrackerApp = () => {
 
   // Главная страница
   const HomePage = () => {
+    const [productTypeStats, setProductTypeStats] = useState<Record<string, {
+      total: number
+      endingSoon: number
+      ok: number
+      calculating: number
+    }>>({})
+    const [loadingTypeStats, setLoadingTypeStats] = useState(false)
+
+    // Загружаем статистику по типам продуктов при монтировании и при изменении продуктов
+    useEffect(() => {
+      const loadTypeStats = async () => {
+        try {
+          setLoadingTypeStats(true)
+          const stats = await SupabaseService.getProductTypeStats(selectedFamilyId)
+          setProductTypeStats(stats)
+        } catch (error) {
+          console.error('Ошибка загрузки статистики по категориям:', error)
+        } finally {
+          setLoadingTypeStats(false)
+        }
+      }
+      
+      loadTypeStats()
+    }, [selectedFamilyId, products.length]) // Обновляем при изменении количества продуктов
+
+    // Также обновляем при возврате на главную страницу
+    useEffect(() => {
+      if (activeTab === 'home') {
+        const loadTypeStats = async () => {
+          try {
+            const stats = await SupabaseService.getProductTypeStats(selectedFamilyId)
+            setProductTypeStats(stats)
+          } catch (error) {
+            console.error('Ошибка загрузки статистики по категориям:', error)
+          }
+        }
+        
+        loadTypeStats()
+      }
+    }, [activeTab, selectedFamilyId])
+
     return (
     <div className="space-y-6">
       {/* Статистика за месяц */}
@@ -492,27 +533,9 @@ const GroceryTrackerApp = () => {
       </div>
 
       {/* Обзор по типам продуктов */}
-      {!productsLoading && processedProducts.length > 0 && (() => {
-        // Группируем продукты по типам
-        const productsByType = processedProducts.reduce((acc, product) => {
-          const type = product.product_type || 'Без категории';
-          if (!acc[type]) {
-            acc[type] = {
-              total: 0,
-              endingSoon: 0,
-              ok: 0,
-              calculating: 0
-            };
-          }
-          acc[type].total += 1;
-          if (product.status === 'ending-soon') acc[type].endingSoon += 1;
-          else if (product.status === 'ok') acc[type].ok += 1;
-          else acc[type].calculating += 1;
-          return acc;
-        }, {} as Record<string, { total: number; endingSoon: number; ok: number; calculating: number }>);
-
+      {!loadingTypeStats && Object.keys(productTypeStats).length > 0 && (() => {
         // Сортируем типы: сначала те, где есть ending-soon
-        const sortedTypes = Object.entries(productsByType).sort(([, a], [, b]) => {
+        const sortedTypes = Object.entries(productTypeStats).sort(([, a], [, b]) => {
           if (a.endingSoon !== b.endingSoon) return b.endingSoon - a.endingSoon;
           return b.total - a.total;
         });
