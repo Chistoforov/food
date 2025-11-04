@@ -223,6 +223,44 @@ async function parseReceiptWithPerplexity(imageUrl) {
 }
 
 /**
+ * Normalize product name for consistent matching
+ */
+function normalizeProductName(name) {
+  if (!name) return '';
+  // Convert to lowercase, trim, and normalize spaces
+  return name.toLowerCase().trim().replace(/\s+/g, ' ');
+}
+
+/**
+ * Check cache for existing translation
+ */
+async function getCachedTranslation(originalName, familyId) {
+  const { data, error } = await supabase
+    .rpc('get_cached_translation', {
+      p_original_name: originalName,
+      p_family_id: familyId
+    });
+
+  if (error || !data || data.length === 0) {
+    return null;
+  }
+
+  return data[0]; // Returns { translated_name, product_type }
+}
+
+/**
+ * Save translation to cache
+ */
+async function saveCachedTranslation(originalName, translatedName, productType, familyId) {
+  await supabase.rpc('save_translation_cache', {
+    p_original_name: originalName,
+    p_translated_name: translatedName,
+    p_product_type: productType,
+    p_family_id: familyId
+  });
+}
+
+/**
  * Process receipt and save to database
  */
 async function processReceipt(familyId, parsedData) {
@@ -246,13 +284,54 @@ async function processReceipt(familyId, parsedData) {
 
   // Process each item
   for (const item of items) {
-    // Find existing product or create new one
-    const { data: existingProducts } = await supabase
-      .from('products')
-      .select('*')
-      .eq('family_id', familyId)
-      .ilike('name', item.name)
-      .limit(1);
+    // Check cache first for this original name
+    let cachedTranslation = null;
+    if (item.originalName) {
+      cachedTranslation = await getCachedTranslation(item.originalName, familyId);
+    }
+
+    // Use cached translation if available, otherwise use AI translation
+    const finalName = cachedTranslation ? cachedTranslation.translated_name : item.name;
+    const finalProductType = cachedTranslation ? cachedTranslation.product_type : item.productType;
+
+    // If we're using AI translation (not cached), save it to cache
+    if (!cachedTranslation && item.originalName) {
+      await saveCachedTranslation(item.originalName, item.name, item.productType, familyId);
+      console.log(`📝 Cached new translation: "${item.originalName}" → "${item.name}" (${item.productType})`);
+    } else if (cachedTranslation) {
+      console.log(`✅ Using cached translation: "${item.originalName}" → "${finalName}" (${finalProductType})`);
+    }
+
+    // Find existing product by product_type first (for better matching)
+    let existingProducts = [];
+    
+    if (finalProductType) {
+      // Try to find by product_type
+      const { data: typeMatches } = await supabase
+        .from('products')
+        .select('*')
+        .eq('family_id', familyId)
+        .eq('product_type', finalProductType)
+        .limit(1);
+      
+      if (typeMatches && typeMatches.length > 0) {
+        existingProducts = typeMatches;
+      }
+    }
+    
+    // If no match by type, try by name
+    if (existingProducts.length === 0) {
+      const { data: nameMatches } = await supabase
+        .from('products')
+        .select('*')
+        .eq('family_id', familyId)
+        .ilike('name', finalName)
+        .limit(1);
+      
+      if (nameMatches) {
+        existingProducts = nameMatches;
+      }
+    }
 
     let product;
 
@@ -268,7 +347,7 @@ async function processReceipt(familyId, parsedData) {
           calories: item.calories,
           purchase_count: (product.purchase_count || 0) + 1,
           original_name: item.originalName || product.original_name,
-          product_type: item.productType || product.product_type  // Update product type if provided
+          product_type: finalProductType || product.product_type
         })
         .eq('id', product.id);
 
@@ -278,9 +357,9 @@ async function processReceipt(familyId, parsedData) {
       const { data: newProduct, error: createError } = await supabase
         .from('products')
         .insert({
-          name: item.name,
+          name: finalName,
           original_name: item.originalName,
-          product_type: item.productType,  // Save product type from AI
+          product_type: finalProductType,
           family_id: familyId,
           last_purchase: receiptDate,
           price: item.price,
