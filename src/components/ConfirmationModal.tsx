@@ -64,7 +64,7 @@ const ConfirmationModal = ({
 
         {/* Message */}
         <div className="mb-6">
-          <p className="text-gray-600 whitespace-pre-line">{message}</p>
+          <p className="text-gray-600" style={{ whiteSpace: 'pre-line' }}>{message}</p>
         </div>
 
         {/* Actions */}
