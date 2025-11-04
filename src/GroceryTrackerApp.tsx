@@ -1861,6 +1861,23 @@ const GroceryTrackerApp = () => {
             ))
           )}
         </div>
+        
+        {/* Кнопка "Загрузить еще" */}
+        {!productsLoading && hasMoreProducts && processedProducts.length > 0 && loadMoreProducts && (
+          <div className="flex justify-center mt-4">
+            <button
+              onClick={() => loadMoreProducts(20)}
+              disabled={loadingMoreProducts}
+              className={`px-6 py-3 rounded-xl font-semibold transition-colors ${
+                loadingMoreProducts
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : 'bg-indigo-600 text-white hover:bg-indigo-700'
+              }`}
+            >
+              {loadingMoreProducts ? 'Загрузка...' : 'Загрузить еще'}
+            </button>
+          </div>
+        )}
 
         <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4">
           <div className="flex items-start gap-3">
