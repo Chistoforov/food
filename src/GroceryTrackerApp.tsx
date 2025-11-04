@@ -389,10 +389,8 @@ const GroceryTrackerApp = () => {
   // Главная страница
   const HomePage = () => {
     const [productTypeStats, setProductTypeStats] = useState<Record<string, {
-      total: number
-      endingSoon: number
-      ok: number
-      calculating: number
+      status: 'ending-soon' | 'ok' | 'calculating'
+      productCount: number
     }>>({})
     const [loadingTypeStats, setLoadingTypeStats] = useState(false)
 
@@ -534,53 +532,61 @@ const GroceryTrackerApp = () => {
 
       {/* Обзор по типам продуктов */}
       {!loadingTypeStats && Object.keys(productTypeStats).length > 0 && (() => {
-        // Сортируем типы: сначала те, где есть ending-soon
+        // Сортируем типы: сначала те, которые заканчиваются, потом по количеству продуктов
         const sortedTypes = Object.entries(productTypeStats).sort(([, a], [, b]) => {
-          if (a.endingSoon !== b.endingSoon) return b.endingSoon - a.endingSoon;
-          return b.total - a.total;
+          // Приоритет статусов: ending-soon > ok > calculating
+          const statusPriority = { 'ending-soon': 0, 'ok': 1, 'calculating': 2 };
+          if (a.status !== b.status) {
+            return statusPriority[a.status] - statusPriority[b.status];
+          }
+          // При одинаковом статусе сортируем по количеству продуктов
+          return b.productCount - a.productCount;
         });
 
         return sortedTypes.length > 0 && (
           <div className="mb-6">
-            <h3 className="text-lg font-semibold mb-3">Обзор по категориям</h3>
+            <h3 className="text-lg font-semibold mb-3">Типы продуктов</h3>
             <div className="grid grid-cols-2 gap-3">
-              {sortedTypes.map(([type, stats]) => (
-                <div key={type} className="bg-white rounded-xl p-4 border border-gray-200 hover:shadow-md transition-shadow">
-                  <div className="mb-2">
-                    <h4 className="font-semibold text-gray-900 text-sm mb-1 capitalize">{type}</h4>
-                    <div className="text-xs text-gray-500">Всего: {stats.total}</div>
+              {sortedTypes.map(([type, typeData]) => {
+                const typeStatus = typeData.status;
+                
+                return (
+                  <div 
+                    key={type} 
+                    className={`rounded-xl p-4 border-2 transition-all ${
+                      typeStatus === 'ending-soon' 
+                        ? 'bg-orange-50 border-orange-300' 
+                        : typeStatus === 'ok'
+                          ? 'bg-green-50 border-green-300'
+                          : 'bg-blue-50 border-blue-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-bold text-gray-900 capitalize">{type}</h4>
+                      {typeStatus === 'ending-soon' && (
+                        <AlertCircle size={20} className="text-orange-600 flex-shrink-0" />
+                      )}
+                      {typeStatus === 'ok' && (
+                        <CheckCircle size={20} className="text-green-600 flex-shrink-0" />
+                      )}
+                      {typeStatus === 'calculating' && (
+                        <Clock size={20} className="text-blue-600 flex-shrink-0" />
+                      )}
+                    </div>
+                    <div className={`text-sm font-medium mt-1 ${
+                      typeStatus === 'ending-soon' 
+                        ? 'text-orange-700' 
+                        : typeStatus === 'ok'
+                          ? 'text-green-700'
+                          : 'text-blue-700'
+                    }`}>
+                      {typeStatus === 'ending-soon' && 'Заканчивается'}
+                      {typeStatus === 'ok' && 'В наличии'}
+                      {typeStatus === 'calculating' && 'Расчет...'}
+                    </div>
                   </div>
-                  <div className="space-y-1">
-                    {stats.endingSoon > 0 && (
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="flex items-center gap-1 text-orange-600">
-                          <AlertCircle size={12} />
-                          <span>Заканчивается</span>
-                        </span>
-                        <span className="font-semibold text-orange-600">{stats.endingSoon}</span>
-                      </div>
-                    )}
-                    {stats.ok > 0 && (
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="flex items-center gap-1 text-green-600">
-                          <CheckCircle size={12} />
-                          <span>В наличии</span>
-                        </span>
-                        <span className="font-semibold text-green-600">{stats.ok}</span>
-                      </div>
-                    )}
-                    {stats.calculating > 0 && (
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="flex items-center gap-1 text-blue-600">
-                          <Clock size={12} />
-                          <span>Расчет...</span>
-                        </span>
-                        <span className="font-semibold text-blue-600">{stats.calculating}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         );

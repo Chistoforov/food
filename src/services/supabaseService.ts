@@ -1038,62 +1038,143 @@ export class SupabaseService {
     }
   }
 
+  // Рассчитать статус для типа продукта на основе всех продуктов этого типа
+  static async calculateProductTypeStatus(
+    productType: string, 
+    familyId: number
+  ): Promise<'ending-soon' | 'ok' | 'calculating'> {
+    try {
+      // Получаем все продукты этого типа
+      const { data: products, error: productsError } = await supabase
+        .from('products')
+        .select('id, last_purchase')
+        .eq('family_id', familyId)
+        .eq('product_type', productType)
+
+      if (productsError) throw productsError
+      if (!products || products.length === 0) return 'calculating'
+
+      // Получаем историю ВСЕХ продуктов этого типа
+      const productIds = products.map(p => p.id)
+      const { data: history, error: historyError } = await supabase
+        .from('product_history')
+        .select('date')
+        .in('product_id', productIds)
+        .eq('family_id', familyId)
+        .order('date', { ascending: true })
+
+      if (historyError) throw historyError
+      if (!history || history.length < 2) return 'calculating'
+
+      // Проверяем: есть ли хоть один продукт, купленный недавно (< 2 дней)?
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+
+      let hasRecentPurchase = false
+      for (const product of products) {
+        const lastPurchaseDate = new Date(product.last_purchase)
+        lastPurchaseDate.setHours(0, 0, 0, 0)
+        const daysSince = Math.floor((today.getTime() - lastPurchaseDate.getTime()) / (1000 * 60 * 60 * 24))
+        
+        if (daysSince < 2) {
+          hasRecentPurchase = true
+          break
+        }
+      }
+
+      // Если есть недавняя покупка - статус "ok" (правило 2-х дней)
+      if (hasRecentPurchase) {
+        return 'ok'
+      }
+
+      // Вычисляем среднюю частоту покупки ТИПА (по всем покупкам всех продуктов)
+      const daysBetweenPurchases = []
+      for (let i = 1; i < history.length; i++) {
+        const prevDate = new Date(history[i - 1].date)
+        const currDate = new Date(history[i].date)
+        const daysDiff = Math.floor((currDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24))
+        
+        if (daysDiff > 0) {
+          daysBetweenPurchases.push(daysDiff)
+        }
+      }
+
+      if (daysBetweenPurchases.length === 0) return 'calculating'
+
+      const avgDays = Math.round(
+        daysBetweenPurchases.reduce((sum, days) => sum + days, 0) / daysBetweenPurchases.length
+      )
+
+      // Находим ПОСЛЕДНЮЮ покупку любого продукта этого типа
+      const lastPurchaseOfType = products.reduce((latest, product) => {
+        const purchaseDate = new Date(product.last_purchase)
+        return purchaseDate > latest ? purchaseDate : latest
+      }, new Date(0))
+
+      // Рассчитываем прогнозируемую дату окончания для ТИПА
+      const predictedEnd = new Date(lastPurchaseOfType.getTime() + avgDays * 24 * 60 * 60 * 1000)
+      const daysUntilEnd = Math.floor((predictedEnd.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+
+      // Определяем статус: если до окончания <= 2 дней, то заканчивается
+      return daysUntilEnd <= 2 ? 'ending-soon' : 'ok'
+    } catch (error) {
+      console.error(`❌ Ошибка расчета статуса типа "${productType}":`, error)
+      return 'calculating'
+    }
+  }
+
   // Получить агрегированную статистику по типам продуктов (для главной страницы)
   static async getProductTypeStats(familyId: number): Promise<Record<string, {
-    total: number
-    endingSoon: number
-    ok: number
-    calculating: number
+    status: 'ending-soon' | 'ok' | 'calculating'
+    productCount: number
   }>> {
     try {
       // Получаем ВСЕ продукты семьи (без пагинации)
       const { data: products, error } = await supabase
         .from('products')
-        .select('product_type, status')
+        .select('product_type')
         .eq('family_id', familyId)
 
       if (error) throw error
 
       // Группируем по типам
-      const stats: Record<string, {
-        total: number
-        endingSoon: number
-        ok: number
-        calculating: number
-      }> = {}
-
+      const typeGroups: Record<string, number> = {}
       products?.forEach(product => {
         const type = product.product_type || 'Без категории'
-        
-        if (!stats[type]) {
-          stats[type] = {
-            total: 0,
-            endingSoon: 0,
-            ok: 0,
-            calculating: 0
-          }
-        }
-
-        stats[type].total += 1
-        
-        if (product.status === 'ending-soon') {
-          stats[type].endingSoon += 1
-        } else if (product.status === 'ok') {
-          stats[type].ok += 1
-        } else {
-          stats[type].calculating += 1
-        }
+        typeGroups[type] = (typeGroups[type] || 0) + 1
       })
 
-      console.log('📊 Статистика по категориям (все продукты):', {
+      // Для каждого типа рассчитываем агрегированный статус
+      const stats: Record<string, {
+        status: 'ending-soon' | 'ok' | 'calculating'
+        productCount: number
+      }> = {}
+
+      for (const [type, count] of Object.entries(typeGroups)) {
+        if (type === 'Без категории') {
+          // Для продуктов без категории не рассчитываем статус
+          stats[type] = {
+            status: 'calculating',
+            productCount: count
+          }
+        } else {
+          const status = await this.calculateProductTypeStatus(type, familyId)
+          stats[type] = {
+            status,
+            productCount: count
+          }
+        }
+      }
+
+      console.log('📊 Статистика по типам продуктов:', {
         totalProducts: products?.length || 0,
-        categories: Object.keys(stats).length,
+        types: Object.keys(stats).length,
         stats
       })
 
       return stats
     } catch (error) {
-      console.error('❌ Ошибка получения статистики по категориям:', error)
+      console.error('❌ Ошибка получения статистики по типам:', error)
       throw error
     }
   }
@@ -1150,6 +1231,66 @@ export class SupabaseService {
       return data
     } catch (error) {
       console.error('❌ Ошибка повторной обработки чеков:', error)
+      throw error
+    }
+  }
+
+  // Пересчет статусов всех продуктов семьи (для cron job)
+  static async recalculateAllProductStatuses(familyId: number): Promise<{
+    success: boolean
+    productsUpdated: number
+    errors: number
+  }> {
+    console.log(`🔄 Начинаем пересчет статусов всех продуктов для семьи ${familyId}`)
+    
+    try {
+      // Получаем все продукты семьи
+      const { data: products, error } = await supabase
+        .from('products')
+        .select('id')
+        .eq('family_id', familyId)
+
+      if (error) {
+        console.error('❌ Ошибка получения продуктов:', error)
+        throw error
+      }
+
+      if (!products || products.length === 0) {
+        console.log('⚠️ Нет продуктов для пересчета')
+        return { success: true, productsUpdated: 0, errors: 0 }
+      }
+
+      console.log(`📦 Найдено ${products.length} продуктов для пересчета`)
+
+      let updated = 0
+      let errors = 0
+
+      // Пересчитываем статус для каждого продукта
+      for (const product of products) {
+        try {
+          await this.updateProductStats(product.id, familyId)
+          updated++
+          
+          // Небольшая задержка между запросами, чтобы не перегружать БД
+          if (updated % 10 === 0) {
+            console.log(`✅ Обработано ${updated}/${products.length} продуктов`)
+            await new Promise(resolve => setTimeout(resolve, 100))
+          }
+        } catch (err) {
+          console.error(`❌ Ошибка пересчета статуса продукта #${product.id}:`, err)
+          errors++
+        }
+      }
+
+      console.log(`✅ Пересчет завершен: обновлено ${updated}, ошибок ${errors}`)
+
+      return {
+        success: true,
+        productsUpdated: updated,
+        errors
+      }
+    } catch (error) {
+      console.error('❌ Ошибка пересчета статусов продуктов:', error)
       throw error
     }
   }
