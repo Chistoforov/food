@@ -394,7 +394,8 @@ const GroceryTrackerApp = () => {
     }>>({})
     const [loadingTypeStats, setLoadingTypeStats] = useState(false)
 
-    // Загружаем статистику по типам продуктов при монтировании и при изменении продуктов
+    // Загружаем статистику по типам продуктов из КЭША (быстро!)
+    // Кэш автоматически обновляется триггерами при изменениях
     useEffect(() => {
       const loadTypeStats = async () => {
         try {
@@ -408,24 +409,11 @@ const GroceryTrackerApp = () => {
         }
       }
       
-      loadTypeStats()
-    }, [selectedFamilyId, products.length]) // Обновляем при изменении количества продуктов
-
-    // Также обновляем при возврате на главную страницу
-    useEffect(() => {
+      // Загружаем только при открытии главной страницы
       if (activeTab === 'home') {
-        const loadTypeStats = async () => {
-          try {
-            const stats = await SupabaseService.getProductTypeStats(selectedFamilyId)
-            setProductTypeStats(stats)
-          } catch (error) {
-            console.error('Ошибка загрузки статистики по категориям:', error)
-          }
-        }
-        
         loadTypeStats()
       }
-    }, [activeTab, selectedFamilyId])
+    }, [activeTab, selectedFamilyId]) // Убрали products.length - кэш обновляется автоматически
 
     return (
     <div className="space-y-6">

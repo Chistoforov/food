@@ -168,7 +168,7 @@ async function recalculateAllProductStatuses(familyId) {
 
   if (!products || products.length === 0) {
     console.log(`⚠️ Нет продуктов для семьи ${familyId}`);
-    return { productsUpdated: 0, errors: 0 };
+    return { productsUpdated: 0, errors: 0, typeStatsUpdated: false };
   }
 
   console.log(`📦 Найдено ${products.length} продуктов для семьи ${familyId}`);
@@ -186,9 +186,27 @@ async function recalculateAllProductStatuses(familyId) {
     }
   }
 
+  // Пересчитываем кэш статусов типов продуктов
+  console.log(`🔄 Пересчитываем кэш статусов типов продуктов для семьи ${familyId}`);
+  try {
+    const { error: typeStatsError } = await supabase.rpc('recalculate_product_type_stats', {
+      p_family_id: familyId
+    });
+
+    if (typeStatsError) {
+      console.error(`❌ Ошибка пересчета кэша типов:`, typeStatsError);
+      throw typeStatsError;
+    }
+
+    console.log(`✅ Кэш статусов типов продуктов пересчитан`);
+  } catch (err) {
+    console.error(`❌ Ошибка при пересчете кэша типов продуктов:`, err);
+    errors++;
+  }
+
   console.log(`✅ Семья ${familyId}: обновлено ${updated}, ошибок ${errors}`);
 
-  return { productsUpdated: updated, errors };
+  return { productsUpdated: updated, errors, typeStatsUpdated: true };
 }
 
 /**
@@ -245,6 +263,7 @@ export default async function handler(req, res) {
           familyId: family.id,
           familyName: family.name,
           productsUpdated: result.productsUpdated,
+          typeStatsUpdated: result.typeStatsUpdated,
           errors: result.errors
         });
         totalUpdated += result.productsUpdated;

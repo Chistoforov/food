@@ -1124,50 +1124,39 @@ export class SupabaseService {
   }
 
   // Получить агрегированную статистику по типам продуктов (для главной страницы)
+  // ОПТИМИЗИРОВАНО: Использует кэш из таблицы product_type_stats вместо расчета на лету
   static async getProductTypeStats(familyId: number): Promise<Record<string, {
     status: 'ending-soon' | 'ok' | 'calculating'
     productCount: number
   }>> {
     try {
-      // Получаем ВСЕ продукты семьи (без пагинации)
-      const { data: products, error } = await supabase
-        .from('products')
-        .select('product_type')
+      console.log('📊 Загружаем статистику типов продуктов из кэша...')
+      
+      // Получаем кэшированные статусы из product_type_stats
+      const { data: cachedStats, error: cacheError } = await supabase
+        .from('product_type_stats')
+        .select('product_type, status, product_count')
         .eq('family_id', familyId)
 
-      if (error) throw error
+      if (cacheError) {
+        console.error('❌ Ошибка загрузки кэша статистики:', cacheError)
+        throw cacheError
+      }
 
-      // Группируем по типам
-      const typeGroups: Record<string, number> = {}
-      products?.forEach(product => {
-        const type = product.product_type || 'Без категории'
-        typeGroups[type] = (typeGroups[type] || 0) + 1
-      })
-
-      // Для каждого типа рассчитываем агрегированный статус
+      // Преобразуем в нужный формат
       const stats: Record<string, {
         status: 'ending-soon' | 'ok' | 'calculating'
         productCount: number
       }> = {}
 
-      for (const [type, count] of Object.entries(typeGroups)) {
-        if (type === 'Без категории') {
-          // Для продуктов без категории не рассчитываем статус
-          stats[type] = {
-            status: 'calculating',
-            productCount: count
-          }
-        } else {
-          const status = await this.calculateProductTypeStatus(type, familyId)
-          stats[type] = {
-            status,
-            productCount: count
-          }
+      cachedStats?.forEach(item => {
+        stats[item.product_type] = {
+          status: item.status as 'ending-soon' | 'ok' | 'calculating',
+          productCount: item.product_count
         }
-      }
+      })
 
-      console.log('📊 Статистика по типам продуктов:', {
-        totalProducts: products?.length || 0,
+      console.log('✅ Статистика типов продуктов загружена из кэша:', {
         types: Object.keys(stats).length,
         stats
       })
@@ -1175,6 +1164,27 @@ export class SupabaseService {
       return stats
     } catch (error) {
       console.error('❌ Ошибка получения статистики по типам:', error)
+      throw error
+    }
+  }
+
+  // Пересчитать статистику типов продуктов (обновить кэш)
+  static async recalculateProductTypeStats(familyId: number): Promise<void> {
+    try {
+      console.log('🔄 Пересчитываем кэш статистики типов продуктов для семьи:', familyId)
+      
+      const { error } = await supabase.rpc('recalculate_product_type_stats', {
+        p_family_id: familyId
+      })
+
+      if (error) {
+        console.error('❌ Ошибка пересчета кэша статистики типов:', error)
+        throw error
+      }
+
+      console.log('✅ Кэш статистики типов продуктов пересчитан')
+    } catch (error) {
+      console.error('❌ Ошибка пересчета статистики типов:', error)
       throw error
     }
   }
