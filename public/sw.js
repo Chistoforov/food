@@ -1,4 +1,4 @@
-const CACHE_NAME = 'grocery-tracker-v2';
+const CACHE_NAME = 'grocery-tracker-v3';
 const urlsToCache = [
   '/',
   '/index.html',
@@ -34,6 +34,12 @@ self.addEventListener('activate', (event) => {
 
 // Перехват запросов
 self.addEventListener('fetch', (event) => {
+  // Кэшируем только GET запросы (Cache API не поддерживает POST/PUT/DELETE)
+  if (event.request.method !== 'GET') {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request)
       .then((response) => {
