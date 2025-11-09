@@ -102,3 +102,16 @@ body {
   }
 }
 
+/* Стили для иконок типов продуктов */
+@keyframes iconFloat {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+.product-type-icon {
+  animation: iconFloat 3s ease-in-out infinite;
+}

@@ -5,7 +5,7 @@ import { SupabaseService } from './services/supabaseService';
 import type { ProductHistory, Product } from './lib/supabase';
 import ConfirmationModal from './components/ConfirmationModal';
 import PWAInstallButton from './components/PWAInstallButton';
-import { ProductTypePatterns, getPatternForProductType, getColorScheme } from './components/ProductTypePatterns';
+import { getColorScheme } from './components/ProductTypePatterns';
 
 // Проверяем переменные окружения при загрузке
 console.log('🔍 Environment check:', {
@@ -614,86 +614,81 @@ const GroceryTrackerApp = () => {
               {sortedTypes.map(([type, typeData]) => {
                 const typeStatus = typeData.status;
                 const isLoading = virtualPurchaseLoading === type;
-                const pattern = getPatternForProductType(type);
                 const colorScheme = getColorScheme(typeStatus);
                 
                 return (
                   <div 
                     key={type} 
-                    className={`rounded-xl p-4 border-2 transition-all relative min-h-[120px] overflow-hidden ${colorScheme.bg} ${colorScheme.border}`}
+                    className={`rounded-xl p-4 border-2 transition-all relative min-h-[120px] overflow-hidden ${colorScheme.border}`}
+                    style={{
+                      background: `linear-gradient(135deg, ${colorScheme.gradientStart} 0%, ${colorScheme.gradientEnd} 100%)`
+                    }}
                   >
-                    {/* SVG паттерн как фон */}
-                    <svg 
-                      className="absolute inset-0 w-full h-full pointer-events-none"
-                      style={{ opacity: 0.4 }}
-                    >
-                      <rect width="100%" height="100%" fill={`url(#${pattern})`} />
-                    </svg>
-
-                    {/* Легкий градиент для глубины */}
-                    <div 
-                      className="absolute inset-0 pointer-events-none"
-                      style={{ 
-                        background: `linear-gradient(135deg, ${colorScheme.overlay} 0%, transparent 100%)`
-                      }}
-                    />
-                    
-                    {/* Контент поверх паттерна */}
-                    <div className="relative z-10">
-                      {/* Кнопка удаления */}
-                      <button
-                        onClick={() => setDeleteTypeConfirm(type)}
-                        className="absolute top-0 right-0 p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors z-20"
-                        title="Удалить тип продукта"
-                      >
-                        <Trash2 size={16} />
-                      </button>
+                    {/* Контент в три ряда */}
+                    <div className="relative z-10 flex flex-col h-full justify-between">
+                      {/* Ряд 1: Название */}
+                      <h4 className="font-bold text-gray-900 capitalize text-lg mb-2">{type}</h4>
                       
-                      {/* Контент с отступами для кнопок */}
-                      <div className={`${typeStatus === 'ending-soon' ? 'pb-10' : ''}`}>
-                        <div className="flex items-center justify-between pr-8">
-                          <h4 className="font-bold text-gray-900 capitalize text-shadow">{type}</h4>
-                          {typeStatus === 'ending-soon' && (
-                            <AlertCircle size={20} className="text-orange-600 flex-shrink-0 drop-shadow" />
-                          )}
-                          {typeStatus === 'ok' && (
-                            <CheckCircle size={20} className="text-green-600 flex-shrink-0 drop-shadow" />
-                          )}
-                          {typeStatus === 'calculating' && (
-                            <Clock size={20} className="text-blue-600 flex-shrink-0 drop-shadow" />
-                          )}
-                        </div>
-                        <div className={`text-sm font-medium mt-1 ${
-                          typeStatus === 'ending-soon' 
-                            ? 'text-orange-700' 
-                            : typeStatus === 'ok'
-                              ? 'text-green-700'
-                              : 'text-blue-700'
-                        }`}>
-                          {typeStatus === 'ending-soon' && 'Заканчивается'}
-                          {typeStatus === 'ok' && 'В наличии'}
-                          {typeStatus === 'calculating' && 'Расчет...'}
-                        </div>
-                        <div className="text-xs text-gray-500 mt-1">
-                          {typeData.productCount} {typeData.productCount === 1 ? 'продукт' : typeData.productCount < 5 ? 'продукта' : 'продуктов'}
-                        </div>
+                      {/* Ряд 2: Статус */}
+                      <div className={`text-sm font-medium mb-3 ${
+                        typeStatus === 'ending-soon' 
+                          ? 'text-orange-700' 
+                          : typeStatus === 'ok'
+                            ? 'text-green-700'
+                            : 'text-blue-700'
+                      }`}>
+                        {typeStatus === 'ending-soon' && 'Заканчивается'}
+                        {typeStatus === 'ok' && 'В наличии'}
+                        {typeStatus === 'calculating' && 'Расчет...'}
                       </div>
                       
-                      {/* Кнопка виртуальной покупки (только для ending-soon) */}
-                      {typeStatus === 'ending-soon' && (
+                      {/* Ряд 3: Иконки и кнопки */}
+                      <div className="flex items-center gap-3 mt-auto">
+                        {/* Иконка статуса */}
+                        {typeStatus === 'ending-soon' && (
+                          <div className="p-1.5 rounded-lg bg-orange-100/50">
+                            <AlertCircle size={20} className="text-orange-600 flex-shrink-0" />
+                          </div>
+                        )}
+                        {typeStatus === 'ok' && (
+                          <div className="p-1.5 rounded-lg bg-green-100/50">
+                            <CheckCircle size={20} className="text-green-600 flex-shrink-0" />
+                          </div>
+                        )}
+                        {typeStatus === 'calculating' && (
+                          <div className="p-1.5 rounded-lg bg-blue-100/50">
+                            <Clock size={20} className="text-blue-600 flex-shrink-0" />
+                          </div>
+                        )}
+                        
+                        {/* Кнопка удаления (корзина) */}
                         <button
-                          onClick={() => handleVirtualPurchase(type)}
-                          disabled={isLoading}
-                          className={`absolute bottom-2 right-2 p-2 rounded-lg transition-all shadow-md ${
-                            isLoading 
-                              ? 'bg-green-200 text-green-400 cursor-not-allowed' 
-                              : 'bg-green-600 text-white hover:bg-green-700 active:scale-95'
-                          }`}
-                          title="Продукт еще есть (+2 дня к прогнозу)"
+                          onClick={() => setDeleteTypeConfirm(type)}
+                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Удалить тип продукта"
                         >
-                          <RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />
+                          <Trash2 size={18} />
                         </button>
-                      )}
+                        
+                        {/* Spacer - чтобы кнопка виртуальной покупки была справа */}
+                        <div className="flex-1"></div>
+                        
+                        {/* Кнопка виртуальной покупки (только для ending-soon) */}
+                        {typeStatus === 'ending-soon' && (
+                          <button
+                            onClick={() => handleVirtualPurchase(type)}
+                            disabled={isLoading}
+                            className={`p-2 rounded-lg transition-all shadow-md ${
+                              isLoading 
+                                ? 'bg-green-200 text-green-400 cursor-not-allowed' 
+                                : 'bg-green-600 text-white hover:bg-green-700 active:scale-95'
+                            }`}
+                            title="Продукт еще есть (+2 дня к прогнозу)"
+                          >
+                            <RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
@@ -1334,13 +1329,20 @@ const GroceryTrackerApp = () => {
 
               {showProductSelect && (
                 <div className="absolute z-10 w-full mt-2 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                  {processedProducts.length === 0 ? (
-                    <div className="p-4 text-center text-gray-500">
-                      <p>Нет продуктов для отображения</p>
-                      <p className="text-sm mt-1">Добавьте чеки, чтобы увидеть продукты</p>
-                    </div>
-                  ) : (
-                    processedProducts
+                  {(() => {
+                    // Фильтруем продукты: только те, что куплены более 3 раз
+                    const frequentProducts = processedProducts.filter(p => p.purchaseCount > 3);
+                    
+                    if (frequentProducts.length === 0) {
+                      return (
+                        <div className="p-4 text-center text-gray-500">
+                          <p>Нет продуктов для отображения</p>
+                          <p className="text-sm mt-1">Нужно купить продукт более 3 раз, чтобы увидеть его динамику</p>
+                        </div>
+                      );
+                    }
+                    
+                    return frequentProducts
                       .sort((a, b) => b.purchaseCount - a.purchaseCount)
                       .map(product => (
                         <button
@@ -1356,8 +1358,8 @@ const GroceryTrackerApp = () => {
                             {product.purchaseCount} {product.purchaseCount === 1 ? 'покупка' : product.purchaseCount < 5 ? 'покупки' : 'покупок'}
                           </div>
                         </button>
-                      ))
-                  )}
+                      ));
+                  })()}
                 </div>
               )}
             </div>
@@ -1423,37 +1425,81 @@ const GroceryTrackerApp = () => {
                     <div className="text-center py-8 text-gray-500">Загрузка истории...</div>
                   ) : productHistory && productHistory.length > 0 ? (
                     <>
-                      <div className="flex items-end justify-between gap-2 h-48 border-b border-gray-200 pb-2">
-                        {productHistory.map((item, i) => {
-                          const data = chartType === 'quantity' ? item.quantity : item.unit_price;
-                          const maxValue = chartType === 'quantity' 
-                            ? Math.max(...productHistory.map(h => h.quantity))
-                            : Math.max(...productHistory.map(h => h.unit_price));
-                          const height = (data / maxValue) * 100;
-                          
-                          return (
-                            <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                              <div className="text-xs font-semibold text-gray-700">
-                                {chartType === 'quantity' ? item.quantity : `€${item.unit_price.toFixed(2)}`}
-                              </div>
-                              <div 
-                                className={`w-full rounded-t hover:opacity-80 transition-all cursor-pointer ${
-                                  chartType === 'quantity' 
-                                    ? 'bg-gradient-to-t from-indigo-500 to-indigo-400 hover:from-indigo-600 hover:to-indigo-500'
-                                    : 'bg-gradient-to-t from-green-500 to-green-400 hover:from-green-600 hover:to-green-500'
-                                }`}
-                                style={{ height: `${height}%` }}
-                              ></div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                      <div className="flex justify-between mt-2 text-xs text-gray-500">
-                        {productHistory.map((item, i) => (
-                          <div key={i} className="flex-1 text-center">
-                            {new Date(item.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
+                      <div className="flex gap-3">
+                        {/* Ось Y (боковая шкала) */}
+                        <div className="flex flex-col justify-between h-48 py-2">
+                          {(() => {
+                            const data = productHistory.map(h => chartType === 'quantity' ? h.quantity : h.unit_price);
+                            const maxValue = Math.max(...data);
+                            const minValue = Math.min(...data);
+                            const range = maxValue - minValue;
+                            
+                            // Генерируем 5 делений шкалы
+                            const steps = 5;
+                            const stepValue = range / (steps - 1);
+                            
+                            return Array.from({ length: steps }, (_, i) => {
+                              const value = maxValue - (stepValue * i);
+                              return (
+                                <div key={i} className="text-xs text-gray-500 font-medium text-right pr-2 leading-none">
+                                  {chartType === 'quantity' 
+                                    ? Math.round(value)
+                                    : `€${value.toFixed(2)}`
+                                  }
+                                </div>
+                              );
+                            });
+                          })()}
+                        </div>
+                        
+                        {/* График с горизонтальными линиями сетки */}
+                        <div className="flex-1 relative">
+                          {/* Горизонтальные линии сетки */}
+                          <div className="absolute inset-0 flex flex-col justify-between py-2">
+                            {Array.from({ length: 5 }, (_, i) => (
+                              <div key={i} className="border-t border-gray-100"></div>
+                            ))}
                           </div>
-                        ))}
+                          
+                          {/* Столбцы графика */}
+                          <div className="relative flex items-end justify-between gap-2 h-48 border-b border-l border-gray-300 pb-2 pl-2">
+                            {productHistory.map((item, i) => {
+                              const data = chartType === 'quantity' ? item.quantity : item.unit_price;
+                              const maxValue = chartType === 'quantity' 
+                                ? Math.max(...productHistory.map(h => h.quantity))
+                                : Math.max(...productHistory.map(h => h.unit_price));
+                              const height = (data / maxValue) * 100;
+                              
+                              return (
+                                <div key={i} className="flex-1 flex flex-col items-center gap-1 relative z-10">
+                                  <div className="text-xs font-semibold text-gray-700">
+                                    {chartType === 'quantity' ? item.quantity : `€${item.unit_price.toFixed(2)}`}
+                                  </div>
+                                  <div 
+                                    className={`w-full rounded-t hover:opacity-80 transition-all cursor-pointer ${
+                                      chartType === 'quantity' 
+                                        ? 'bg-gradient-to-t from-indigo-500 to-indigo-400 hover:from-indigo-600 hover:to-indigo-500'
+                                        : 'bg-gradient-to-t from-green-500 to-green-400 hover:from-green-600 hover:to-green-500'
+                                    }`}
+                                    style={{ height: `${height}%` }}
+                                  ></div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Ось X (время) */}
+                      <div className="flex gap-3">
+                        <div className="w-12"></div> {/* Отступ для выравнивания с осью Y */}
+                        <div className="flex-1 flex justify-between mt-2 text-xs text-gray-500 pl-2">
+                          {productHistory.map((item, i) => (
+                            <div key={i} className="flex-1 text-center">
+                              {new Date(item.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
+                            </div>
+                          ))}
+                        </div>
                       </div>
 
                       {/* Статистика по продукту */}
@@ -1565,7 +1611,6 @@ const GroceryTrackerApp = () => {
     const [showSuccessMessage, setShowSuccessMessage] = useState(false);
     const [successMessage, setSuccessMessage] = useState<string>('');
     const [isClearingCache, setIsClearingCache] = useState(false);
-    const [showClearCacheModal, setShowClearCacheModal] = useState(false);
 
     const startEditing = (product: typeof processedProducts[0]) => {
       setEditingId(product.id);
@@ -1630,7 +1675,6 @@ const GroceryTrackerApp = () => {
     const handleClearCache = async () => {
       try {
         setIsClearingCache(true);
-        setShowClearCacheModal(false);
         console.log('🧹 Начинаем очистку кэша...');
 
         // 1. Очищаем все кэши браузера
@@ -1688,30 +1732,17 @@ const GroceryTrackerApp = () => {
 
     return (
       <div className="space-y-6">
-        {/* Модалка подтверждения сброса кэша */}
-        <ConfirmationModal
-          isOpen={showClearCacheModal}
-          onClose={() => setShowClearCacheModal(false)}
-          onConfirm={handleClearCache}
-          title="Очистить кэш приложения?"
-          message="Это действие выполнит следующее:\n\n• Удалит все кэшированные данные приложения\n• Пересчитает всю аналитику\n• Обновит приложение до последней версии\n• Перезагрузит страницу\n\nВаши данные в базе не будут удалены. Это займет несколько секунд."
-          confirmText="Да, очистить"
-          cancelText="Отмена"
-          isLoading={isClearingCache}
-          variant="warning"
-        />
-        
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-bold">Мои продукты</h2>
           
           {/* Кнопка очистки кэша */}
           <button
-            onClick={() => setShowClearCacheModal(true)}
+            onClick={handleClearCache}
             disabled={isClearingCache}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-300 ease-in-out transform ${
               isClearingCache
-                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                : 'bg-red-600 text-white hover:bg-red-700'
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed scale-95 opacity-80'
+                : 'bg-red-600 text-white hover:bg-red-700 hover:scale-105 hover:shadow-lg active:scale-95 active:shadow-md'
             }`}
             title="Очистить кэш и обновить приложение"
           >
@@ -1955,9 +1986,6 @@ const GroceryTrackerApp = () => {
 
   return (
     <div className="h-full flex flex-col bg-gray-50">
-      {/* SVG паттерны для типов продуктов */}
-      <ProductTypePatterns />
-      
       {/* Уведомление о восстановлении вкладки */}
       {showRestoredMessage && (
         <div className="fixed top-0 left-0 right-0 z-50 message-fade-in">
