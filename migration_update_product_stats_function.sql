@@ -157,3 +157,5 @@ COMMENT ON FUNCTION update_product_analytics(INTEGER, INTEGER) IS
 Если у продукта указан product_type, использует историю всех продуктов этого типа.
 Если продукт куплен недавно (< 2 дней), статус всегда = ok.';
 
+
+

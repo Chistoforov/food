@@ -196,3 +196,5 @@ AI Assistant (Claude Sonnet 4.5)
 - `public/sw.js` - Service Worker
 - `PWA_INSTALL_FIX.md` - Общее руководство по PWA
 
+
+

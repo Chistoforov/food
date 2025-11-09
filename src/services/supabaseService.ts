@@ -1305,6 +1305,85 @@ export class SupabaseService {
     }
   }
 
+  // Добавить виртуальную покупку для корректировки avg_days
+  // Это нужно, когда пользователь видит, что продукт помечен как "заканчивается",
+  // но на самом деле продукт еще есть дома
+  static async addVirtualPurchase(productId: number, familyId: number): Promise<void> {
+    console.log(`🔄 Добавляем виртуальную покупку для продукта #${productId}`)
+    
+    try {
+      // Создаем виртуальную покупку с сегодняшней датой
+      const today = new Date().toISOString().split('T')[0]
+      
+      // Добавляем запись в историю с quantity=0 (виртуальная покупка)
+      // price=0 и unit_price=0, т.к. это не реальная покупка
+      await this.addProductHistory({
+        product_id: productId,
+        family_id: familyId,
+        date: today,
+        quantity: 0, // Виртуальная покупка - не влияет на расход
+        price: 0,
+        unit_price: 0
+        // receipt_id не указываем - будет undefined (нет чека для виртуальной покупки)
+      })
+
+      console.log('✅ Виртуальная покупка добавлена')
+
+      // Обновляем last_purchase на сегодня
+      await this.updateProduct(productId, {
+        last_purchase: today
+      })
+
+      console.log('✅ last_purchase обновлен')
+
+      // Пересчитываем статистику продукта
+      // Это пересчитает avg_days с учетом новой виртуальной покупки
+      await this.updateProductStats(productId, familyId)
+
+      console.log('✅ Статистика пересчитана, avg_days увеличен')
+    } catch (error) {
+      console.error('❌ Ошибка добавления виртуальной покупки:', error)
+      throw error
+    }
+  }
+
+  // Добавить виртуальную покупку для всех продуктов указанного типа
+  static async addVirtualPurchaseForType(productType: string, familyId: number): Promise<number> {
+    console.log(`🔄 Добавляем виртуальную покупку для типа продукта: "${productType}"`)
+    
+    try {
+      // Получаем все продукты этого типа из базы данных
+      const { data: products, error: productsError } = await supabase
+        .from('products')
+        .select('id, name')
+        .eq('family_id', familyId)
+        .eq('product_type', productType)
+
+      if (productsError) {
+        console.error('❌ Ошибка получения продуктов типа:', productsError)
+        throw productsError
+      }
+
+      if (!products || products.length === 0) {
+        console.warn(`⚠️ Нет продуктов для типа "${productType}"`)
+        return 0
+      }
+
+      console.log(`📦 Найдено ${products.length} продуктов типа "${productType}":`, products.map(p => p.name))
+
+      // Добавляем виртуальную покупку для каждого продукта этого типа
+      for (const product of products) {
+        await this.addVirtualPurchase(product.id, familyId)
+      }
+
+      console.log(`✅ Виртуальные покупки добавлены для ${products.length} продуктов`)
+      return products.length
+    } catch (error) {
+      console.error('❌ Ошибка добавления виртуальной покупки для типа:', error)
+      throw error
+    }
+  }
+
   // Удаление типа продукта (очистка product_type для всех продуктов этого типа)
   static async deleteProductType(productType: string, familyId: number): Promise<void> {
     console.log(`🗑️ Удаляем тип продукта "${productType}" для семьи ${familyId}`)

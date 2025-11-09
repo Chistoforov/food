@@ -161,7 +161,7 @@ const GroceryTrackerApp = () => {
   };
 
   // Получаем данные из Supabase с обработкой ошибок
-  let products, productsLoading, updateProduct, loadMoreProducts, loadingMoreProducts, hasMoreProducts, receipts, receiptsLoading, deleteReceipt, loadMoreReceipts, loadingMoreReceipts, hasMoreReceipts, monthlyStatsData, statsLoading, recalculateStats, recalculateAllAnalytics, statsError, refetchStats;
+  let products, productsLoading, updateProduct, loadMoreProducts, loadingMoreProducts, hasMoreProducts, refetchProducts, receipts, receiptsLoading, deleteReceipt, loadMoreReceipts, loadingMoreReceipts, hasMoreReceipts, monthlyStatsData, statsLoading, recalculateStats, recalculateAllAnalytics, statsError, refetchStats;
   
   try {
     console.log('🔄 Инициализируем хуки Supabase...');
@@ -173,6 +173,7 @@ const GroceryTrackerApp = () => {
     loadMoreProducts = productsHook.loadMore;
     loadingMoreProducts = productsHook.loadingMore;
     hasMoreProducts = productsHook.hasMore;
+    refetchProducts = productsHook.refetch;
     
     const receiptsHook = useReceipts(selectedFamilyId);
     receipts = receiptsHook.receipts;
@@ -397,6 +398,7 @@ const GroceryTrackerApp = () => {
     const [loadingTypeStats, setLoadingTypeStats] = useState(false)
     const [deleteTypeConfirm, setDeleteTypeConfirm] = useState<string | null>(null)
     const [deletingType, setDeletingType] = useState(false)
+    const [virtualPurchaseLoading, setVirtualPurchaseLoading] = useState<string | null>(null)
 
     // Загружаем статистику по типам продуктов из КЭША (быстро!)
     // Кэш автоматически обновляется триггерами при изменениях
@@ -439,6 +441,39 @@ const GroceryTrackerApp = () => {
         alert('Ошибка удаления типа продукта. Попробуйте еще раз.')
       } finally {
         setDeletingType(false)
+      }
+    }
+
+    const handleVirtualPurchase = async (productType: string) => {
+      try {
+        setVirtualPurchaseLoading(productType)
+        console.log('🔄 Добавляем виртуальную покупку для типа:', productType)
+        
+        // Добавляем виртуальную покупку для всех продуктов этого типа
+        // Используем метод, который получает продукты напрямую из БД
+        const updatedCount = await SupabaseService.addVirtualPurchaseForType(productType, selectedFamilyId)
+        
+        if (updatedCount === 0) {
+          console.warn('⚠️ Нет продуктов для этого типа')
+          alert('Не найдено продуктов этого типа')
+          return
+        }
+        
+        console.log(`✅ Виртуальные покупки добавлены для ${updatedCount} продуктов`)
+        
+        // Обновляем список продуктов (чтобы получить новые статусы)
+        await refetchProducts()
+        
+        // Обновляем статистику типов
+        const stats = await SupabaseService.getProductTypeStats(selectedFamilyId)
+        setProductTypeStats(stats)
+        
+        console.log('✅ Продукты и статистика обновлены')
+      } catch (error) {
+        console.error('❌ Ошибка добавления виртуальной покупки:', error)
+        alert('Ошибка обновления. Попробуйте еще раз.')
+      } finally {
+        setVirtualPurchaseLoading(null)
       }
     }
 
@@ -577,11 +612,12 @@ const GroceryTrackerApp = () => {
             <div className="grid grid-cols-2 gap-3">
               {sortedTypes.map(([type, typeData]) => {
                 const typeStatus = typeData.status;
+                const isLoading = virtualPurchaseLoading === type;
                 
                 return (
                   <div 
                     key={type} 
-                    className={`rounded-xl p-4 border-2 transition-all relative ${
+                    className={`rounded-xl p-4 border-2 transition-all relative min-h-[100px] ${
                       typeStatus === 'ending-soon' 
                         ? 'bg-orange-50 border-orange-300' 
                         : typeStatus === 'ok'
@@ -592,38 +628,54 @@ const GroceryTrackerApp = () => {
                     {/* Кнопка удаления */}
                     <button
                       onClick={() => setDeleteTypeConfirm(type)}
-                      className="absolute top-2 right-2 p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      className="absolute top-2 right-2 p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors z-10"
                       title="Удалить тип продукта"
                     >
                       <Trash2 size={16} />
                     </button>
                     
-                    <div className="flex items-center justify-between pr-6">
-                      <h4 className="font-bold text-gray-900 capitalize">{type}</h4>
-                      {typeStatus === 'ending-soon' && (
-                        <AlertCircle size={20} className="text-orange-600 flex-shrink-0" />
-                      )}
-                      {typeStatus === 'ok' && (
-                        <CheckCircle size={20} className="text-green-600 flex-shrink-0" />
-                      )}
-                      {typeStatus === 'calculating' && (
-                        <Clock size={20} className="text-blue-600 flex-shrink-0" />
-                      )}
+                    {/* Контент с отступами для кнопок */}
+                    <div className={`${typeStatus === 'ending-soon' ? 'pb-10' : ''}`}>
+                      <div className="flex items-center justify-between pr-8">
+                        <h4 className="font-bold text-gray-900 capitalize">{type}</h4>
+                        {typeStatus === 'ending-soon' && (
+                          <AlertCircle size={20} className="text-orange-600 flex-shrink-0" />
+                        )}
+                        {typeStatus === 'ok' && (
+                          <CheckCircle size={20} className="text-green-600 flex-shrink-0" />
+                        )}
+                        {typeStatus === 'calculating' && (
+                          <Clock size={20} className="text-blue-600 flex-shrink-0" />
+                        )}
+                      </div>
+                      <div className={`text-sm font-medium mt-1 ${
+                        typeStatus === 'ending-soon' 
+                          ? 'text-orange-700' 
+                          : typeStatus === 'ok'
+                            ? 'text-green-700'
+                            : 'text-blue-700'
+                      }`}>
+                        {typeStatus === 'ending-soon' && 'Заканчивается'}
+                        {typeStatus === 'ok' && 'В наличии'}
+                        {typeStatus === 'calculating' && 'Расчет...'}
+                      </div>
                     </div>
-                    <div className={`text-sm font-medium mt-1 ${
-                      typeStatus === 'ending-soon' 
-                        ? 'text-orange-700' 
-                        : typeStatus === 'ok'
-                          ? 'text-green-700'
-                          : 'text-blue-700'
-                    }`}>
-                      {typeStatus === 'ending-soon' && 'Заканчивается'}
-                      {typeStatus === 'ok' && 'В наличии'}
-                      {typeStatus === 'calculating' && 'Расчет...'}
-                    </div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      {typeData.productCount} {typeData.productCount === 1 ? 'продукт' : typeData.productCount < 5 ? 'продукта' : 'продуктов'}
-                    </div>
+                    
+                    {/* Кнопка виртуальной покупки (только для ending-soon) */}
+                    {typeStatus === 'ending-soon' && (
+                      <button
+                        onClick={() => handleVirtualPurchase(type)}
+                        disabled={isLoading}
+                        className={`absolute bottom-2 right-2 p-2 rounded-lg transition-all shadow-md z-10 ${
+                          isLoading 
+                            ? 'bg-green-200 text-green-400 cursor-not-allowed' 
+                            : 'bg-green-600 text-white hover:bg-green-700 active:scale-95'
+                        }`}
+                        title="Продукт еще есть (+2 дня к прогнозу)"
+                      >
+                        <RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />
+                      </button>
+                    )}
                   </div>
                 );
               })}
