@@ -5,6 +5,7 @@ import { SupabaseService } from './services/supabaseService';
 import type { ProductHistory, Product } from './lib/supabase';
 import ConfirmationModal from './components/ConfirmationModal';
 import PWAInstallButton from './components/PWAInstallButton';
+import { ProductTypePatterns, getPatternForProductType, getColorScheme } from './components/ProductTypePatterns';
 
 // Проверяем переменные окружения при загрузке
 console.log('🔍 Environment check:', {
@@ -613,69 +614,87 @@ const GroceryTrackerApp = () => {
               {sortedTypes.map(([type, typeData]) => {
                 const typeStatus = typeData.status;
                 const isLoading = virtualPurchaseLoading === type;
+                const pattern = getPatternForProductType(type);
+                const colorScheme = getColorScheme(typeStatus);
                 
                 return (
                   <div 
                     key={type} 
-                    className={`rounded-xl p-4 border-2 transition-all relative min-h-[100px] ${
-                      typeStatus === 'ending-soon' 
-                        ? 'bg-orange-50 border-orange-300' 
-                        : typeStatus === 'ok'
-                          ? 'bg-green-50 border-green-300'
-                          : 'bg-blue-50 border-blue-300'
-                    }`}
+                    className={`rounded-xl p-4 border-2 transition-all relative min-h-[120px] overflow-hidden ${colorScheme.bg} ${colorScheme.border}`}
                   >
-                    {/* Кнопка удаления */}
-                    <button
-                      onClick={() => setDeleteTypeConfirm(type)}
-                      className="absolute top-2 right-2 p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors z-10"
-                      title="Удалить тип продукта"
+                    {/* SVG паттерн как фон */}
+                    <svg 
+                      className="absolute inset-0 w-full h-full pointer-events-none"
+                      style={{ opacity: 0.4 }}
                     >
-                      <Trash2 size={16} />
-                    </button>
+                      <rect width="100%" height="100%" fill={`url(#${pattern})`} />
+                    </svg>
+
+                    {/* Легкий градиент для глубины */}
+                    <div 
+                      className="absolute inset-0 pointer-events-none"
+                      style={{ 
+                        background: `linear-gradient(135deg, ${colorScheme.overlay} 0%, transparent 100%)`
+                      }}
+                    />
                     
-                    {/* Контент с отступами для кнопок */}
-                    <div className={`${typeStatus === 'ending-soon' ? 'pb-10' : ''}`}>
-                      <div className="flex items-center justify-between pr-8">
-                        <h4 className="font-bold text-gray-900 capitalize">{type}</h4>
-                        {typeStatus === 'ending-soon' && (
-                          <AlertCircle size={20} className="text-orange-600 flex-shrink-0" />
-                        )}
-                        {typeStatus === 'ok' && (
-                          <CheckCircle size={20} className="text-green-600 flex-shrink-0" />
-                        )}
-                        {typeStatus === 'calculating' && (
-                          <Clock size={20} className="text-blue-600 flex-shrink-0" />
-                        )}
-                      </div>
-                      <div className={`text-sm font-medium mt-1 ${
-                        typeStatus === 'ending-soon' 
-                          ? 'text-orange-700' 
-                          : typeStatus === 'ok'
-                            ? 'text-green-700'
-                            : 'text-blue-700'
-                      }`}>
-                        {typeStatus === 'ending-soon' && 'Заканчивается'}
-                        {typeStatus === 'ok' && 'В наличии'}
-                        {typeStatus === 'calculating' && 'Расчет...'}
-                      </div>
-                    </div>
-                    
-                    {/* Кнопка виртуальной покупки (только для ending-soon) */}
-                    {typeStatus === 'ending-soon' && (
+                    {/* Контент поверх паттерна */}
+                    <div className="relative z-10">
+                      {/* Кнопка удаления */}
                       <button
-                        onClick={() => handleVirtualPurchase(type)}
-                        disabled={isLoading}
-                        className={`absolute bottom-2 right-2 p-2 rounded-lg transition-all shadow-md z-10 ${
-                          isLoading 
-                            ? 'bg-green-200 text-green-400 cursor-not-allowed' 
-                            : 'bg-green-600 text-white hover:bg-green-700 active:scale-95'
-                        }`}
-                        title="Продукт еще есть (+2 дня к прогнозу)"
+                        onClick={() => setDeleteTypeConfirm(type)}
+                        className="absolute top-0 right-0 p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors z-20"
+                        title="Удалить тип продукта"
                       >
-                        <RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />
+                        <Trash2 size={16} />
                       </button>
-                    )}
+                      
+                      {/* Контент с отступами для кнопок */}
+                      <div className={`${typeStatus === 'ending-soon' ? 'pb-10' : ''}`}>
+                        <div className="flex items-center justify-between pr-8">
+                          <h4 className="font-bold text-gray-900 capitalize text-shadow">{type}</h4>
+                          {typeStatus === 'ending-soon' && (
+                            <AlertCircle size={20} className="text-orange-600 flex-shrink-0 drop-shadow" />
+                          )}
+                          {typeStatus === 'ok' && (
+                            <CheckCircle size={20} className="text-green-600 flex-shrink-0 drop-shadow" />
+                          )}
+                          {typeStatus === 'calculating' && (
+                            <Clock size={20} className="text-blue-600 flex-shrink-0 drop-shadow" />
+                          )}
+                        </div>
+                        <div className={`text-sm font-medium mt-1 ${
+                          typeStatus === 'ending-soon' 
+                            ? 'text-orange-700' 
+                            : typeStatus === 'ok'
+                              ? 'text-green-700'
+                              : 'text-blue-700'
+                        }`}>
+                          {typeStatus === 'ending-soon' && 'Заканчивается'}
+                          {typeStatus === 'ok' && 'В наличии'}
+                          {typeStatus === 'calculating' && 'Расчет...'}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          {typeData.productCount} {typeData.productCount === 1 ? 'продукт' : typeData.productCount < 5 ? 'продукта' : 'продуктов'}
+                        </div>
+                      </div>
+                      
+                      {/* Кнопка виртуальной покупки (только для ending-soon) */}
+                      {typeStatus === 'ending-soon' && (
+                        <button
+                          onClick={() => handleVirtualPurchase(type)}
+                          disabled={isLoading}
+                          className={`absolute bottom-2 right-2 p-2 rounded-lg transition-all shadow-md ${
+                            isLoading 
+                              ? 'bg-green-200 text-green-400 cursor-not-allowed' 
+                              : 'bg-green-600 text-white hover:bg-green-700 active:scale-95'
+                          }`}
+                          title="Продукт еще есть (+2 дня к прогнозу)"
+                        >
+                          <RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 );
               })}
@@ -1936,6 +1955,9 @@ const GroceryTrackerApp = () => {
 
   return (
     <div className="h-full flex flex-col bg-gray-50">
+      {/* SVG паттерны для типов продуктов */}
+      <ProductTypePatterns />
+      
       {/* Уведомление о восстановлении вкладки */}
       {showRestoredMessage && (
         <div className="fixed top-0 left-0 right-0 z-50 message-fade-in">
