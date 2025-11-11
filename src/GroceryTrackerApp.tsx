@@ -619,7 +619,7 @@ const GroceryTrackerApp = () => {
                 return (
                   <div 
                     key={type} 
-                    className={`rounded-xl p-4 border-2 transition-all relative min-h-[120px] overflow-hidden ${colorScheme.border}`}
+                    className={`rounded-xl p-3 border-2 transition-all relative min-h-[120px] ${colorScheme.border}`}
                     style={{
                       background: `linear-gradient(135deg, ${colorScheme.gradientStart} 0%, ${colorScheme.gradientEnd} 100%)`
                     }}
@@ -643,49 +643,49 @@ const GroceryTrackerApp = () => {
                       </div>
                       
                       {/* Ряд 3: Иконки и кнопки */}
-                      <div className="flex items-center gap-3 mt-auto">
+                      <div className="flex items-center gap-2 mt-auto">
                         {/* Иконка статуса */}
                         {typeStatus === 'ending-soon' && (
-                          <div className="p-1.5 rounded-lg bg-orange-100/50">
-                            <AlertCircle size={20} className="text-orange-600 flex-shrink-0" />
+                          <div className="p-1.5 rounded-lg bg-orange-100/50 flex-shrink-0">
+                            <AlertCircle size={18} className="text-orange-600" />
                           </div>
                         )}
                         {typeStatus === 'ok' && (
-                          <div className="p-1.5 rounded-lg bg-green-100/50">
-                            <CheckCircle size={20} className="text-green-600 flex-shrink-0" />
+                          <div className="p-1.5 rounded-lg bg-green-100/50 flex-shrink-0">
+                            <CheckCircle size={18} className="text-green-600" />
                           </div>
                         )}
                         {typeStatus === 'calculating' && (
-                          <div className="p-1.5 rounded-lg bg-blue-100/50">
-                            <Clock size={20} className="text-blue-600 flex-shrink-0" />
+                          <div className="p-1.5 rounded-lg bg-blue-100/50 flex-shrink-0">
+                            <Clock size={18} className="text-blue-600" />
                           </div>
                         )}
                         
                         {/* Кнопка удаления (корзина) */}
                         <button
                           onClick={() => setDeleteTypeConfirm(type)}
-                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
                           title="Удалить тип продукта"
                         >
-                          <Trash2 size={18} />
+                          <Trash2 size={16} />
                         </button>
                         
                         {/* Spacer - чтобы кнопка виртуальной покупки была справа */}
-                        <div className="flex-1"></div>
+                        <div className="flex-1 min-w-0"></div>
                         
                         {/* Кнопка виртуальной покупки (только для ending-soon) */}
                         {typeStatus === 'ending-soon' && (
                           <button
                             onClick={() => handleVirtualPurchase(type)}
                             disabled={isLoading}
-                            className={`p-2 rounded-lg transition-all shadow-md ${
+                            className={`p-2 rounded-lg transition-all flex-shrink-0 ${
                               isLoading 
                                 ? 'bg-green-200 text-green-400 cursor-not-allowed' 
-                                : 'bg-green-600 text-white hover:bg-green-700 active:scale-95'
+                                : 'bg-green-600 text-white hover:bg-green-700 active:scale-95 shadow-sm'
                             }`}
                             title="Продукт еще есть (+2 дня к прогнозу)"
                           >
-                            <RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />
+                            <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
                           </button>
                         )}
                       </div>
