@@ -1449,4 +1449,102 @@ export class SupabaseService {
       throw error
     }
   }
+
+  // Отметить продукт как досрочно закончившийся
+  // Это обратная операция от виртуальной покупки - продукт закончился раньше прогноза
+  static async markAsDepletedEarly(productId: number, familyId: number): Promise<void> {
+    console.log(`⚠️ Отмечаем продукт #${productId} как досрочно закончившийся`)
+    
+    try {
+      // Получаем информацию о продукте
+      const { data: product, error: productError } = await supabase
+        .from('products')
+        .select('last_purchase, predicted_end, avg_days')
+        .eq('id', productId)
+        .single()
+
+      if (productError) {
+        console.error('❌ Ошибка получения продукта:', productError)
+        throw productError
+      }
+
+      const today = new Date().toISOString().split('T')[0]
+      
+      // Вычисляем, на сколько дней раньше закончился продукт
+      const lastPurchaseDate = new Date(product.last_purchase)
+      const todayDate = new Date(today)
+      const actualDays = Math.floor((todayDate.getTime() - lastPurchaseDate.getTime()) / (1000 * 60 * 60 * 24))
+      
+      console.log(`📊 Продукт закончился через ${actualDays} дней вместо прогнозируемых ${product.avg_days || 'N/A'}`)
+      
+      // Добавляем запись в историю о досрочном окончании
+      // Это создаст новую точку для расчета avg_days
+      // quantity=-1 означает "досрочное окончание" (отличается от виртуальной покупки quantity=0)
+      await this.addProductHistory({
+        product_id: productId,
+        family_id: familyId,
+        date: today,
+        quantity: -1, // Специальный маркер "досрочное окончание"
+        price: 0,
+        unit_price: 0
+        // receipt_id не указываем - нет чека для досрочного окончания
+      })
+
+      console.log('✅ Запись о досрочном окончании добавлена в историю')
+
+      // Обновляем last_purchase на сегодня, чтобы это стало новой точкой отсчета
+      await this.updateProduct(productId, {
+        last_purchase: today
+      })
+
+      console.log('✅ last_purchase обновлен на сегодня')
+
+      // Пересчитываем статистику продукта
+      // avg_days будет пересчитан с учетом того, что продукт закончился раньше
+      // Это сделает интервалы между покупками короче и статус изменится на 'ending-soon'
+      await this.updateProductStats(productId, familyId)
+
+      console.log('✅ Статистика пересчитана, avg_days уменьшен, статус обновлен')
+    } catch (error) {
+      console.error('❌ Ошибка отметки о досрочном окончании:', error)
+      throw error
+    }
+  }
+
+  // Отметить все продукты указанного типа как досрочно закончившиеся
+  static async markTypeAsDepletedEarly(productType: string, familyId: number): Promise<number> {
+    console.log(`⚠️ Отмечаем все продукты типа "${productType}" как досрочно закончившиеся`)
+    
+    try {
+      // Получаем все продукты этого типа из базы данных
+      const { data: products, error: productsError } = await supabase
+        .from('products')
+        .select('id, name')
+        .eq('family_id', familyId)
+        .eq('product_type', productType)
+
+      if (productsError) {
+        console.error('❌ Ошибка получения продуктов типа:', productsError)
+        throw productsError
+      }
+
+      if (!products || products.length === 0) {
+        console.warn(`⚠️ Нет продуктов для типа "${productType}"`)
+        return 0
+      }
+
+      console.log(`📦 Найдено ${products.length} продуктов типа "${productType}":`, products.map(p => p.name))
+
+      // Отмечаем каждый продукт этого типа как досрочно закончившийся
+      for (const product of products) {
+        await this.markAsDepletedEarly(product.id, familyId)
+      }
+
+      console.log(`✅ Все ${products.length} продуктов отмечены как досрочно закончившиеся`)
+      return products.length
+    } catch (error) {
+      console.error('❌ Ошибка отметки типа как досрочно закончившегося:', error)
+      throw error
+    }
+  }
 }

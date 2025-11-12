@@ -400,6 +400,7 @@ const GroceryTrackerApp = () => {
     const [deleteTypeConfirm, setDeleteTypeConfirm] = useState<string | null>(null)
     const [deletingType, setDeletingType] = useState(false)
     const [virtualPurchaseLoading, setVirtualPurchaseLoading] = useState<string | null>(null)
+    const [earlyDepletionLoading, setEarlyDepletionLoading] = useState<string | null>(null)
 
     // Загружаем статистику по типам продуктов из КЭША (быстро!)
     // Кэш автоматически обновляется триггерами при изменениях
@@ -475,6 +476,38 @@ const GroceryTrackerApp = () => {
         alert('Ошибка обновления. Попробуйте еще раз.')
       } finally {
         setVirtualPurchaseLoading(null)
+      }
+    }
+
+    const handleEarlyDepletion = async (productType: string) => {
+      try {
+        setEarlyDepletionLoading(productType)
+        console.log('⚠️ Отмечаем продукты типа как досрочно закончившиеся:', productType)
+        
+        // Отмечаем все продукты этого типа как досрочно закончившиеся
+        const updatedCount = await SupabaseService.markTypeAsDepletedEarly(productType, selectedFamilyId)
+        
+        if (updatedCount === 0) {
+          console.warn('⚠️ Нет продуктов для этого типа')
+          alert('Не найдено продуктов этого типа')
+          return
+        }
+        
+        console.log(`✅ ${updatedCount} продуктов отмечены как досрочно закончившиеся`)
+        
+        // Обновляем список продуктов (чтобы получить новые статусы)
+        await refetchProducts()
+        
+        // Обновляем статистику типов
+        const stats = await SupabaseService.getProductTypeStats(selectedFamilyId)
+        setProductTypeStats(stats)
+        
+        console.log('✅ Продукты и статистика обновлены')
+      } catch (error) {
+        console.error('❌ Ошибка отметки досрочного окончания:', error)
+        alert('Ошибка обновления. Попробуйте еще раз.')
+      } finally {
+        setEarlyDepletionLoading(null)
       }
     }
 
@@ -670,8 +703,27 @@ const GroceryTrackerApp = () => {
                           <Trash2 size={16} />
                         </button>
                         
-                        {/* Spacer - чтобы кнопка виртуальной покупки была справа */}
+                        {/* Spacer - чтобы кнопки были справа */}
                         <div className="flex-1 min-w-0"></div>
+                        
+                        {/* Кнопка досрочного окончания (только для ok) */}
+                        {typeStatus === 'ok' && (() => {
+                          const isDepletionLoading = earlyDepletionLoading === type;
+                          return (
+                            <button
+                              onClick={() => handleEarlyDepletion(type)}
+                              disabled={isDepletionLoading}
+                              className={`p-2 rounded-lg transition-all flex-shrink-0 ${
+                                isDepletionLoading 
+                                  ? 'bg-orange-200 text-orange-400 cursor-not-allowed' 
+                                  : 'bg-orange-600 text-white hover:bg-orange-700 active:scale-95 shadow-sm'
+                              }`}
+                              title="Продукт закончился раньше"
+                            >
+                              <AlertTriangle size={16} className={isDepletionLoading ? 'animate-pulse' : ''} />
+                            </button>
+                          );
+                        })()}
                         
                         {/* Кнопка виртуальной покупки (только для ending-soon) */}
                         {typeStatus === 'ending-soon' && (
