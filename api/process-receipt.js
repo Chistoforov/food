@@ -19,9 +19,92 @@ const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY;
 const PERPLEXITY_API_URL = 'https://api.perplexity.ai/chat/completions';
 
 /**
+ * Get existing product types with examples for the family
+ */
+async function getExistingProductTypes(familyId) {
+  try {
+    const { data, error } = await supabase
+      .from('products')
+      .select('product_type, name')
+      .eq('family_id', familyId)
+      .not('product_type', 'is', null)
+      .order('purchase_count', { ascending: false });
+
+    if (error || !data || data.length === 0) {
+      return null;
+    }
+
+    // Group products by type and take up to 3 examples per type
+    const typeExamples = {};
+    for (const product of data) {
+      const type = product.product_type.toLowerCase().trim();
+      if (!typeExamples[type]) {
+        typeExamples[type] = [];
+      }
+      if (typeExamples[type].length < 3) {
+        typeExamples[type].push(product.name);
+      }
+    }
+
+    // Format for prompt
+    const formattedTypes = Object.entries(typeExamples)
+      .map(([type, examples]) => `  * "${type}" (примеры: ${examples.join(', ')})`)
+      .join('\n');
+
+    return formattedTypes;
+  } catch (error) {
+    console.error('Error fetching existing product types:', error);
+    return null;
+  }
+}
+
+/**
  * Parses receipt image using Perplexity API
  */
-async function parseReceiptWithPerplexity(imageUrl) {
+async function parseReceiptWithPerplexity(imageUrl, existingProductTypes = null) {
+  // Build the product type instruction with existing types if available
+  let productTypeInstruction = `КРИТИЧЕСКИ ВАЖНО про productType:
+- "productType" - это ОБЩАЯ КАТЕГОРИЯ продукта, БЕЗ брендов и конкретных названий
+- Это поле используется для группировки похожих продуктов разных брендов`;
+
+  if (existingProductTypes) {
+    productTypeInstruction += `
+
+⚠️ ВАЖНО: В базе уже существуют следующие категории продуктов.
+ОБЯЗАТЕЛЬНО используй эти категории для похожих продуктов:
+
+${existingProductTypes}
+
+Если новый продукт похож на примеры выше - используй ТОЧНО ТУ ЖЕ категорию!
+Создавай новую категорию только если продукт совершенно другого типа.`;
+  }
+
+  productTypeInstruction += `
+
+- Примеры правильных типов:
+  * "молоко" (для любого молока: "Простоквашино", "Parmalat", "Домик в деревне" и т.д.)
+  * "хлеб белый" (для всех белых хлебов, независимо от бренда)
+  * "хлеб черный" (для всех черных хлебов)
+  * "сыр плавленный" (для "Дружба", "Филадельфия", "Viola" и т.д.)
+  * "сыр твердый" (для Гауда, Чеддер и т.д.)
+  * "яблоки" (для всех яблок, независимо от сорта)
+  * "апельсины" (для всех апельсинов)
+  * "йогурт" (для всех йогуртов)
+  * "масло сливочное" (для всех сливочных масел)
+  * "масло растительное" (для подсолнечного, оливкового и т.д.)
+  * "курица" (для любых частей курицы)
+  * "говядина" (для любых частей говядины)
+  * "рис" (для всех видов риса)
+  * "макароны" (для всех видов пасты)
+  * "яйца" (для всех яиц)
+  * "сахар" (для всех видов сахара)
+  * "соль" (для всех видов соли)
+  * "вода" (для всех видов воды)
+- ВСЕГДА используй строчные буквы для productType
+- НИКОГДА не включай бренд в productType
+- Если можешь уточнить тип (например "хлеб белый" вместо просто "хлеб") - уточни
+- Для похожих продуктов используй ОДИНАКОВЫЙ productType`;
+
   const prompt = `Проанализируй этот чек из магазина и извлеки следующую информацию в формате JSON:
 
 {
@@ -45,32 +128,7 @@ async function parseReceiptWithPerplexity(imageUrl) {
 - "originalName" - это точное название с чека как оно написано (например: "MILK 3.2% 1L", "BREAD WHITE", "APPLES")
 - Если чек на русском, то оба поля могут быть одинаковыми
 
-КРИТИЧЕСКИ ВАЖНО про productType:
-- "productType" - это ОБЩАЯ КАТЕГОРИЯ продукта, БЕЗ брендов и конкретных названий
-- Это поле используется для группировки похожих продуктов разных брендов
-- Примеры правильных типов:
-  * "молоко" (для любого молока: "Простоквашино", "Parmalat", "Домик в деревне" и т.д.)
-  * "хлеб белый" (для всех белых хлебов, независимо от бренда)
-  * "хлеб черный" (для всех черных хлебов)
-  * "сыр плавленный" (для "Дружба", "Филадельфия", "Viola" и т.д.)
-  * "сыр твердый" (для Гауда, Чеддер и т.д.)
-  * "яблоки" (для всех яблок, независимо от сорта)
-  * "апельсины" (для всех апельсинов)
-  * "йогурт" (для всех йогуртов)
-  * "масло сливочное" (для всех сливочных масел)
-  * "масло растительное" (для подсолнечного, оливкового и т.д.)
-  * "курица" (для любых частей курицы)
-  * "говядина" (для любых частей говядины)
-  * "рис" (для всех видов риса)
-  * "макароны" (для всех видов пасты)
-  * "яйца" (для всех яиц)
-  * "сахар" (для всех видов сахара)
-  * "соль" (для всех видов соли)
-  * "вода" (для всех видов воды)
-- ВСЕГДА используй строчные буквы для productType
-- НИКОГДА не включай бренд в productType
-- Если можешь уточнить тип (например "хлеб белый" вместо просто "хлеб") - уточни
-- Для похожих продуктов используй ОДИНАКОВЫЙ productType
+${productTypeInstruction}
 
 КРИТИЧЕСКИ ВАЖНО про quantity и price:
 - "quantity" - это количество купленного товара в ЕДИНИЦАХ ИЗМЕРЕНИЯ
@@ -232,6 +290,72 @@ function normalizeProductName(name) {
 }
 
 /**
+ * Find similar products by name and suggest product type
+ * This helps maintain consistency when the same product appears with slight variations
+ */
+async function findSimilarProductType(productName, familyId) {
+  try {
+    const normalizedName = normalizeProductName(productName);
+    const nameWords = normalizedName.split(' ').filter(word => word.length > 2);
+    
+    if (nameWords.length === 0) return null;
+
+    // Get all products for this family
+    const { data, error } = await supabase
+      .from('products')
+      .select('name, product_type, purchase_count')
+      .eq('family_id', familyId)
+      .not('product_type', 'is', null)
+      .order('purchase_count', { ascending: false })
+      .limit(100);
+
+    if (error || !data || data.length === 0) {
+      return null;
+    }
+
+    // Find products with matching words
+    let bestMatch = null;
+    let highestScore = 0;
+
+    for (const existingProduct of data) {
+      const existingNormalized = normalizeProductName(existingProduct.name);
+      const existingWords = existingNormalized.split(' ').filter(word => word.length > 2);
+      
+      // Calculate similarity score (number of matching words)
+      let matchingWords = 0;
+      for (const word of nameWords) {
+        if (existingWords.some(ew => ew.includes(word) || word.includes(ew))) {
+          matchingWords++;
+        }
+      }
+
+      // Calculate score (matching words / total unique words)
+      const totalWords = Math.max(nameWords.length, existingWords.length);
+      const score = matchingWords / totalWords;
+
+      // Require at least 60% similarity
+      if (score > highestScore && score >= 0.6) {
+        highestScore = score;
+        bestMatch = {
+          productType: existingProduct.product_type,
+          matchedProduct: existingProduct.name,
+          similarity: Math.round(score * 100)
+        };
+      }
+    }
+
+    if (bestMatch) {
+      console.log(`🔍 Found similar product: "${productName}" → "${bestMatch.matchedProduct}" (${bestMatch.similarity}% match, type: ${bestMatch.productType})`);
+    }
+
+    return bestMatch;
+  } catch (error) {
+    console.error('Error finding similar products:', error);
+    return null;
+  }
+}
+
+/**
  * Check cache for existing translation
  */
 async function getCachedTranslation(originalName, familyId) {
@@ -294,13 +418,22 @@ async function processReceipt(familyId, parsedData) {
     }
 
     // Use cached translation if available, otherwise use AI translation
-    const finalName = cachedTranslation ? cachedTranslation.translated_name : item.name;
-    const finalProductType = cachedTranslation ? cachedTranslation.product_type : item.productType;
+    let finalName = cachedTranslation ? cachedTranslation.translated_name : item.name;
+    let finalProductType = cachedTranslation ? cachedTranslation.product_type : item.productType;
+
+    // If not using cache, check for similar products to ensure consistent categorization
+    if (!cachedTranslation) {
+      const similarProduct = await findSimilarProductType(finalName, familyId);
+      if (similarProduct) {
+        console.log(`🔄 Adjusting category from "${finalProductType}" to "${similarProduct.productType}" based on similar product`);
+        finalProductType = similarProduct.productType;
+      }
+    }
 
     // If we're using AI translation (not cached), save it to cache
     if (!cachedTranslation && item.originalName) {
-      await saveCachedTranslation(item.originalName, item.name, item.productType, familyId);
-      console.log(`📝 Cached new translation: "${item.originalName}" → "${item.name}" (${item.productType})`);
+      await saveCachedTranslation(item.originalName, finalName, finalProductType, familyId);
+      console.log(`📝 Cached new translation: "${item.originalName}" → "${finalName}" (${finalProductType})`);
     } else if (cachedTranslation) {
       console.log(`✅ Using cached translation: "${item.originalName}" → "${finalName}" (${finalProductType})`);
     }
@@ -489,9 +622,18 @@ export default async function handler(req, res) {
       .from('receipts')
       .getPublicUrl(pendingReceipt.image_url);
 
+    // Get existing product types for context
+    console.log('Fetching existing product types for family:', pendingReceipt.family_id);
+    const existingProductTypes = await getExistingProductTypes(pendingReceipt.family_id);
+    if (existingProductTypes) {
+      console.log('Found existing product types, including in prompt');
+    } else {
+      console.log('No existing product types found, using default categories');
+    }
+
     // Parse receipt with Perplexity
     console.log('Parsing receipt:', pendingReceiptId);
-    const parsedData = await parseReceiptWithPerplexity(urlData.publicUrl);
+    const parsedData = await parseReceiptWithPerplexity(urlData.publicUrl, existingProductTypes);
 
     // Process and save receipt
     console.log('Processing receipt:', pendingReceiptId);

@@ -150,6 +150,74 @@ async function parseReceiptWithPerplexity(imageUrl) {
 }
 
 /**
+ * Normalize product name for consistent matching
+ */
+function normalizeProductName(name) {
+  if (!name) return '';
+  return name.toLowerCase().trim().replace(/\s+/g, ' ');
+}
+
+/**
+ * Find similar products by name and suggest product type
+ */
+async function findSimilarProductType(productName, familyId) {
+  try {
+    const normalizedName = normalizeProductName(productName);
+    const nameWords = normalizedName.split(' ').filter(word => word.length > 2);
+    
+    if (nameWords.length === 0) return null;
+
+    const { data, error } = await supabase
+      .from('products')
+      .select('name, product_type, purchase_count')
+      .eq('family_id', familyId)
+      .not('product_type', 'is', null)
+      .order('purchase_count', { ascending: false })
+      .limit(100);
+
+    if (error || !data || data.length === 0) {
+      return null;
+    }
+
+    let bestMatch = null;
+    let highestScore = 0;
+
+    for (const existingProduct of data) {
+      const existingNormalized = normalizeProductName(existingProduct.name);
+      const existingWords = existingNormalized.split(' ').filter(word => word.length > 2);
+      
+      let matchingWords = 0;
+      for (const word of nameWords) {
+        if (existingWords.some(ew => ew.includes(word) || word.includes(ew))) {
+          matchingWords++;
+        }
+      }
+
+      const totalWords = Math.max(nameWords.length, existingWords.length);
+      const score = matchingWords / totalWords;
+
+      if (score > highestScore && score >= 0.6) {
+        highestScore = score;
+        bestMatch = {
+          productType: existingProduct.product_type,
+          matchedProduct: existingProduct.name,
+          similarity: Math.round(score * 100)
+        };
+      }
+    }
+
+    if (bestMatch) {
+      console.log(`🔍 Найден похожий продукт: "${productName}" → "${bestMatch.matchedProduct}" (${bestMatch.similarity}% совпадение, тип: ${bestMatch.productType})`);
+    }
+
+    return bestMatch;
+  } catch (error) {
+    console.error('Ошибка поиска похожих продуктов:', error);
+    return null;
+  }
+}
+
+/**
  * Update product types from re-parsed receipt data
  */
 async function updateProductTypes(familyId, parsedData) {
@@ -160,6 +228,14 @@ async function updateProductTypes(familyId, parsedData) {
     if (!item.productType) {
       console.log(`⚠️ Пропускаем "${item.name}" - нет productType`);
       continue;
+    }
+
+    // Check for similar products to ensure consistent categorization
+    let finalProductType = item.productType.toLowerCase();
+    const similarProduct = await findSimilarProductType(item.name, familyId);
+    if (similarProduct) {
+      console.log(`🔄 Корректировка категории с "${finalProductType}" на "${similarProduct.productType}" на основе похожего продукта`);
+      finalProductType = similarProduct.productType;
     }
 
     // Find existing product by name
@@ -174,18 +250,18 @@ async function updateProductTypes(familyId, parsedData) {
       const product = existingProducts[0];
       
       // Update product_type if it's different or missing
-      if (!product.product_type || product.product_type !== item.productType.toLowerCase()) {
+      if (!product.product_type || product.product_type !== finalProductType) {
         const { error: updateError } = await supabase
           .from('products')
           .update({
-            product_type: item.productType.toLowerCase()
+            product_type: finalProductType
           })
           .eq('id', product.id);
 
         if (updateError) {
           console.error(`❌ Ошибка обновления "${item.name}":`, updateError);
         } else {
-          console.log(`✅ Обновлен тип для "${item.name}": ${item.productType.toLowerCase()}`);
+          console.log(`✅ Обновлен тип для "${item.name}": ${finalProductType}`);
           updatedCount++;
         }
       } else {
