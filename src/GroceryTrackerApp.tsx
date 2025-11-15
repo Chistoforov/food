@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Camera, ShoppingCart, Home, BarChart3, Clock, AlertCircle, CheckCircle, Edit2, Save, X, Upload, Loader2, XCircle, Trash2, ChevronLeft, ChevronRight, Eye, Calendar, RefreshCw, AlertTriangle, Info, Sparkles } from 'lucide-react';
-import { useProducts, useReceipts, useProductHistory, useMonthlyStats } from './hooks/useSupabaseData';
+import { useProducts, useReceipts, useProductTypeHistory, useMonthlyStats } from './hooks/useSupabaseData';
 import { SupabaseService } from './services/supabaseService';
 import type { ProductHistory, Product } from './lib/supabase';
 import ConfirmationModal from './components/ConfirmationModal';
@@ -1380,13 +1380,32 @@ const GroceryTrackerApp = () => {
 
   // Страница аналитики
   const AnalyticsPage = () => {
-    const [selectedProduct, setSelectedProduct] = useState<number | null>(null);
+    const [selectedProductType, setSelectedProductType] = useState<string | null>(null);
     const [dateRange, setDateRange] = useState('month'); // week, month, 3months, all
     const [showProductSelect, setShowProductSelect] = useState(false);
     const [chartType, setChartType] = useState('quantity'); // quantity, price
 
-    // Получаем историю продукта из Supabase
-    const { history: productHistory, loading: historyLoading } = useProductHistory(selectedProduct || 0, selectedFamilyId);
+    // Группируем продукты по типу и считаем общее количество покупок
+    const productTypeGroups = processedProducts.reduce((groups, product) => {
+      // Только продукты с указанным типом
+      if (!product.product_type) return groups;
+      
+      if (!groups[product.product_type]) {
+        groups[product.product_type] = {
+          productType: product.product_type,
+          totalPurchases: 0,
+          products: []
+        };
+      }
+      
+      groups[product.product_type].totalPurchases += product.purchaseCount;
+      groups[product.product_type].products.push(product);
+      
+      return groups;
+    }, {} as Record<string, { productType: string; totalPurchases: number; products: typeof processedProducts }>);
+
+    // Получаем историю типа продукта из Supabase
+    const { history: productHistory, loading: historyLoading } = useProductTypeHistory(selectedProductType, selectedFamilyId);
 
     const dateRangeOptions = [
       { value: 'week', label: 'Неделя' },
@@ -1426,19 +1445,19 @@ const GroceryTrackerApp = () => {
       <div className="space-y-6">
         <h2 className="text-2xl font-bold">Аналитика</h2>
         
-        {/* Выбор продукта */}
+        {/* Выбор типа продукта */}
         <div className="bg-white rounded-2xl p-6 border border-gray-200">
-          <h3 className="font-semibold mb-4">Динамика продукта</h3>
+          <h3 className="font-semibold mb-4">Динамика типа продуктов</h3>
           
           <div className="space-y-4">
-            {/* Селектор продукта */}
+            {/* Селектор типа продукта */}
             <div className="relative">
               <button
                 onClick={() => setShowProductSelect(!showProductSelect)}
                 className="w-full flex items-center justify-between p-3 border border-gray-300 rounded-lg hover:border-indigo-500 transition-colors"
               >
-                <span className={selectedProduct ? 'text-gray-900' : 'text-gray-500'}>
-                  {selectedProduct ? processedProducts.find(p => p.id === selectedProduct)?.name : 'Выберите продукт'}
+                <span className={selectedProductType ? 'text-gray-900' : 'text-gray-500'}>
+                  {selectedProductType || 'Выберите тип продукта'}
                 </span>
                 <svg className={`w-5 h-5 text-gray-400 transition-transform ${showProductSelect ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -1448,32 +1467,34 @@ const GroceryTrackerApp = () => {
               {showProductSelect && (
                 <div className="absolute z-10 w-full mt-2 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
                   {(() => {
-                    // Фильтруем продукты: только те, что куплены более 3 раз
-                    const frequentProducts = processedProducts.filter(p => p.purchaseCount > 3);
+                    // Показываем все типы продуктов
+                    const allTypes = Object.values(productTypeGroups);
                     
-                    if (frequentProducts.length === 0) {
+                    if (allTypes.length === 0) {
                       return (
                         <div className="p-4 text-center text-gray-500">
-                          <p>Нет продуктов для отображения</p>
-                          <p className="text-sm mt-1">Нужно купить продукт более 3 раз, чтобы увидеть его динамику</p>
+                          <p>Нет типов продуктов для отображения</p>
+                          <p className="text-sm mt-1">У продуктов не указаны типы. Вы можете задать типы продуктов на странице "Продукты"</p>
                         </div>
                       );
                     }
                     
-                    return frequentProducts
-                      .sort((a, b) => b.purchaseCount - a.purchaseCount)
-                      .map(product => (
+                    return allTypes
+                      .sort((a, b) => b.totalPurchases - a.totalPurchases)
+                      .map(group => (
                         <button
-                          key={product.id}
+                          key={group.productType}
                           onClick={() => {
-                            setSelectedProduct(product.id);
+                            setSelectedProductType(group.productType);
                             setShowProductSelect(false);
                           }}
                           className="w-full text-left p-3 hover:bg-gray-50 border-b border-gray-100 last:border-0"
                         >
-                          <div className="font-medium text-gray-900">{product.name}</div>
+                          <div className="font-medium text-gray-900">{group.productType}</div>
                           <div className="text-sm text-gray-500">
-                            {product.purchaseCount} {product.purchaseCount === 1 ? 'покупка' : product.purchaseCount < 5 ? 'покупки' : 'покупок'}
+                            {group.totalPurchases} {group.totalPurchases === 1 ? 'покупка' : group.totalPurchases < 5 ? 'покупки' : 'покупок'}
+                            {' • '}
+                            {group.products.length} {group.products.length === 1 ? 'продукт' : group.products.length < 5 ? 'продукта' : 'продуктов'}
                           </div>
                         </button>
                       ));
@@ -1482,8 +1503,23 @@ const GroceryTrackerApp = () => {
               )}
             </div>
 
+            {/* Информация о выбранном типе продукта */}
+            {selectedProductType && productTypeGroups[selectedProductType] && (
+              <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                <div className="text-sm text-gray-600 mb-1">Продукты в этой категории:</div>
+                <div className="flex flex-wrap gap-2">
+                  {productTypeGroups[selectedProductType].products.map(product => (
+                    <span key={product.id} className="inline-flex items-center px-2 py-1 rounded-md bg-white border border-gray-200 text-xs">
+                      {product.name}
+                      <span className="ml-1 text-gray-400">({product.purchaseCount})</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Выбор периода и типа графика */}
-            {selectedProduct && (
+            {selectedProductType && (
               <>
                 <div className="space-y-4">
                   {/* Переключатель типа графика */}
@@ -1556,21 +1592,43 @@ const GroceryTrackerApp = () => {
                             const paddedMax = maxValue + padding;
                             const paddedMin = Math.max(0, minValue - padding);
                             
-                            // Генерируем 5 делений шкалы
-                            const steps = 5;
-                            const stepValue = (paddedMax - paddedMin) / (steps - 1);
+                            let tickValues: number[];
                             
-                            return Array.from({ length: steps }, (_, i) => {
-                              const value = paddedMax - (stepValue * i);
-                              return (
-                                <div key={i} className="text-xs text-gray-500 font-medium text-right pr-2 leading-none w-12">
-                                  {chartType === 'quantity' 
-                                    ? Math.round(value)
-                                    : `€${value.toFixed(2)}`
-                                  }
-                                </div>
-                              );
-                            });
+                            if (chartType === 'quantity') {
+                              // Для количества используем только целые числа без дубликатов
+                              const minInt = Math.floor(paddedMin);
+                              const maxInt = Math.ceil(paddedMax);
+                              const rangeInt = maxInt - minInt;
+                              
+                              if (rangeInt <= 5) {
+                                // Если диапазон маленький, показываем все целые числа
+                                tickValues = Array.from({ length: rangeInt + 1 }, (_, i) => maxInt - i);
+                              } else {
+                                // Если диапазон большой, показываем ~5 делений
+                                const step = Math.ceil(rangeInt / 4);
+                                tickValues = [];
+                                for (let i = maxInt; i >= minInt; i -= step) {
+                                  tickValues.push(i);
+                                }
+                                if (tickValues[tickValues.length - 1] !== minInt) {
+                                  tickValues.push(minInt);
+                                }
+                              }
+                            } else {
+                              // Для цены используем 5 делений с десятичными числами
+                              const steps = 5;
+                              const stepValue = (paddedMax - paddedMin) / (steps - 1);
+                              tickValues = Array.from({ length: steps }, (_, i) => paddedMax - (stepValue * i));
+                            }
+                            
+                            return tickValues.map((value, i) => (
+                              <div key={i} className="text-xs text-gray-500 font-medium text-right pr-2 leading-none w-12">
+                                {chartType === 'quantity' 
+                                  ? Math.round(value)
+                                  : `€${value.toFixed(2)}`
+                                }
+                              </div>
+                            ));
                           })()}
                         </div>
                         
@@ -1578,9 +1636,28 @@ const GroceryTrackerApp = () => {
                         <div className="flex-1 relative">
                           {/* Горизонтальные линии сетки */}
                           <div className="absolute inset-0 flex flex-col justify-between py-2">
-                            {Array.from({ length: 5 }, (_, i) => (
-                              <div key={i} className="border-t border-gray-200"></div>
-                            ))}
+                            {(() => {
+                              const data = filteredHistory.map(h => chartType === 'quantity' ? h.quantity : h.unit_price);
+                              const maxValue = Math.max(...data);
+                              const minValue = Math.min(...data);
+                              const range = maxValue - minValue;
+                              const padding = range * 0.1;
+                              const paddedMax = maxValue + padding;
+                              const paddedMin = Math.max(0, minValue - padding);
+                              
+                              let gridLines = 5;
+                              
+                              if (chartType === 'quantity') {
+                                const minInt = Math.floor(paddedMin);
+                                const maxInt = Math.ceil(paddedMax);
+                                const rangeInt = maxInt - minInt;
+                                gridLines = rangeInt <= 5 ? rangeInt + 1 : 5;
+                              }
+                              
+                              return Array.from({ length: gridLines }, (_, i) => (
+                                <div key={i} className="border-t border-gray-200"></div>
+                              ));
+                            })()}
                           </div>
                           
                           {/* Линейный график */}
@@ -1626,27 +1703,16 @@ const GroceryTrackerApp = () => {
                                     
                                     {/* Точки на графике */}
                                     {points.map((point, i) => (
-                                      <g key={i}>
-                                        <circle
-                                          cx={point.x}
-                                          cy={point.y}
-                                          r="4"
-                                          fill="white"
-                                          stroke={chartType === 'quantity' ? '#6366f1' : '#10b981'}
-                                          strokeWidth="2"
-                                          className="cursor-pointer hover:r-6 transition-all"
-                                        />
-                                        {/* Значение над точкой */}
-                                        <text
-                                          x={point.x}
-                                          y={point.y - 10}
-                                          textAnchor="middle"
-                                          className="text-xs font-semibold fill-gray-700"
-                                          style={{ fontSize: '10px' }}
-                                        >
-                                          {chartType === 'quantity' ? point.value : `€${point.value.toFixed(2)}`}
-                                        </text>
-                                      </g>
+                                      <circle
+                                        key={i}
+                                        cx={point.x}
+                                        cy={point.y}
+                                        r="4"
+                                        fill="white"
+                                        stroke={chartType === 'quantity' ? '#6366f1' : '#10b981'}
+                                        strokeWidth="2"
+                                        className="cursor-pointer hover:r-6 transition-all"
+                                      />
                                     ))}
                                   </g>
                                 );
@@ -1659,19 +1725,43 @@ const GroceryTrackerApp = () => {
                       {/* Ось X (время) */}
                       <div className="flex gap-3">
                         <div className="w-12"></div> {/* Отступ для выравнивания с осью Y */}
-                        <div className="flex-1 flex justify-between mt-2 text-xs text-gray-500">
-                          {filteredHistory.map((item, i) => (
-                            <div 
-                              key={i} 
-                              className="flex-1 text-center"
-                              style={{ 
-                                marginLeft: i === 0 ? '0' : '-20px',
-                                marginRight: i === filteredHistory.length - 1 ? '0' : '-20px'
-                              }}
-                            >
-                              {new Date(item.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
-                            </div>
-                          ))}
+                        <div className="flex-1 relative mt-2 text-xs text-gray-500" style={{ height: '20px' }}>
+                          {(() => {
+                            // Определяем шаг отображения дат в зависимости от выбранного периода
+                            let step = 1;
+                            if (dateRange === 'week') {
+                              step = Math.max(1, Math.ceil(filteredHistory.length / 7)); // Показываем ~7 меток
+                            } else if (dateRange === 'month') {
+                              step = Math.max(1, Math.ceil(filteredHistory.length / 6)); // Показываем ~6 меток (примерно каждые 5 дней)
+                            } else if (dateRange === '3months') {
+                              step = Math.max(1, Math.ceil(filteredHistory.length / 6)); // Показываем ~6 меток (примерно каждые 15 дней)
+                            } else {
+                              // Для "всё время" показываем максимум 8 меток
+                              step = Math.max(1, Math.ceil(filteredHistory.length / 8));
+                            }
+                            
+                            // Фильтруем даты с заданным шагом, но всегда показываем первую и последнюю
+                            return filteredHistory
+                              .map((item, i) => ({ item, index: i }))
+                              .filter(({ index }) => 
+                                index === 0 || 
+                                index === filteredHistory.length - 1 || 
+                                index % step === 0
+                              )
+                              .map(({ item, index }) => (
+                                <div 
+                                  key={index} 
+                                  className="text-center"
+                                  style={{ 
+                                    position: 'absolute',
+                                    left: `${(index / Math.max(1, filteredHistory.length - 1)) * 100}%`,
+                                    transform: 'translateX(-50%)'
+                                  }}
+                                >
+                                  {new Date(item.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
+                                </div>
+                              ));
+                          })()}
                         </div>
                       </div>
 
@@ -1752,10 +1842,10 @@ const GroceryTrackerApp = () => {
               </>
             )}
 
-            {!selectedProduct && (
+            {!selectedProductType && (
               <div className="py-12 text-center text-gray-400">
                 <BarChart3 size={48} className="mx-auto mb-3 opacity-50" />
-                <p>Выберите продукт для просмотра динамики</p>
+                <p>Выберите тип продукта для просмотра динамики</p>
               </div>
             )}
           </div>
