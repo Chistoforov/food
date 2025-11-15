@@ -334,8 +334,12 @@ export class SupabaseService {
     
     let status: 'ending-soon' | 'ok' | 'calculating' = 'ok'
     
-    // Проверяем последнюю запись в истории - это досрочное окончание (quantity=-1)?
-    const isEarlyDepletion = history.length > 0 && history[history.length - 1].quantity === -1
+    // ВАЖНО: Проверяем последнюю запись КОНКРЕТНОГО продукта (а не всей группы)!
+    // Это критично для корректной работы досрочного окончания в группах
+    const productHistory = await this.getProductHistory(productId, familyId)
+    const isEarlyDepletion = productHistory.length > 0 && productHistory[productHistory.length - 1].quantity === -1
+    
+    console.log(`🔍 Проверка досрочного окончания: продукт #${productId}, последняя запись quantity=${productHistory.length > 0 ? productHistory[productHistory.length - 1].quantity : 'N/A'}, isEarlyDepletion=${isEarlyDepletion}`)
     
     // Если продукт куплен недавно (меньше 2 дней назад), статус обычно "ok"
     // Это гарантирует, что только что купленный продукт точно есть минимум 2 дня
