@@ -159,3 +159,9 @@ COMMENT ON FUNCTION update_product_analytics(INTEGER, INTEGER) IS
 
 
 
+
+
+
+
+
+

@@ -134,3 +134,7 @@ Found existing product types, including in prompt
 **Дата реализации:** 12 ноября 2025  
 **Файл:** `/api/process-receipt.js`
 
+
+
+
+
