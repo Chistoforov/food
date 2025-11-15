@@ -334,15 +334,19 @@ export class SupabaseService {
     
     let status: 'ending-soon' | 'ok' | 'calculating' = 'ok'
     
-    // Если продукт куплен недавно (меньше 2 дней назад), статус всегда "ok"
-    // независимо от прогноза. Это предотвращает ситуацию, когда только что 
-    // купленный продукт сразу помечается как "заканчивается"
-    if (daysSincePurchase < 2) {
+    // Проверяем последнюю запись в истории - это досрочное окончание (quantity=-1)?
+    const isEarlyDepletion = history.length > 0 && history[history.length - 1].quantity === -1
+    
+    // Если продукт куплен недавно (меньше 2 дней назад), статус обычно "ok"
+    // Это гарантирует, что только что купленный продукт точно есть минимум 2 дня
+    // ИСКЛЮЧЕНИЕ: если последняя запись - досрочное окончание (quantity=-1),
+    // то проверяем срок окончания независимо от даты покупки
+    if (daysSincePurchase < 2 && !isEarlyDepletion) {
       status = 'ok'
-      console.log(`✅ Продукт куплен ${daysSincePurchase === 0 ? 'сегодня' : 'вчера'}, статус = ok`)
+      console.log(`✅ Продукт куплен ${daysSincePurchase === 0 ? 'сегодня' : 'вчера'}, гарантированно в наличии минимум 2 дня, статус = ok`)
     } else if (daysUntilEnd <= 2) {
       status = 'ending-soon'
-      console.log(`⚠️  До окончания ${daysUntilEnd} дней, статус = ending-soon`)
+      console.log(`⚠️  До окончания ${daysUntilEnd} дней${isEarlyDepletion ? ' (досрочное окончание)' : ''}, статус = ending-soon`)
     }
 
     return {
