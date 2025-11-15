@@ -699,7 +699,7 @@ const GroceryTrackerApp = () => {
                     {/* Контент в три ряда */}
                     <div className="relative z-10 flex flex-col h-full justify-between">
                       {/* Ряд 1: Название */}
-                      <h4 className="font-bold text-gray-900 capitalize text-lg mb-2">{type}</h4>
+                      <h4 className="font-bold text-gray-900 capitalize text-lg mb-2 break-words leading-tight">{type}</h4>
                       
                       {/* Ряд 2: Статус */}
                       <div className={`text-sm font-medium mb-3 ${
@@ -1395,6 +1395,33 @@ const GroceryTrackerApp = () => {
       { value: 'all', label: 'Всё время' }
     ];
 
+    // Фильтруем историю по выбранному периоду
+    const getFilteredHistory = () => {
+      if (!productHistory || productHistory.length === 0) return [];
+      
+      const now = new Date();
+      let startDate: Date;
+      
+      switch (dateRange) {
+        case 'week':
+          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          break;
+        case 'month':
+          startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          break;
+        case '3months':
+          startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+          break;
+        case 'all':
+        default:
+          return productHistory;
+      }
+      
+      return productHistory.filter(item => new Date(item.date) >= startDate);
+    };
+
+    const filteredHistory = getFilteredHistory();
+
     return (
       <div className="space-y-6">
         <h2 className="text-2xl font-bold">Аналитика</h2>
@@ -1508,31 +1535,35 @@ const GroceryTrackerApp = () => {
                       {chartType === 'quantity' ? 'Динамика количества покупок' : 'Динамика цены продукта'}
                     </h4>
                     <div className="text-sm text-gray-500">
-                      {productHistory?.length || 0} покупок
+                      {filteredHistory?.length || 0} {filteredHistory?.length === 1 ? 'покупка' : filteredHistory?.length && filteredHistory.length < 5 ? 'покупки' : 'покупок'}
                     </div>
                   </div>
                   
                   {historyLoading ? (
                     <div className="text-center py-8 text-gray-500">Загрузка истории...</div>
-                  ) : productHistory && productHistory.length > 0 ? (
+                  ) : filteredHistory && filteredHistory.length > 0 ? (
                     <>
                       <div className="flex gap-3">
                         {/* Ось Y (боковая шкала) */}
-                        <div className="flex flex-col justify-between h-48 py-2">
+                        <div className="flex flex-col justify-between h-64 py-2">
                           {(() => {
-                            const data = productHistory.map(h => chartType === 'quantity' ? h.quantity : h.unit_price);
+                            const data = filteredHistory.map(h => chartType === 'quantity' ? h.quantity : h.unit_price);
                             const maxValue = Math.max(...data);
                             const minValue = Math.min(...data);
                             const range = maxValue - minValue;
+                            // Добавляем небольшой padding (10%) к диапазону для лучшей визуализации
+                            const padding = range * 0.1;
+                            const paddedMax = maxValue + padding;
+                            const paddedMin = Math.max(0, minValue - padding);
                             
                             // Генерируем 5 делений шкалы
                             const steps = 5;
-                            const stepValue = range / (steps - 1);
+                            const stepValue = (paddedMax - paddedMin) / (steps - 1);
                             
                             return Array.from({ length: steps }, (_, i) => {
-                              const value = maxValue - (stepValue * i);
+                              const value = paddedMax - (stepValue * i);
                               return (
-                                <div key={i} className="text-xs text-gray-500 font-medium text-right pr-2 leading-none">
+                                <div key={i} className="text-xs text-gray-500 font-medium text-right pr-2 leading-none w-12">
                                   {chartType === 'quantity' 
                                     ? Math.round(value)
                                     : `€${value.toFixed(2)}`
@@ -1548,35 +1579,79 @@ const GroceryTrackerApp = () => {
                           {/* Горизонтальные линии сетки */}
                           <div className="absolute inset-0 flex flex-col justify-between py-2">
                             {Array.from({ length: 5 }, (_, i) => (
-                              <div key={i} className="border-t border-gray-100"></div>
+                              <div key={i} className="border-t border-gray-200"></div>
                             ))}
                           </div>
                           
-                          {/* Столбцы графика */}
-                          <div className="relative flex items-end justify-between gap-2 h-48 border-b border-l border-gray-300 pb-2 pl-2">
-                            {productHistory.map((item, i) => {
-                              const data = chartType === 'quantity' ? item.quantity : item.unit_price;
-                              const maxValue = chartType === 'quantity' 
-                                ? Math.max(...productHistory.map(h => h.quantity))
-                                : Math.max(...productHistory.map(h => h.unit_price));
-                              const height = (data / maxValue) * 100;
-                              
-                              return (
-                                <div key={i} className="flex-1 flex flex-col items-center gap-1 relative z-10">
-                                  <div className="text-xs font-semibold text-gray-700">
-                                    {chartType === 'quantity' ? item.quantity : `€${item.unit_price.toFixed(2)}`}
-                                  </div>
-                                  <div 
-                                    className={`w-full rounded-t hover:opacity-80 transition-all cursor-pointer ${
-                                      chartType === 'quantity' 
-                                        ? 'bg-gradient-to-t from-indigo-500 to-indigo-400 hover:from-indigo-600 hover:to-indigo-500'
-                                        : 'bg-gradient-to-t from-green-500 to-green-400 hover:from-green-600 hover:to-green-500'
-                                    }`}
-                                    style={{ height: `${height}%` }}
-                                  ></div>
-                                </div>
-                              );
-                            })}
+                          {/* Линейный график */}
+                          <div className="relative h-64 border-b border-l border-gray-300">
+                            <svg className="absolute inset-0 w-full h-full" style={{ overflow: 'visible' }}>
+                              {(() => {
+                                const data = filteredHistory.map(h => chartType === 'quantity' ? h.quantity : h.unit_price);
+                                const maxValue = Math.max(...data);
+                                const minValue = Math.min(...data);
+                                const range = maxValue - minValue;
+                                const padding = range * 0.1;
+                                const paddedMax = maxValue + padding;
+                                const paddedMin = Math.max(0, minValue - padding);
+                                const paddedRange = paddedMax - paddedMin;
+                                
+                                const width = 100; // процент
+                                const height = 100; // процент
+                                const pointSpacing = width / Math.max(1, filteredHistory.length - 1);
+                                
+                                // Создаем точки для линии
+                                const points = filteredHistory.map((item, i) => {
+                                  const value = chartType === 'quantity' ? item.quantity : item.unit_price;
+                                  const x = filteredHistory.length === 1 ? 50 : (i * pointSpacing);
+                                  const y = height - ((value - paddedMin) / paddedRange * height);
+                                  return { x, y, value, date: item.date };
+                                });
+                                
+                                // Создаем path для линии
+                                const linePath = points.map((p, i) => 
+                                  `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`
+                                ).join(' ');
+                                
+                                return (
+                                  <g>
+                                    {/* Линия графика */}
+                                    <path
+                                      d={linePath}
+                                      fill="none"
+                                      stroke={chartType === 'quantity' ? '#6366f1' : '#10b981'}
+                                      strokeWidth="2"
+                                      vectorEffect="non-scaling-stroke"
+                                    />
+                                    
+                                    {/* Точки на графике */}
+                                    {points.map((point, i) => (
+                                      <g key={i}>
+                                        <circle
+                                          cx={point.x}
+                                          cy={point.y}
+                                          r="4"
+                                          fill="white"
+                                          stroke={chartType === 'quantity' ? '#6366f1' : '#10b981'}
+                                          strokeWidth="2"
+                                          className="cursor-pointer hover:r-6 transition-all"
+                                        />
+                                        {/* Значение над точкой */}
+                                        <text
+                                          x={point.x}
+                                          y={point.y - 10}
+                                          textAnchor="middle"
+                                          className="text-xs font-semibold fill-gray-700"
+                                          style={{ fontSize: '10px' }}
+                                        >
+                                          {chartType === 'quantity' ? point.value : `€${point.value.toFixed(2)}`}
+                                        </text>
+                                      </g>
+                                    ))}
+                                  </g>
+                                );
+                              })()}
+                            </svg>
                           </div>
                         </div>
                       </div>
@@ -1584,9 +1659,16 @@ const GroceryTrackerApp = () => {
                       {/* Ось X (время) */}
                       <div className="flex gap-3">
                         <div className="w-12"></div> {/* Отступ для выравнивания с осью Y */}
-                        <div className="flex-1 flex justify-between mt-2 text-xs text-gray-500 pl-2">
-                          {productHistory.map((item, i) => (
-                            <div key={i} className="flex-1 text-center">
+                        <div className="flex-1 flex justify-between mt-2 text-xs text-gray-500">
+                          {filteredHistory.map((item, i) => (
+                            <div 
+                              key={i} 
+                              className="flex-1 text-center"
+                              style={{ 
+                                marginLeft: i === 0 ? '0' : '-20px',
+                                marginRight: i === filteredHistory.length - 1 ? '0' : '-20px'
+                              }}
+                            >
                               {new Date(item.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
                             </div>
                           ))}
@@ -1600,19 +1682,28 @@ const GroceryTrackerApp = () => {
                             <div>
                               <div className="text-xs text-gray-500">Всего куплено</div>
                               <div className="text-lg font-bold text-gray-900">
-                                {productHistory.reduce((sum, item) => sum + item.quantity, 0)}
+                                {filteredHistory.reduce((sum, item) => sum + item.quantity, 0)}
                               </div>
                             </div>
                             <div>
                               <div className="text-xs text-gray-500">Потрачено</div>
                               <div className="text-lg font-bold text-gray-900">
-                                €{productHistory.reduce((sum, item) => sum + item.price, 0).toFixed(2)}
+                                €{filteredHistory.reduce((sum, item) => sum + item.price, 0).toFixed(2)}
                               </div>
                             </div>
                             <div>
                               <div className="text-xs text-gray-500">Частота</div>
                               <div className="text-lg font-bold text-gray-900">
-                                {processedProducts.find(p => p.id === selectedProduct)?.avgDays} дн
+                                {(() => {
+                                  if (filteredHistory.length < 2) return '—';
+                                  const dates = filteredHistory.map(h => new Date(h.date).getTime());
+                                  const daysBetween = dates.map((date, i) => 
+                                    i === 0 ? 0 : (date - dates[i - 1]) / (1000 * 60 * 60 * 24)
+                                  ).filter(d => d > 0);
+                                  if (daysBetween.length === 0) return '—';
+                                  const avgDays = Math.round(daysBetween.reduce((sum, d) => sum + d, 0) / daysBetween.length);
+                                  return `${avgDays} дн`;
+                                })()}
                               </div>
                             </div>
                           </>
@@ -1621,24 +1712,24 @@ const GroceryTrackerApp = () => {
                             <div>
                               <div className="text-xs text-gray-500">Средняя цена</div>
                               <div className="text-lg font-bold text-gray-900">
-                                €{(productHistory.reduce((sum, item) => sum + item.unit_price, 0) / productHistory.length).toFixed(2)}
+                                €{(filteredHistory.reduce((sum, item) => sum + item.unit_price, 0) / filteredHistory.length).toFixed(2)}
                               </div>
                             </div>
                             <div>
                               <div className="text-xs text-gray-500">Изменение</div>
                               <div className={`text-lg font-bold ${
                                 (() => {
-                                  if (!productHistory || productHistory.length < 2) return 'text-gray-900';
-                                  const firstPrice = productHistory[0].unit_price;
-                                  const lastPrice = productHistory[productHistory.length - 1].unit_price;
+                                  if (!filteredHistory || filteredHistory.length < 2) return 'text-gray-900';
+                                  const firstPrice = filteredHistory[0].unit_price;
+                                  const lastPrice = filteredHistory[filteredHistory.length - 1].unit_price;
                                   const change = ((lastPrice - firstPrice) / firstPrice) * 100;
                                   return change > 0 ? 'text-red-600' : change < 0 ? 'text-green-600' : 'text-gray-900';
                                 })()
                               }`}>
                                 {(() => {
-                                  if (!productHistory || productHistory.length < 2) return '—';
-                                  const firstPrice = productHistory[0].unit_price;
-                                  const lastPrice = productHistory[productHistory.length - 1].unit_price;
+                                  if (!filteredHistory || filteredHistory.length < 2) return '—';
+                                  const firstPrice = filteredHistory[0].unit_price;
+                                  const lastPrice = filteredHistory[filteredHistory.length - 1].unit_price;
                                   const change = ((lastPrice - firstPrice) / firstPrice) * 100;
                                   return `${change > 0 ? '+' : ''}${change.toFixed(1)}%`;
                                 })()}
@@ -1647,7 +1738,7 @@ const GroceryTrackerApp = () => {
                             <div>
                               <div className="text-xs text-gray-500">Диапазон</div>
                               <div className="text-lg font-bold text-gray-900">
-                                €{Math.min(...productHistory.map(h => h.unit_price)).toFixed(2)} - €{Math.max(...productHistory.map(h => h.unit_price)).toFixed(2)}
+                                €{Math.min(...filteredHistory.map(h => h.unit_price)).toFixed(2)} - €{Math.max(...filteredHistory.map(h => h.unit_price)).toFixed(2)}
                               </div>
                             </div>
                           </>
