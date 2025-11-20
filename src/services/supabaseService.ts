@@ -7,6 +7,7 @@ export class SupabaseService {
       .from('products')
       .select('*')
       .eq('family_id', familyId)
+      .order('last_purchase', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: false })
 
     if (limit !== undefined) {
