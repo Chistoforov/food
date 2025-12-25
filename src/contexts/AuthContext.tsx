@@ -21,21 +21,41 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     // Check active session
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null)
-      if (session?.user) {
+      console.log('🔍 [Auth] Initial session check:', session ? 'Found session' : 'No session')
+      
+      // If no session but we have a code/hash in URL, don't stop loading yet
+      // Let onAuthStateChange handle the session establishment
+      const isAuthCallback = window.location.hash || window.location.search.includes('code=')
+      
+      if (session) {
+        setUser(session.user)
         fetchProfile(session.user.id)
-      } else {
+      } else if (!isAuthCallback) {
+        // Only set loading false if we're not expecting a callback
+        console.log('🔍 [Auth] No session and no callback params - stopping load')
         setLoading(false)
+      } else {
+        console.log('🔍 [Auth] Detected auth callback params - waiting for auth state change')
       }
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log(`🔔 [Auth] State change: ${event}`, session ? 'User present' : 'No user')
+      
       setUser(session?.user ?? null)
       if (session?.user) {
         fetchProfile(session.user.id)
-      } else {
+      } else if (event !== 'INITIAL_SESSION') {
+        // Don't clear profile on INITIAL_SESSION if we're just starting up
+        // (handled by getSession above)
         setProfile(null)
         setLoading(false)
+      } else {
+         // INITIAL_SESSION with no session
+         const isAuthCallback = window.location.hash || window.location.search.includes('code=')
+         if (!isAuthCallback) {
+            setLoading(false)
+         }
       }
     })
 
@@ -81,10 +101,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }
 
   const signInWithGoogle = async () => {
+    const redirectUrl = window.location.origin
+    console.log('🔐 [Auth] Initiating Google Sign In, redirect to:', redirectUrl)
+    
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: window.location.origin,
+        redirectTo: redirectUrl,
         queryParams: {
           access_type: 'offline',
           prompt: 'consent',
