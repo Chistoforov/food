@@ -61,11 +61,11 @@ async function getExistingProductTypes(familyId) {
 /**
  * Parses receipt image using Perplexity API
  */
-async function parseReceiptWithPerplexity(imageUrl, existingProductTypes = null) {
+async function parseReceiptWithPerplexity(imageUrl, existingProductTypes = null, language = 'Russian') {
   // Build the product type instruction with existing types if available
   let productTypeInstruction = `КРИТИЧЕСКИ ВАЖНО про productType:
-- "productType" - это ОБЩАЯ КАТЕГОРИЯ продукта, БЕЗ брендов и конкретных названий
-- Это поле используется для группировки похожих продуктов разных брендов`;
+  - "productType" - это ОБЩАЯ КАТЕГОРИЯ продукта, БЕЗ брендов и конкретных названий
+  - Это поле используется для группировки похожих продуктов разных брендов`;
 
   if (existingProductTypes) {
     productTypeInstruction += `
@@ -105,12 +105,13 @@ ${existingProductTypes}
 - Если можешь уточнить тип (например "хлеб белый" вместо просто "хлеб") - уточни
 - Для похожих продуктов используй ОДИНАКОВЫЙ productType`;
 
-  const prompt = `Проанализируй этот чек из магазина и извлеки следующую информацию в формате JSON:
+  const prompt = `Проанализируй этот чек из магазина и извлеки следующую информацию в формате JSON.
+Язык чека предположительно: ${language}. Пожалуйста, учитывай это при распознавании.
 
 {
   "items": [
     {
-      "name": "русское название продукта (понятное и читаемое)",
+      "name": "название продукта на языке ${language} (понятное и читаемое)",
       "originalName": "оригинальное название с чека (как написано в магазине)",
       "productType": "общая категория продукта (см. правила ниже)",
       "quantity": число (сколько единиц товара куплено),
@@ -124,9 +125,9 @@ ${existingProductTypes}
 }
 
 ВАЖНО про названия:
-- "name" - это красивое русское название (например: "Молоко 3.2% 1L", "Хлеб белый", "Яблоки")
+- "name" - это красивое название на языке ${language} (например: "Молоко 3.2% 1L", "Хлеб белый", "Яблоки")
 - "originalName" - это точное название с чека как оно написано (например: "MILK 3.2% 1L", "BREAD WHITE", "APPLES")
-- Если чек на русском, то оба поля могут быть одинаковыми
+- Если чек на том же языке, то оба поля могут быть одинаковыми
 
 ${productTypeInstruction}
 
@@ -631,9 +632,28 @@ export default async function handler(req, res) {
       console.log('No existing product types found, using default categories');
     }
 
+    // Fetch user language preference if available
+    let receiptLanguage = 'Russian';
+    if (pendingReceipt.uploaded_by) {
+      try {
+        const { data: userProfile } = await supabase
+          .from('user_profiles')
+          .select('receipt_language')
+          .eq('id', pendingReceipt.uploaded_by)
+          .single();
+        
+        if (userProfile && userProfile.receipt_language) {
+          receiptLanguage = userProfile.receipt_language;
+          console.log(`Using user preferred language: ${receiptLanguage}`);
+        }
+      } catch (langError) {
+        console.warn('Error fetching user language preference, using default:', langError);
+      }
+    }
+
     // Parse receipt with Perplexity
     console.log('Parsing receipt:', pendingReceiptId);
-    const parsedData = await parseReceiptWithPerplexity(urlData.publicUrl, existingProductTypes);
+    const parsedData = await parseReceiptWithPerplexity(urlData.publicUrl, existingProductTypes, receiptLanguage);
 
     // Process and save receipt
     console.log('Processing receipt:', pendingReceiptId);

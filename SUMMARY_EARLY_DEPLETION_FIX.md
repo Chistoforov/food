@@ -88,3 +88,7 @@ git push origin main
 - `EARLY_DEPLETION_FEATURE.md` - описание функции досрочного окончания
 - `VIRTUAL_PURCHASE_FEATURE.md` - описание виртуальной покупки (противоположная функция)
 
+
+
+
+

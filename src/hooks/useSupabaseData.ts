@@ -86,8 +86,8 @@ export const useProducts = (familyId: number) => {
 
   useEffect(() => {
     if (familyId) {
-      // Загружаем первые 15 продуктов при инициализации
-      fetchProducts(15, 0, false)
+      // Загружаем первые 100 продуктов при инициализации (достаточно для аналитики)
+      fetchProducts(100, 0, false)
     }
   }, [familyId])
 
@@ -243,6 +243,48 @@ export const useProductHistory = (productId: number, familyId: number) => {
     error,
     refetch: fetchHistory,
     addHistory
+  }
+}
+
+// Хук для работы с историей типа продуктов (все продукты одного типа)
+export const useProductTypeHistory = (productType: string | null, familyId: number) => {
+  const [history, setHistory] = useState<ProductHistory[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const fetchHistory = async () => {
+    if (!productType) {
+      setHistory([])
+      setLoading(false)
+      return
+    }
+
+    try {
+      setLoading(true)
+      setError(null)
+      const data = await SupabaseService.getProductTypeHistory(productType, familyId)
+      setHistory(data)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Ошибка загрузки истории типа продукта')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (productType && familyId) {
+      fetchHistory()
+    } else {
+      setHistory([])
+      setLoading(false)
+    }
+  }, [productType, familyId])
+
+  return {
+    history,
+    loading,
+    error,
+    refetch: fetchHistory
   }
 }
 

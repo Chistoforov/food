@@ -97,3 +97,7 @@ setProductTypeStats(stats)
 - `EARLY_DEPLETION_FEATURE.md` - документация по функции досрочного окончания
 - `PRODUCT_TYPE_STATS_CACHE_FIX.md` - документация по кэшу статистики типов
 
+
+
+
+

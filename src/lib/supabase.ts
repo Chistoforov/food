@@ -98,4 +98,21 @@ export interface PendingReceipt {
   created_at: string
   processed_at?: string
   attempts: number
+  uploaded_by?: string
+}
+
+export interface UserProfile {
+  id: string
+  email: string
+  family_id: number
+  created_at: string
+  receipt_language?: string | null
+}
+
+export interface FamilyInvitation {
+  id: number
+  family_id: number
+  email: string
+  status: 'pending' | 'accepted' | 'rejected'
+  created_at: string
 }
