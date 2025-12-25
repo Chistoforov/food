@@ -87,12 +87,14 @@ const GroceryTrackerApp = () => {
   const [selectedMonth, setSelectedMonth] = useState<{month: string, year: number} | null>(null);
   const [showRestoredMessage, setShowRestoredMessage] = useState(false);
 
-  // Получаем текущий месяц (используем для хука и рендера)
-  const currentMonth = selectedMonth || getCurrentMonth();
-
-  // Инициализируем хуки Supabase (безусловно, чтобы не нарушать Rules of Hooks)
-  // Используем familyId=0 если профиль еще не загружен, чтобы избежать лишних запросов
-  const safeFamilyId = profile?.family_id || 0;
+  // Функции для навигации по месяцам
+  const getCurrentMonth = () => {
+    const now = new Date();
+    return {
+      month: String(now.getMonth() + 1).padStart(2, '0'),
+      year: now.getFullYear()
+    };
+  };
 
   const {
     products,
@@ -226,15 +228,6 @@ const GroceryTrackerApp = () => {
       window.removeEventListener('pagehide', handlePageHide);
     };
   }, [activeTab]);
-
-  // Функции для навигации по месяцам
-  const getCurrentMonth = () => {
-    const now = new Date();
-    return {
-      month: String(now.getMonth() + 1).padStart(2, '0'),
-      year: now.getFullYear()
-    };
-  };
 
 
   // Подписка на обновления pending receipts для автоматического обновления статистики
