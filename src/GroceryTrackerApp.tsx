@@ -201,60 +201,41 @@ const GroceryTrackerApp = () => {
     };
   };
 
-  // Получаем данные из Supabase с обработкой ошибок
-  let products, productsLoading, updateProduct, loadMoreProducts, loadingMoreProducts, hasMoreProducts, refetchProducts, receipts, receiptsLoading, deleteReceipt, loadMoreReceipts, loadingMoreReceipts, hasMoreReceipts, monthlyStatsData, statsLoading, recalculateStats, recalculateAllAnalytics, statsError, refetchStats;
-  
-  try {
-    console.log('🔄 Инициализируем хуки Supabase...');
-    
-    const productsHook = useProducts(selectedFamilyId);
-    products = productsHook.products;
-    productsLoading = productsHook.loading;
-    updateProduct = productsHook.updateProduct;
-    loadMoreProducts = productsHook.loadMore;
-    loadingMoreProducts = productsHook.loadingMore;
-    hasMoreProducts = productsHook.hasMore;
-    refetchProducts = productsHook.refetch;
-    
-    const receiptsHook = useReceipts(selectedFamilyId);
-    receipts = receiptsHook.receipts;
-    receiptsLoading = receiptsHook.loading;
-    deleteReceipt = receiptsHook.deleteReceipt;
-    loadMoreReceipts = receiptsHook.loadMore;
-    loadingMoreReceipts = receiptsHook.loadingMore;
-    hasMoreReceipts = receiptsHook.hasMore;
-    
-    // Получаем текущий месяц для загрузки статистики
-    const currentMonth = selectedMonth || getCurrentMonth();
-    const statsHook = useMonthlyStats(selectedFamilyId, currentMonth.month, currentMonth.year);
-    monthlyStatsData = statsHook.stats;
-    statsLoading = statsHook.loading;
-    recalculateStats = statsHook.recalculateStats;
-    recalculateAllAnalytics = statsHook.recalculateAllAnalytics;
-    statsError = statsHook.error;
-    refetchStats = statsHook.refetch;
-    
-    console.log('✅ Хуки Supabase инициализированы успешно');
-  } catch (error) {
-    console.error('❌ Ошибка инициализации хуков Supabase:', error);
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <AlertTriangle className="text-red-500 mx-auto mb-4" size={64} />
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Ошибка инициализации</h2>
-          <p className="text-gray-600 mb-4">
-            Не удалось инициализировать подключение к базе данных
-          </p>
-          <button
-            onClick={() => window.location.reload()}
-            className="bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 transition-colors"
-          >
-            Обновить страницу
-          </button>
-        </div>
-      </div>
-    );
-  }
+  // Получаем текущий месяц (используем для хука и рендера)
+  const currentMonth = selectedMonth || getCurrentMonth();
+
+  console.log('🔄 Инициализируем хуки Supabase...');
+
+  // Инициализируем хуки Supabase (на верхнем уровне, без try-catch!)
+  const {
+    products,
+    loading: productsLoading,
+    updateProduct,
+    loadMore: loadMoreProducts,
+    loadingMore: loadingMoreProducts,
+    hasMore: hasMoreProducts,
+    refetch: refetchProducts
+  } = useProducts(selectedFamilyId);
+
+  const {
+    receipts,
+    loading: receiptsLoading,
+    deleteReceipt,
+    loadMore: loadMoreReceipts,
+    loadingMore: loadingMoreReceipts,
+    hasMore: hasMoreReceipts
+  } = useReceipts(selectedFamilyId);
+
+  const {
+    stats: monthlyStatsData,
+    loading: statsLoading,
+    recalculateStats,
+    recalculateAllAnalytics,
+    error: statsError,
+    refetch: refetchStats
+  } = useMonthlyStats(selectedFamilyId, currentMonth.month, currentMonth.year);
+
+  console.log('✅ Хуки Supabase инициализированы успешно');
 
   // Подписка на обновления pending receipts для автоматического обновления статистики
   useEffect(() => {
@@ -279,8 +260,6 @@ const GroceryTrackerApp = () => {
     };
   }, [selectedFamilyId, refetchStats]);
 
-  // Получаем текущий месяц для использования в компоненте
-  const currentMonth = selectedMonth || getCurrentMonth();
 
   const goToPreviousMonth = () => {
     const date = new Date(currentMonth.year, parseInt(currentMonth.month) - 1, 1);
