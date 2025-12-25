@@ -34,6 +34,11 @@ self.addEventListener('activate', (event) => {
 
 // Перехват запросов
 self.addEventListener('fetch', (event) => {
+  // Игнорируем расширения Chrome и другие схемы кроме http/https
+  if (!event.request.url.startsWith('http')) {
+    return;
+  }
+
   // Кэшируем только GET запросы (Cache API не поддерживает POST/PUT/DELETE)
   if (event.request.method !== 'GET') {
     event.respondWith(fetch(event.request));
