@@ -87,6 +87,41 @@ const GroceryTrackerApp = () => {
   const [selectedMonth, setSelectedMonth] = useState<{month: string, year: number} | null>(null);
   const [showRestoredMessage, setShowRestoredMessage] = useState(false);
 
+  // Получаем текущий месяц (используем для хука и рендера)
+  const currentMonth = selectedMonth || getCurrentMonth();
+
+  // Инициализируем хуки Supabase (безусловно, чтобы не нарушать Rules of Hooks)
+  // Используем familyId=0 если профиль еще не загружен, чтобы избежать лишних запросов
+  const safeFamilyId = profile?.family_id || 0;
+
+  const {
+    products,
+    loading: productsLoading,
+    updateProduct,
+    loadMore: loadMoreProducts,
+    loadingMore: loadingMoreProducts,
+    hasMore: hasMoreProducts,
+    refetch: refetchProducts
+  } = useProducts(safeFamilyId);
+
+  const {
+    receipts,
+    loading: receiptsLoading,
+    deleteReceipt,
+    loadMore: loadMoreReceipts,
+    loadingMore: loadingMoreReceipts,
+    hasMore: hasMoreReceipts
+  } = useReceipts(safeFamilyId);
+
+  const {
+    stats: monthlyStatsData,
+    loading: statsLoading,
+    recalculateStats,
+    recalculateAllAnalytics,
+    error: statsError,
+    refetch: refetchStats
+  } = useMonthlyStats(safeFamilyId, currentMonth.month, currentMonth.year);
+
   // Show loader while auth is initializing
   if (authLoading) {
     return (
@@ -201,41 +236,6 @@ const GroceryTrackerApp = () => {
     };
   };
 
-  // Получаем текущий месяц (используем для хука и рендера)
-  const currentMonth = selectedMonth || getCurrentMonth();
-
-  console.log('🔄 Инициализируем хуки Supabase...');
-
-  // Инициализируем хуки Supabase (на верхнем уровне, без try-catch!)
-  const {
-    products,
-    loading: productsLoading,
-    updateProduct,
-    loadMore: loadMoreProducts,
-    loadingMore: loadingMoreProducts,
-    hasMore: hasMoreProducts,
-    refetch: refetchProducts
-  } = useProducts(selectedFamilyId);
-
-  const {
-    receipts,
-    loading: receiptsLoading,
-    deleteReceipt,
-    loadMore: loadMoreReceipts,
-    loadingMore: loadingMoreReceipts,
-    hasMore: hasMoreReceipts
-  } = useReceipts(selectedFamilyId);
-
-  const {
-    stats: monthlyStatsData,
-    loading: statsLoading,
-    recalculateStats,
-    recalculateAllAnalytics,
-    error: statsError,
-    refetch: refetchStats
-  } = useMonthlyStats(selectedFamilyId, currentMonth.month, currentMonth.year);
-
-  console.log('✅ Хуки Supabase инициализированы успешно');
 
   // Подписка на обновления pending receipts для автоматического обновления статистики
   useEffect(() => {
