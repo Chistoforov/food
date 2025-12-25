@@ -1,11 +1,15 @@
 import { useState, useRef, useEffect } from 'react';
-import { Camera, ShoppingCart, Home, BarChart3, Clock, AlertCircle, CheckCircle, Edit2, Save, X, Upload, Loader2, XCircle, Trash2, ChevronLeft, ChevronRight, Eye, Calendar, RefreshCw, AlertTriangle, Info, Sparkles } from 'lucide-react';
+import { Camera, ShoppingCart, Home, BarChart3, Clock, AlertCircle, CheckCircle, Edit2, Save, X, Upload, Loader2, XCircle, Trash2, ChevronLeft, ChevronRight, Eye, Calendar, RefreshCw, AlertTriangle, Info, Sparkles, User } from 'lucide-react';
 import { useProducts, useReceipts, useProductTypeHistory, useMonthlyStats } from './hooks/useSupabaseData';
 import { SupabaseService } from './services/supabaseService';
 import type { ProductHistory, Product } from './lib/supabase';
 import ConfirmationModal from './components/ConfirmationModal';
+import ReceiptLanguageModal from './components/ReceiptLanguageModal';
 import PWAInstallButton from './components/PWAInstallButton';
 import { getColorScheme } from './components/ProductTypePatterns';
+import { useAuth } from './contexts/AuthContext';
+import LoginPage from './components/LoginPage';
+import AccountPage from './components/AccountPage';
 
 // Проверяем переменные окружения при загрузке
 console.log('🔍 Environment check:', {
@@ -15,6 +19,18 @@ console.log('🔍 Environment check:', {
 });
 
 const GroceryTrackerApp = () => {
+  const { user, profile, loading: authLoading } = useAuth();
+  const [showLanguageModal, setShowLanguageModal] = useState(false);
+
+  // Check for receipt language setting
+  useEffect(() => {
+    if (profile && (profile.receipt_language === null || profile.receipt_language === undefined)) {
+      setShowLanguageModal(true);
+    } else {
+      setShowLanguageModal(false);
+    }
+  }, [profile]);
+
   // Проверяем переменные окружения перед инициализацией
   if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
     console.error('❌ Переменные окружения Supabase не настроены!');
@@ -53,7 +69,7 @@ const GroceryTrackerApp = () => {
       console.log('🔄 [INIT] Восстанавливаем вкладку из localStorage:', savedTab);
       
       // Проверяем, что сохраненная вкладка является допустимой
-      const validTabs = ['home', 'upload', 'products', 'analytics'];
+      const validTabs = ['home', 'upload', 'products', 'account'];
       if (savedTab && validTabs.includes(savedTab)) {
         console.log('✅ [INIT] Вкладка валидна, восстанавливаем:', savedTab);
         return savedTab;
@@ -67,9 +83,33 @@ const GroceryTrackerApp = () => {
     return 'home';
   });
   
-  const [selectedFamilyId] = useState<number>(1);
+  const selectedFamilyId = profile?.family_id || 1;
   const [selectedMonth, setSelectedMonth] = useState<{month: string, year: number} | null>(null);
   const [showRestoredMessage, setShowRestoredMessage] = useState(false);
+
+  // Show loader while auth is initializing
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Loader2 className="animate-spin text-indigo-600" size={48} />
+      </div>
+    );
+  }
+
+  // Show login page if not authenticated
+  if (!user) {
+    return <LoginPage />;
+  }
+
+  // Show loader if profile is not yet loaded (e.g. creating after signup)
+  if (!profile) {
+     return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center flex-col gap-4">
+        <Loader2 className="animate-spin text-indigo-600" size={48} />
+        <p className="text-gray-500">Подготовка вашего аккаунта...</p>
+      </div>
+    );
+  }
 
   // Обертка для setActiveTab с логированием
   const handleTabChange = (newTab: string) => {
@@ -551,7 +591,7 @@ const GroceryTrackerApp = () => {
     }
 
     return (
-    <div className="space-y-6">
+    <div className="space-y-8 animate-fadeIn">
       {/* Модалка подтверждения удаления типа */}
       <ConfirmationModal
         isOpen={!!deleteTypeConfirm}
@@ -567,20 +607,23 @@ const GroceryTrackerApp = () => {
       
       {/* Статистика за месяц */}
       <div 
-        className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl p-6 text-white"
+        className="relative overflow-hidden bg-slate-900 rounded-[32px] p-6 text-white shadow-2xl"
         onTouchStart={handleTouchStart}
       >
+        {/* Decorative background elements */}
+        <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/20 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none"></div>
+        <div className="absolute bottom-0 left-0 w-48 h-48 bg-blue-500/20 rounded-full blur-3xl -ml-10 -mb-10 pointer-events-none"></div>
+
         {/* Навигация по месяцам */}
-        <div className="flex items-center justify-center space-x-4 mb-4">
+        <div className="relative z-10 flex items-center justify-between mb-8">
           <button
             onClick={goToPreviousMonth}
-            className="p-2.5 rounded-lg bg-white/20 hover:bg-white/30 transition-colors"
-            title="Предыдущий месяц"
+            className="p-3 rounded-2xl bg-white/10 hover:bg-white/20 transition-all active:scale-95 backdrop-blur-sm"
           >
-            <ChevronLeft className="w-6 h-6" />
+            <ChevronLeft className="w-5 h-5" />
           </button>
           
-          <h2 className="text-xl font-bold px-4">
+          <h2 className="text-xl font-bold tracking-tight">
             {(() => {
               const monthStr = currentMonth.month.includes('-') 
                 ? currentMonth.month.split('-')[1] 
@@ -593,190 +636,155 @@ const GroceryTrackerApp = () => {
           <button
             onClick={goToNextMonth}
             disabled={!canGoToNextMonth()}
-            className={`p-2.5 rounded-lg transition-colors ${
+            className={`p-3 rounded-2xl transition-all active:scale-95 backdrop-blur-sm ${
               canGoToNextMonth()
-                ? 'bg-white/20 hover:bg-white/30'
-                : 'bg-white/10 text-white/50 cursor-not-allowed'
+                ? 'bg-white/10 hover:bg-white/20'
+                : 'bg-white/5 text-white/30 cursor-not-allowed'
             }`}
-            title={canGoToNextMonth() ? "Следующий месяц" : "Нельзя перейти в будущее"}
           >
-            <ChevronRight className="w-6 h-6" />
+            <ChevronRight className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Кнопка обновления */}
-        <div className="mb-4">
-          <button
-            onClick={async () => {
-              try {
-                await recalculateStats();
-              } catch (error) {
-                console.error('Ошибка пересчета статистики:', error);
-              }
-            }}
-            disabled={statsLoading}
-            className={`w-full py-2 rounded-lg text-sm font-medium transition-colors ${
-              statsLoading 
-                ? 'bg-white/10 text-white/50 cursor-not-allowed' 
-                : 'bg-white/20 hover:bg-white/30 active:bg-white/40'
-            }`}
-            title="Пересчитать статистику"
-          >
-            {statsLoading ? (
-              <span className="flex items-center justify-center gap-2">
-                <Loader2 className="animate-spin" size={16} />
-                Обновление...
-              </span>
-            ) : (
-              <span className="flex items-center justify-center gap-2">
-                <RefreshCw size={16} />
-                Обновить статистику
-              </span>
-            )}
-          </button>
-        </div>
-        {statsError && (
-          <div className="bg-red-100 border border-red-300 rounded-lg p-3 mb-4">
-            <div className="text-red-800 text-sm">
+        {statsError ? (
+          <div className="bg-red-500/20 border border-red-500/30 rounded-2xl p-4 mb-4 backdrop-blur-md">
+            <div className="text-red-200 text-sm">
               <strong>Ошибка:</strong> {statsError}
             </div>
           </div>
-        )}
-        {statsLoading ? (
-          <div className="text-center py-4">Загрузка статистики...</div>
+        ) : statsLoading ? (
+           <div className="flex flex-col items-center justify-center py-12 gap-3">
+             <Loader2 className="animate-spin text-primary-400" size={32} />
+             <span className="text-white/60 font-medium">Считаем расходы...</span>
+           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <div className="text-sm opacity-90">Потрачено</div>
-              <div className="text-2xl font-bold">€{monthlyStats.totalSpent.toFixed(2)}</div>
+          <div className="relative z-10">
+            <div className="grid grid-cols-2 gap-6 mb-6">
+              <div className="bg-white/5 rounded-2xl p-4 backdrop-blur-sm border border-white/10">
+                <div className="text-sm text-white/60 mb-1 font-medium">Потрачено</div>
+                <div className="text-3xl font-bold tracking-tight">€{monthlyStats.totalSpent.toFixed(0)}<span className="text-lg text-white/60">.{monthlyStats.totalSpent.toFixed(2).split('.')[1]}</span></div>
+              </div>
+              <div className="bg-white/5 rounded-2xl p-4 backdrop-blur-sm border border-white/10">
+                <div className="text-sm text-white/60 mb-1 font-medium">Калории</div>
+                <div className="text-3xl font-bold tracking-tight">{(monthlyStats.totalCalories / 1000).toFixed(1)}k</div>
+              </div>
             </div>
-            <div>
-              <div className="text-sm opacity-90">Калорий</div>
-              <div className="text-2xl font-bold">{(monthlyStats.totalCalories / 1000).toFixed(0)}k</div>
-            </div>
-            <div>
-              <div className="text-sm opacity-90">Среднее в день</div>
-              <div className="text-xl font-semibold">{monthlyStats.avgCaloriesPerDay} ккал</div>
-            </div>
-            <div>
-              <div className="text-sm opacity-90">Чеков</div>
-              <div className="text-xl font-semibold">{monthlyStats.receiptsCount}</div>
+            
+            <div className="grid grid-cols-2 gap-6">
+              <div>
+                <div className="text-sm text-white/60 mb-1 font-medium">В день</div>
+                <div className="text-xl font-semibold tracking-tight">{monthlyStats.avgCaloriesPerDay} <span className="text-sm font-normal text-white/40">ккал</span></div>
+              </div>
+              <div>
+                <div className="text-sm text-white/60 mb-1 font-medium">Чеков</div>
+                <div className="text-xl font-semibold tracking-tight">{monthlyStats.receiptsCount}</div>
+              </div>
             </div>
           </div>
         )}
+        
+        {/* Кнопка обновления */}
+        <button
+          onClick={async () => {
+            try {
+              await recalculateStats();
+            } catch (error) {
+              console.error('Ошибка пересчета статистики:', error);
+            }
+          }}
+          disabled={statsLoading}
+          className={`absolute top-6 right-16 p-3 rounded-2xl text-white/60 hover:text-white hover:bg-white/10 transition-all active:scale-95 ${statsLoading ? 'opacity-50' : ''}`}
+        >
+          <RefreshCw size={20} className={statsLoading ? 'animate-spin' : ''} />
+        </button>
       </div>
 
       {/* Обзор по типам продуктов */}
       {!loadingTypeStats && Object.keys(productTypeStats).length > 0 && (() => {
-        // Сортируем типы: сначала те, которые заканчиваются, потом по количеству продуктов
         const sortedTypes = Object.entries(productTypeStats).sort(([, a], [, b]) => {
-          // Приоритет статусов: ending-soon > ok > calculating
           const statusPriority = { 'ending-soon': 0, 'ok': 1, 'calculating': 2 };
           if (a.status !== b.status) {
             return statusPriority[a.status] - statusPriority[b.status];
           }
-          // При одинаковом статусе сортируем по количеству продуктов
           return b.productCount - a.productCount;
         });
 
         return sortedTypes.length > 0 && (
-          <div className="mb-6">
-            <h3 className="text-lg font-semibold mb-3">Типы продуктов</h3>
+          <div className="animate-fadeIn" style={{animationDelay: '0.1s'}}>
+            <h3 className="text-xl font-bold text-surface-900 mb-4 px-1">Мои продукты</h3>
             <div className="grid grid-cols-2 gap-3">
-              {sortedTypes.map(([type, typeData]) => {
+              {sortedTypes.map(([type, typeData], index) => {
                 const typeStatus = typeData.status;
                 const isLoading = virtualPurchaseLoading === type;
-                const colorScheme = getColorScheme(typeStatus);
+                
+                // Determine styling based on status
+                let cardStyle = "bg-white border-surface-100";
+                let iconBg = "bg-surface-100 text-surface-500";
+                let statusColor = "text-surface-500";
+                
+                if (typeStatus === 'ending-soon') {
+                  cardStyle = "bg-red-50 border-red-100 shadow-sm ring-1 ring-red-100";
+                  iconBg = "bg-red-100 text-red-600";
+                  statusColor = "text-red-600";
+                } else if (typeStatus === 'ok') {
+                  cardStyle = "bg-white border-surface-200";
+                  iconBg = "bg-emerald-100 text-emerald-600";
+                  statusColor = "text-emerald-600";
+                }
                 
                 return (
                   <div 
                     key={type} 
-                    className={`rounded-xl p-3 border-2 transition-all relative min-h-[120px] ${colorScheme.border}`}
-                    style={{
-                      background: `linear-gradient(135deg, ${colorScheme.gradientStart} 0%, ${colorScheme.gradientEnd} 100%)`
-                    }}
+                    className={`group relative rounded-[24px] p-4 border transition-all duration-300 hover:shadow-lg hover:-translate-y-1 ${cardStyle}`}
+                    style={{ animationDelay: `${0.1 + index * 0.05}s` }}
                   >
-                    {/* Контент в три ряда */}
-                    <div className="relative z-10 flex flex-col h-full justify-between">
-                      {/* Ряд 1: Название */}
-                      <h4 className="font-bold text-gray-900 capitalize text-lg mb-2 break-words leading-tight">{type}</h4>
+                    <div className="flex flex-col h-full min-h-[140px]">
+                      <div className="flex justify-between items-start mb-3">
+                         <div className={`p-2.5 rounded-2xl ${iconBg} transition-colors`}>
+                           {typeStatus === 'ending-soon' ? <AlertCircle size={20} /> : 
+                            typeStatus === 'ok' ? <CheckCircle size={20} /> : 
+                            <Clock size={20} />}
+                         </div>
+                         
+                         <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeleteTypeConfirm(type);
+                          }}
+                          className="opacity-0 group-hover:opacity-100 p-2 text-surface-400 hover:text-red-500 transition-all"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+
+                      <h4 className="font-bold text-surface-900 capitalize text-lg leading-tight mb-1">{type}</h4>
                       
-                      {/* Ряд 2: Статус */}
-                      <div className={`text-sm font-medium mb-3 ${
-                        typeStatus === 'ending-soon' 
-                          ? 'text-orange-700' 
-                          : typeStatus === 'ok'
-                            ? 'text-green-700'
-                            : 'text-blue-700'
-                      }`}>
+                      <div className={`text-xs font-semibold uppercase tracking-wider mb-auto ${statusColor}`}>
                         {typeStatus === 'ending-soon' && 'Заканчивается'}
                         {typeStatus === 'ok' && 'В наличии'}
                         {typeStatus === 'calculating' && 'Расчет...'}
                       </div>
-                      
-                      {/* Ряд 3: Иконки и кнопки */}
-                      <div className="flex items-center gap-2 mt-auto">
-                        {/* Иконка статуса */}
-                        {typeStatus === 'ending-soon' && (
-                          <div className="p-1.5 rounded-lg bg-orange-100/50 flex-shrink-0">
-                            <AlertCircle size={18} className="text-orange-600" />
-                          </div>
-                        )}
+
+                      <div className="flex items-center gap-2 mt-4 pt-4 border-t border-black/5">
                         {typeStatus === 'ok' && (
-                          <div className="p-1.5 rounded-lg bg-green-100/50 flex-shrink-0">
-                            <CheckCircle size={18} className="text-green-600" />
-                          </div>
+                           <button
+                             onClick={() => handleEarlyDepletion(type)}
+                             disabled={earlyDepletionLoading === type}
+                             className="flex-1 py-2 rounded-xl bg-orange-50 text-orange-600 text-sm font-semibold hover:bg-orange-100 transition-colors flex items-center justify-center gap-1.5"
+                           >
+                             <AlertTriangle size={14} />
+                             <span>Кончилось</span>
+                           </button>
                         )}
-                        {typeStatus === 'calculating' && (
-                          <div className="p-1.5 rounded-lg bg-blue-100/50 flex-shrink-0">
-                            <Clock size={18} className="text-blue-600" />
-                          </div>
-                        )}
                         
-                        {/* Кнопка удаления (корзина) */}
-                        <button
-                          onClick={() => setDeleteTypeConfirm(type)}
-                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
-                          title="Удалить тип продукта"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                        
-                        {/* Spacer - чтобы кнопки были справа */}
-                        <div className="flex-1 min-w-0"></div>
-                        
-                        {/* Кнопка досрочного окончания (только для ok) */}
-                        {typeStatus === 'ok' && (() => {
-                          const isDepletionLoading = earlyDepletionLoading === type;
-                          return (
-                            <button
-                              onClick={() => handleEarlyDepletion(type)}
-                              disabled={isDepletionLoading}
-                              className={`p-2 rounded-lg transition-all flex-shrink-0 ${
-                                isDepletionLoading 
-                                  ? 'bg-orange-200 text-orange-400 cursor-not-allowed' 
-                                  : 'bg-orange-600 text-white hover:bg-orange-700 active:scale-95 shadow-sm'
-                              }`}
-                              title="Продукт закончился раньше"
-                            >
-                              <AlertTriangle size={16} className={isDepletionLoading ? 'animate-pulse' : ''} />
-                            </button>
-                          );
-                        })()}
-                        
-                        {/* Кнопка виртуальной покупки (только для ending-soon) */}
                         {typeStatus === 'ending-soon' && (
                           <button
                             onClick={() => handleVirtualPurchase(type)}
                             disabled={isLoading}
-                            className={`p-2 rounded-lg transition-all flex-shrink-0 ${
-                              isLoading 
-                                ? 'bg-green-200 text-green-400 cursor-not-allowed' 
-                                : 'bg-green-600 text-white hover:bg-green-700 active:scale-95 shadow-sm'
-                            }`}
-                            title="Продукт еще есть (+2 дня к прогнозу)"
+                            className="flex-1 py-2 rounded-xl bg-emerald-50 text-emerald-600 text-sm font-semibold hover:bg-emerald-100 transition-colors flex items-center justify-center gap-1.5"
                           >
-                            <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
+                             <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
+                             <span>Купил</span>
                           </button>
                         )}
                       </div>
@@ -1022,8 +1030,14 @@ const GroceryTrackerApp = () => {
     const galleryInputRef = useRef<HTMLInputElement>(null);
 
     const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+      console.log('📁 File selection triggered');
       const file = event.target.files?.[0];
-      if (!file) return;
+      if (!file) {
+        console.log('⚠️ No file selected or selection cancelled');
+        return;
+      }
+      
+      console.log('📄 File selected:', file.name, file.type, file.size);
 
       // Validate file type
       if (!file.type.startsWith('image/')) {
@@ -1046,7 +1060,8 @@ const GroceryTrackerApp = () => {
         console.log('📤 Uploading receipt for background processing...');
         const pendingReceipt = await SupabaseService.uploadReceiptForProcessing(
           selectedFamilyId,
-          file
+          file,
+          user?.id
         );
 
         console.log('✅ Receipt uploaded, triggering background processing...');
@@ -1078,7 +1093,7 @@ const GroceryTrackerApp = () => {
         );
       } finally {
         setIsProcessing(false);
-        // Reset file inputs
+        // Reset file inputs - though we also do this on click now
         if (cameraInputRef.current) {
           cameraInputRef.current.value = '';
         }
@@ -1135,7 +1150,7 @@ const GroceryTrackerApp = () => {
     };
 
     return (
-      <div className="space-y-6">
+      <div className="space-y-8 animate-fadeIn">
         {/* Receipt Detail Modal */}
         {selectedReceiptId && (
           <ReceiptDetailModal
@@ -1145,20 +1160,24 @@ const GroceryTrackerApp = () => {
           />
         )}
 
-        <h2 className="text-2xl font-bold">Загрузить чек</h2>
+        <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold text-surface-900">Сканировать чек</h2>
+            <div className="text-xs font-medium text-primary-600 bg-primary-50 px-3 py-1 rounded-full">AI Powered</div>
+        </div>
         
         {/* Success Message */}
         {uploadSuccess && (
-          <div className={`bg-green-50 border border-green-200 rounded-xl p-4 transition-all ${
-            uploadSuccessClosing ? 'message-fade-out' : 'message-fade-in'
+          <div className={`bg-emerald-50 border border-emerald-100 rounded-[24px] p-5 transition-all shadow-sm ${
+            uploadSuccessClosing ? 'opacity-0 scale-95' : 'opacity-100 scale-100'
           }`}>
-            <div className="flex items-start gap-3">
-              <CheckCircle size={24} className="text-green-600 flex-shrink-0 animate-bounce" style={{ animationIterationCount: '2' }} />
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-emerald-100 rounded-full text-emerald-600">
+                  <CheckCircle size={28} className="animate-bounce" />
+              </div>
               <div className="flex-1">
-                <div className="font-semibold text-green-900 mb-1">Чек загружен!</div>
-                <div className="text-sm text-green-700">
-                  Чек обрабатывается в фоновом режиме. Вы можете закрыть приложение - 
-                  обработка продолжится автоматически.
+                <div className="font-bold text-emerald-900 mb-1 text-lg">Чек принят!</div>
+                <div className="text-sm text-emerald-700 font-medium">
+                  Обрабатываем в фоне. Можете закрыть приложение.
                 </div>
               </div>
             </div>
@@ -1167,24 +1186,18 @@ const GroceryTrackerApp = () => {
         
         {/* Error Message */}
         {uploadError && (
-          <div className={`bg-red-50 border border-red-200 rounded-xl p-4 transition-all ${
-            uploadErrorClosing ? 'message-fade-out' : 'message-fade-in'
-          }`}>
-            <div className="flex items-start gap-3">
-              <XCircle size={24} className="text-red-600 flex-shrink-0" />
+          <div className="bg-red-50 border border-red-100 rounded-[24px] p-5 shadow-sm animate-shake">
+            <div className="flex items-start gap-4">
+              <div className="p-2 bg-red-100 rounded-full text-red-600 mt-1">
+                 <XCircle size={24} />
+              </div>
               <div className="flex-1">
-                <div className="font-semibold text-red-900 mb-1">Ошибка</div>
+                <div className="font-bold text-red-900 mb-1">Ошибка</div>
                 <div className="text-sm text-red-700">{uploadError}</div>
               </div>
               <button 
-                onClick={() => {
-                  setUploadErrorClosing(true);
-                  setTimeout(() => {
-                    setUploadError(null);
-                    setUploadErrorClosing(false);
-                  }, 500);
-                }}
-                className="text-red-400 hover:text-red-600 transition-colors"
+                onClick={() => setUploadError(null)}
+                className="p-2 text-red-400 hover:text-red-600 transition-colors"
               >
                 <X size={20} />
               </button>
@@ -1194,10 +1207,10 @@ const GroceryTrackerApp = () => {
 
         {/* Upload Area */}
         <div 
-          className={`border-2 border-dashed rounded-2xl p-12 text-center transition-all ${
+          className={`relative overflow-hidden rounded-[32px] transition-all duration-300 group ${
             isProcessing 
-              ? 'border-indigo-300 bg-indigo-50 cursor-not-allowed' 
-              : 'border-gray-300 bg-gray-50'
+              ? 'bg-surface-100 border-2 border-dashed border-surface-300' 
+              : 'bg-white border-2 border-dashed border-surface-200 hover:border-primary-400 shadow-sm hover:shadow-md'
           }`}
         >
           {/* Input для камеры (с capture) */}
@@ -1207,6 +1220,7 @@ const GroceryTrackerApp = () => {
             accept="image/*"
             capture="environment"
             onChange={handleFileSelect}
+            onClick={(e) => (e.target as HTMLInputElement).value = ''}
             className="hidden"
             disabled={isProcessing}
           />
@@ -1217,102 +1231,113 @@ const GroceryTrackerApp = () => {
             type="file"
             accept="image/*"
             onChange={handleFileSelect}
+            onClick={(e) => (e.target as HTMLInputElement).value = ''}
             className="hidden"
             disabled={isProcessing}
           />
           
-          {isProcessing ? (
-            <>
-              <Loader2 size={48} className="mx-auto text-indigo-600 mb-4 animate-spin" />
-              <p className="text-lg font-semibold text-gray-700 mb-2">Загружаем чек...</p>
-              <p className="text-sm text-gray-500">Это займет всего пару секунд</p>
-            </>
-          ) : (
-            <>
-              <Camera size={48} className="mx-auto text-gray-400 mb-4" />
-              <p className="text-lg font-semibold text-gray-700 mb-2">Сфотографируйте чек</p>
-              <p className="text-sm text-gray-500 mb-2">или выберите фото из галереи</p>
-              <p className="text-xs text-indigo-600 font-medium mb-4 flex items-center justify-center gap-1">
-                <Sparkles size={14} className="flex-shrink-0" />
-                Обработка в фоне - можно закрыть приложение!
-              </p>
-              <div className="flex gap-3 justify-center">
-                <button 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    triggerCameraInput();
-                  }}
-                  className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-semibold hover:bg-indigo-700 transition-colors flex items-center gap-2"
-                >
-                  <Camera size={20} />
-                  Камера
-                </button>
-                <button 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    triggerGalleryInput();
-                  }}
-                  className="bg-white text-indigo-600 border-2 border-indigo-600 px-6 py-3 rounded-xl font-semibold hover:bg-indigo-50 transition-colors flex items-center gap-2"
-                >
-                  <Upload size={20} />
-                  Галерея
-                </button>
-              </div>
-            </>
-          )}
+          <div className="p-8 py-12 text-center">
+             {isProcessing ? (
+                <div className="flex flex-col items-center">
+                  <div className="relative mb-6">
+                    <div className="absolute inset-0 bg-primary-500 blur-xl opacity-20 animate-pulse rounded-full"></div>
+                    <Loader2 size={64} className="relative text-primary-600 animate-spin" />
+                  </div>
+                  <h3 className="text-xl font-bold text-surface-900 mb-2">Анализируем чек...</h3>
+                  <p className="text-surface-500 font-medium">Это займет пару секунд</p>
+                </div>
+             ) : (
+                <div className="flex flex-col items-center">
+                   <div className="mb-8 relative group-hover:scale-110 transition-transform duration-300">
+                      <div className="absolute inset-0 bg-gradient-to-tr from-primary-400 to-violet-500 blur-2xl opacity-20 rounded-full"></div>
+                      <Camera size={64} className="relative text-surface-400 group-hover:text-primary-600 transition-colors" />
+                   </div>
+                   
+                   <h3 className="text-2xl font-bold text-surface-900 mb-3">Добавить чек</h3>
+                   <p className="text-surface-500 mb-8 max-w-[200px] mx-auto">Сфотографируйте чек или загрузите из галереи</p>
+                   
+                   <div className="flex flex-col sm:flex-row gap-4 w-full max-w-sm mx-auto">
+                     <button 
+                       onClick={(e) => { e.stopPropagation(); triggerCameraInput(); }}
+                       className="flex-1 bg-surface-900 text-white px-6 py-4 rounded-2xl font-bold hover:bg-black transition-all active:scale-95 flex items-center justify-center gap-2 shadow-lg hover:shadow-xl"
+                     >
+                       <Camera size={20} />
+                       <span>Камера</span>
+                     </button>
+                     <button 
+                       onClick={(e) => { e.stopPropagation(); triggerGalleryInput(); }}
+                       className="flex-1 bg-white text-surface-900 border border-surface-200 px-6 py-4 rounded-2xl font-bold hover:bg-surface-50 transition-all active:scale-95 flex items-center justify-center gap-2"
+                     >
+                       <Upload size={20} />
+                       <span>Галерея</span>
+                     </button>
+                   </div>
+                </div>
+             )}
+          </div>
         </div>
 
         {/* Info Box */}
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-          <div className="flex items-start gap-3">
-            <AlertCircle size={20} className="text-blue-600 flex-shrink-0 mt-0.5" />
-            <div className="text-sm text-blue-800">
-              <p className="font-semibold mb-1">Как это работает:</p>
-              <ul className="space-y-1 list-disc list-inside">
-                <li>Сфотографируйте чек или выберите фото</li>
-                <li>AI автоматически распознает продукты, цены и количество</li>
-                <li>Калории рассчитываются для полного купленного объема</li>
-                <li>Все данные автоматически добавляются в ваш список</li>
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-[24px] p-6">
+          <div className="flex items-start gap-4">
+            <div className="p-2 bg-white rounded-xl shadow-sm text-blue-600">
+               <Sparkles size={20} />
+            </div>
+            <div className="text-sm text-blue-900">
+              <p className="font-bold mb-2">Как это работает</p>
+              <ul className="space-y-1.5 opacity-80 font-medium">
+                <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-blue-400"></div>Загрузите фото чека</li>
+                <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-blue-400"></div>AI распознает продукты и цены</li>
+                <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-blue-400"></div>Данные добавятся автоматически</li>
               </ul>
             </div>
           </div>
         </div>
 
         {/* Recent Receipts */}
-        <div className="mt-8">
-          <h3 className="text-lg font-semibold mb-4">Последние чеки</h3>
+        <div className="pt-4">
+          <div className="flex items-center justify-between mb-4">
+             <h3 className="text-lg font-bold text-surface-900">История загрузок</h3>
+             {processedReceipts.length > 0 && (
+                <span className="text-xs font-bold bg-surface-100 text-surface-500 px-2 py-1 rounded-lg">{processedReceipts.length}</span>
+             )}
+          </div>
+          
           <div className="space-y-3">
             {receiptsLoading ? (
-              <div className="text-center py-8 text-gray-500">Загрузка чеков...</div>
+               <div className="flex flex-col items-center justify-center py-12 gap-3">
+                 <Loader2 className="animate-spin text-surface-400" size={24} />
+               </div>
             ) : processedReceipts.length === 0 ? (
-              <div className="text-center py-8 text-gray-400">
-                <Camera size={48} className="mx-auto mb-3 opacity-50" />
-                <p>Пока нет загруженных чеков</p>
+              <div className="text-center py-12 text-surface-400 bg-surface-50 rounded-[24px] border border-dashed border-surface-200">
+                <Camera size={32} className="mx-auto mb-3 opacity-30" />
+                <p className="font-medium">История пуста</p>
               </div>
             ) : (
-              processedReceipts.map(receipt => (
-                <div key={receipt.id} className="bg-white rounded-xl p-4 border border-gray-200 hover:shadow-md transition-shadow">
+              processedReceipts.map((receipt, index) => (
+                <div 
+                   key={receipt.id} 
+                   className="bg-white rounded-[24px] p-5 border border-surface-100 hover:shadow-lg hover:border-surface-200 transition-all duration-300 group"
+                   style={{ animationDelay: `${index * 0.05}s` }}
+                >
                   {deleteConfirmId === receipt.id ? (
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-2 text-red-600">
+                    <div className="space-y-4 animate-fadeIn">
+                      <div className="flex items-center gap-3 text-red-600 bg-red-50 p-3 rounded-xl">
                         <AlertCircle size={20} />
-                        <span className="font-semibold">Удалить этот чек?</span>
+                        <span className="font-bold text-sm">Удалить этот чек?</span>
                       </div>
-                      <p className="text-sm text-gray-600">
-                        Все продукты из этого чека будут удалены из подсчетов. Это действие нельзя отменить.
-                      </p>
-                      <div className="flex gap-2">
+                      <div className="flex gap-3">
                         <button
                           onClick={() => handleDeleteReceipt(receipt.id)}
                           disabled={deletingReceiptId === receipt.id}
-                          className="flex-1 bg-red-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="flex-1 bg-red-600 text-white px-4 py-3 rounded-xl font-bold text-sm hover:bg-red-700 transition-colors shadow-lg shadow-red-200"
                         >
-                          {deletingReceiptId === receipt.id ? 'Удаление...' : 'Да, удалить'}
+                          {deletingReceiptId === receipt.id ? <Loader2 className="animate-spin mx-auto"/> : 'Удалить'}
                         </button>
                         <button
                           onClick={() => setDeleteConfirmId(null)}
                           disabled={deletingReceiptId === receipt.id}
-                          className="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-medium hover:bg-gray-300 transition-colors disabled:opacity-50"
+                          className="flex-1 bg-surface-100 text-surface-900 px-4 py-3 rounded-xl font-bold text-sm hover:bg-surface-200 transition-colors"
                         >
                           Отмена
                         </button>
@@ -1324,31 +1349,31 @@ const GroceryTrackerApp = () => {
                         className="flex-1 cursor-pointer"
                         onClick={() => setSelectedReceiptId(receipt.id)}
                       >
-                        <div className="font-semibold text-gray-900">{new Date(receipt.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}</div>
-                        <div className="text-sm text-gray-500">{receipt.items} товаров</div>
+                        <div className="font-bold text-surface-900 text-lg mb-0.5">{new Date(receipt.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}</div>
+                        <div className="text-sm text-surface-500 font-medium">{receipt.items} товаров</div>
                       </div>
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-4">
                         <div className="text-right">
-                          <div className="font-bold text-gray-900">€{receipt.total.toFixed(2)}</div>
-                          <div className="text-xs text-green-600 flex items-center gap-1">
-                            <CheckCircle size={12} />
-                            Обработан
+                          <div className="font-bold text-primary-600 text-lg">€{receipt.total.toFixed(2)}</div>
+                          <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 flex items-center justify-end gap-1 bg-emerald-50 px-2 py-0.5 rounded-md mt-1">
+                            <CheckCircle size={10} />
+                            Готово
                           </div>
                         </div>
-                        <button
-                          onClick={() => setSelectedReceiptId(receipt.id)}
-                          className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                          title="Просмотреть чек"
-                        >
-                          <Eye size={20} />
-                        </button>
-                        <button
-                          onClick={() => setDeleteConfirmId(receipt.id)}
-                          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          title="Удалить чек"
-                        >
-                          <Trash2 size={20} />
-                        </button>
+                        <div className="flex gap-1">
+                            <button
+                              onClick={() => setSelectedReceiptId(receipt.id)}
+                              className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-colors"
+                            >
+                              <Eye size={20} />
+                            </button>
+                            <button
+                              onClick={() => setDeleteConfirmId(receipt.id)}
+                              className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors"
+                            >
+                              <Trash2 size={20} />
+                            </button>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -1359,17 +1384,13 @@ const GroceryTrackerApp = () => {
           
           {/* Кнопка "Загрузить еще" */}
           {!receiptsLoading && hasMoreReceipts && processedReceipts.length > 0 && loadMoreReceipts && (
-            <div className="flex justify-center mt-4">
+            <div className="flex justify-center mt-6">
               <button
                 onClick={() => loadMoreReceipts(20)}
                 disabled={loadingMoreReceipts}
-                className={`px-6 py-3 rounded-xl font-semibold transition-colors ${
-                  loadingMoreReceipts
-                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    : 'bg-indigo-600 text-white hover:bg-indigo-700'
-                }`}
+                className="px-8 py-3 rounded-2xl font-bold bg-white border border-surface-200 text-surface-900 shadow-sm hover:bg-surface-50 transition-all active:scale-95"
               >
-                {loadingMoreReceipts ? 'Загрузка...' : 'Загрузить еще'}
+                {loadingMoreReceipts ? <Loader2 className="animate-spin" /> : 'Показать еще'}
               </button>
             </div>
           )}
@@ -1442,39 +1463,35 @@ const GroceryTrackerApp = () => {
     const filteredHistory = getFilteredHistory();
 
     return (
-      <div className="space-y-6">
-        <h2 className="text-2xl font-bold">Аналитика</h2>
+      <div className="space-y-6 animate-fadeIn">
+        <h2 className="text-xl font-bold text-surface-900">Аналитика</h2>
         
         {/* Выбор типа продукта */}
-        <div className="bg-white rounded-2xl p-6 border border-gray-200">
-          <h3 className="font-semibold mb-4">Динамика типа продуктов</h3>
+        <div className="bg-white rounded-[24px] p-5 shadow-sm border border-surface-200">
+          <h3 className="font-bold text-surface-900 mb-4">Динамика типа продуктов</h3>
           
           <div className="space-y-4">
-            {/* Селектор типа продукта */}
+            {/* Custom Select */}
             <div className="relative">
               <button
                 onClick={() => setShowProductSelect(!showProductSelect)}
-                className="w-full flex items-center justify-between p-3 border border-gray-300 rounded-lg hover:border-indigo-500 transition-colors"
+                className="w-full flex items-center justify-between p-4 bg-surface-50 border border-surface-200 rounded-2xl hover:border-primary-400 hover:bg-white transition-all duration-300 group"
               >
-                <span className={selectedProductType ? 'text-gray-900' : 'text-gray-500'}>
+                <span className={`font-medium ${selectedProductType ? 'text-surface-900' : 'text-surface-400'}`}>
                   {selectedProductType || 'Выберите тип продукта'}
                 </span>
-                <svg className={`w-5 h-5 text-gray-400 transition-transform ${showProductSelect ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
+                <ChevronLeft className={`w-5 h-5 text-surface-400 transition-transform duration-300 -rotate-90 group-hover:text-primary-500 ${showProductSelect ? 'rotate-90' : ''}`} />
               </button>
 
               {showProductSelect && (
-                <div className="absolute z-10 w-full mt-2 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                <div className="absolute z-20 w-full mt-2 bg-white border border-surface-100 rounded-2xl shadow-xl max-h-80 overflow-y-auto animate-scaleIn origin-top">
                   {(() => {
-                    // Показываем все типы продуктов
                     const allTypes = Object.values(productTypeGroups);
                     
                     if (allTypes.length === 0) {
                       return (
-                        <div className="p-4 text-center text-gray-500">
-                          <p>Нет типов продуктов для отображения</p>
-                          <p className="text-sm mt-1">У продуктов не указаны типы. Вы можете задать типы продуктов на странице "Продукты"</p>
+                        <div className="p-6 text-center text-surface-500">
+                          <p>Нет данных для отображения</p>
                         </div>
                       );
                     }
@@ -1488,13 +1505,16 @@ const GroceryTrackerApp = () => {
                             setSelectedProductType(group.productType);
                             setShowProductSelect(false);
                           }}
-                          className="w-full text-left p-3 hover:bg-gray-50 border-b border-gray-100 last:border-0"
+                          className="w-full text-left p-4 hover:bg-surface-50 border-b border-surface-50 last:border-0 transition-colors flex justify-between items-center group"
                         >
-                          <div className="font-medium text-gray-900">{group.productType}</div>
-                          <div className="text-sm text-gray-500">
-                            {group.totalPurchases} {group.totalPurchases === 1 ? 'покупка' : group.totalPurchases < 5 ? 'покупки' : 'покупок'}
-                            {' • '}
-                            {group.products.length} {group.products.length === 1 ? 'продукт' : group.products.length < 5 ? 'продукта' : 'продуктов'}
+                          <div>
+                            <div className="font-bold text-surface-900 group-hover:text-primary-600 transition-colors">{group.productType}</div>
+                            <div className="text-xs text-surface-500 mt-0.5">
+                              {group.products.length} {group.products.length === 1 ? 'продукт' : 'товаров'}
+                            </div>
+                          </div>
+                          <div className="px-2 py-1 bg-surface-100 rounded-lg text-xs font-semibold text-surface-600">
+                             {group.totalPurchases} пок.
                           </div>
                         </button>
                       ));
@@ -1503,83 +1523,73 @@ const GroceryTrackerApp = () => {
               )}
             </div>
 
-            {/* Информация о выбранном типе продукта */}
+            {/* Selected Info Pills */}
             {selectedProductType && productTypeGroups[selectedProductType] && (
-              <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
-                <div className="text-sm text-gray-600 mb-1">Продукты в этой категории:</div>
-                <div className="flex flex-wrap gap-2">
-                  {productTypeGroups[selectedProductType].products.map(product => (
-                    <span key={product.id} className="inline-flex items-center px-2 py-1 rounded-md bg-white border border-gray-200 text-xs">
-                      {product.name}
-                      <span className="ml-1 text-gray-400">({product.purchaseCount})</span>
-                    </span>
-                  ))}
-                </div>
+              <div className="flex flex-wrap gap-2">
+                {productTypeGroups[selectedProductType].products.map(product => (
+                  <span key={product.id} className="inline-flex items-center px-3 py-1.5 rounded-xl bg-primary-50 text-primary-700 text-xs font-semibold border border-primary-100">
+                    {product.name}
+                  </span>
+                ))}
               </div>
             )}
 
-            {/* Выбор периода и типа графика */}
+            {/* Controls */}
             {selectedProductType && (
-              <>
-                <div className="space-y-4">
-                  {/* Переключатель типа графика */}
-                  <div className="flex gap-2">
+              <div className="bg-surface-50 p-1.5 rounded-xl flex gap-1">
+                 {['quantity', 'price'].map(type => (
                     <button
-                      onClick={() => setChartType('quantity')}
-                      className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
-                        chartType === 'quantity'
-                          ? 'bg-indigo-600 text-white'
-                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      key={type}
+                      onClick={() => setChartType(type)}
+                      className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm ${
+                        chartType === type
+                          ? 'bg-white text-surface-900 shadow-sm'
+                          : 'text-surface-500 hover:text-surface-900 hover:bg-white/50 shadow-none'
                       }`}
                     >
-                      Количество
+                      {type === 'quantity' ? 'Количество' : 'Цена'}
                     </button>
-                    <button
-                      onClick={() => setChartType('price')}
-                      className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
-                        chartType === 'price'
-                          ? 'bg-indigo-600 text-white'
-                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                      }`}
-                    >
-                      Цена
-                    </button>
-                  </div>
+                 ))}
+              </div>
+            )}
+             
+            {selectedProductType && (
+               <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+                 {dateRangeOptions.map(option => (
+                   <button
+                     key={option.value}
+                     onClick={() => setDateRange(option.value)}
+                     className={`flex-none px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap border ${
+                       dateRange === option.value
+                         ? 'bg-primary-600 border-primary-600 text-white'
+                         : 'bg-white border-surface-200 text-surface-500 hover:border-surface-300'
+                     }`}
+                   >
+                     {option.label}
+                   </button>
+                 ))}
+               </div>
+            )}
 
-                  {/* Выбор периода */}
-                  <div className="flex gap-2">
-                    {dateRangeOptions.map(option => (
-                      <button
-                        key={option.value}
-                        onClick={() => setDateRange(option.value)}
-                        className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
-                          dateRange === option.value
-                            ? 'bg-indigo-600 text-white'
-                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                        }`}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* График */}
-                <div className="mt-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h4 className="font-semibold text-gray-900">
-                      {chartType === 'quantity' ? 'Динамика количества покупок' : 'Динамика цены продукта'}
+            {/* График */}
+            {selectedProductType && (
+              <div className="mt-6 pt-4 border-t border-surface-100">
+                  <div className="flex items-center justify-between mb-6">
+                    <h4 className="font-bold text-surface-900">
+                      {chartType === 'quantity' ? 'История покупок' : 'История цены'}
                     </h4>
-                    <div className="text-sm text-gray-500">
-                      {filteredHistory?.length || 0} {filteredHistory?.length === 1 ? 'покупка' : filteredHistory?.length && filteredHistory.length < 5 ? 'покупки' : 'покупок'}
+                    <div className="text-xs font-medium px-2 py-1 bg-surface-100 rounded-lg text-surface-600">
+                      {filteredHistory?.length || 0} записей
                     </div>
                   </div>
                   
                   {historyLoading ? (
-                    <div className="text-center py-8 text-gray-500">Загрузка истории...</div>
+                    <div className="flex flex-col items-center justify-center py-12 gap-3">
+                       <Loader2 className="animate-spin text-surface-400" size={24} />
+                    </div>
                   ) : filteredHistory && filteredHistory.length > 0 ? (
                     <>
-                      <div className="flex gap-3">
+                      <div className="flex gap-1">
                         {/* Ось Y (боковая шкала) */}
                         <div className="flex flex-col justify-between h-64 py-2">
                           {(() => {
@@ -1587,7 +1597,6 @@ const GroceryTrackerApp = () => {
                             const maxValue = Math.max(...data);
                             const minValue = Math.min(...data);
                             const range = maxValue - minValue;
-                            // Добавляем небольшой padding (10%) к диапазону для лучшей визуализации
                             const padding = range * 0.1;
                             const paddedMax = maxValue + padding;
                             const paddedMin = Math.max(0, minValue - padding);
@@ -1595,16 +1604,13 @@ const GroceryTrackerApp = () => {
                             let tickValues: number[];
                             
                             if (chartType === 'quantity') {
-                              // Для количества используем только целые числа без дубликатов
                               const minInt = Math.floor(paddedMin);
                               const maxInt = Math.ceil(paddedMax);
                               const rangeInt = maxInt - minInt;
                               
                               if (rangeInt <= 5) {
-                                // Если диапазон маленький, показываем все целые числа
                                 tickValues = Array.from({ length: rangeInt + 1 }, (_, i) => maxInt - i);
                               } else {
-                                // Если диапазон большой, показываем ~5 делений
                                 const step = Math.ceil(rangeInt / 4);
                                 tickValues = [];
                                 for (let i = maxInt; i >= minInt; i -= step) {
@@ -1615,54 +1621,39 @@ const GroceryTrackerApp = () => {
                                 }
                               }
                             } else {
-                              // Для цены используем 5 делений с десятичными числами
                               const steps = 5;
                               const stepValue = (paddedMax - paddedMin) / (steps - 1);
                               tickValues = Array.from({ length: steps }, (_, i) => paddedMax - (stepValue * i));
                             }
                             
                             return tickValues.map((value, i) => (
-                              <div key={i} className="text-xs text-gray-500 font-medium text-right pr-2 leading-none w-12">
+                              <div key={i} className="text-[10px] text-surface-400 font-medium text-right pr-2 leading-none w-10">
                                 {chartType === 'quantity' 
                                   ? Math.round(value)
-                                  : `€${value.toFixed(2)}`
+                                  : `€${value.toFixed(1)}`
                                 }
                               </div>
                             ));
                           })()}
                         </div>
                         
-                        {/* График с горизонтальными линиями сетки */}
+                        {/* График */}
                         <div className="flex-1 relative">
-                          {/* Горизонтальные линии сетки */}
                           <div className="absolute inset-0 flex flex-col justify-between py-2">
-                            {(() => {
-                              const data = filteredHistory.map(h => chartType === 'quantity' ? h.quantity : h.unit_price);
-                              const maxValue = Math.max(...data);
-                              const minValue = Math.min(...data);
-                              const range = maxValue - minValue;
-                              const padding = range * 0.1;
-                              const paddedMax = maxValue + padding;
-                              const paddedMin = Math.max(0, minValue - padding);
-                              
-                              let gridLines = 5;
-                              
-                              if (chartType === 'quantity') {
-                                const minInt = Math.floor(paddedMin);
-                                const maxInt = Math.ceil(paddedMax);
-                                const rangeInt = maxInt - minInt;
-                                gridLines = rangeInt <= 5 ? rangeInt + 1 : 5;
-                              }
-                              
-                              return Array.from({ length: gridLines }, (_, i) => (
-                                <div key={i} className="border-t border-gray-200"></div>
-                              ));
-                            })()}
+                             {/* Grid Lines */}
+                             {Array.from({ length: 5 }).map((_, i) => (
+                               <div key={i} className="border-t border-surface-100 border-dashed"></div>
+                             ))}
                           </div>
                           
-                          {/* Линейный график */}
-                          <div className="relative h-64 border-b border-l border-gray-300">
-                            <svg className="absolute inset-0 w-full h-full" style={{ overflow: 'visible' }}>
+                          <div className="relative h-64">
+                            <svg className="absolute inset-0 w-full h-full overflow-visible">
+                               <defs>
+                                <linearGradient id="lineGradient" x1="0" y1="0" x2="1" y2="0">
+                                  <stop offset="0%" stopColor="#10b981" />
+                                  <stop offset="100%" stopColor="#3b82f6" />
+                                </linearGradient>
+                              </defs>
                               {(() => {
                                 const data = filteredHistory.map(h => chartType === 'quantity' ? h.quantity : h.unit_price);
                                 const maxValue = Math.max(...data);
@@ -1673,11 +1664,10 @@ const GroceryTrackerApp = () => {
                                 const paddedMin = Math.max(0, minValue - padding);
                                 const paddedRange = paddedMax - paddedMin;
                                 
-                                const width = 100; // процент
-                                const height = 100; // процент
+                                const width = 100;
+                                const height = 100;
                                 const pointSpacing = width / Math.max(1, filteredHistory.length - 1);
                                 
-                                // Создаем точки для линии
                                 const points = filteredHistory.map((item, i) => {
                                   const value = chartType === 'quantity' ? item.quantity : item.unit_price;
                                   const x = filteredHistory.length === 1 ? 50 : (i * pointSpacing);
@@ -1685,33 +1675,33 @@ const GroceryTrackerApp = () => {
                                   return { x, y, value, date: item.date };
                                 });
                                 
-                                // Создаем path для линии
                                 const linePath = points.map((p, i) => 
                                   `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`
                                 ).join(' ');
                                 
                                 return (
                                   <g>
-                                    {/* Линия графика */}
                                     <path
                                       d={linePath}
                                       fill="none"
-                                      stroke={chartType === 'quantity' ? '#6366f1' : '#10b981'}
-                                      strokeWidth="2"
+                                      stroke="url(#lineGradient)"
+                                      strokeWidth="3"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
                                       vectorEffect="non-scaling-stroke"
+                                      filter="drop-shadow(0px 4px 6px rgba(16, 185, 129, 0.2))"
                                     />
-                                    
-                                    {/* Точки на графике */}
                                     {points.map((point, i) => (
                                       <circle
                                         key={i}
                                         cx={point.x}
                                         cy={point.y}
-                                        r="4"
+                                        r="3"
                                         fill="white"
-                                        stroke={chartType === 'quantity' ? '#6366f1' : '#10b981'}
+                                        stroke="#3b82f6"
                                         strokeWidth="2"
-                                        className="cursor-pointer hover:r-6 transition-all"
+                                        vectorEffect="non-scaling-stroke"
+                                        className="transition-all duration-300 hover:r-5"
                                       />
                                     ))}
                                   </g>
@@ -1722,41 +1712,24 @@ const GroceryTrackerApp = () => {
                         </div>
                       </div>
                       
-                      {/* Ось X (время) */}
-                      <div className="flex gap-3">
-                        <div className="w-12"></div> {/* Отступ для выравнивания с осью Y */}
-                        <div className="flex-1 relative mt-2 text-xs text-gray-500" style={{ height: '20px' }}>
+                      {/* Axis X */}
+                      <div className="flex gap-3 mt-2">
+                        <div className="w-10"></div>
+                        <div className="flex-1 relative h-6 text-[10px] text-surface-400 font-medium">
                           {(() => {
-                            // Определяем шаг отображения дат в зависимости от выбранного периода
                             let step = 1;
-                            if (dateRange === 'week') {
-                              step = Math.max(1, Math.ceil(filteredHistory.length / 7)); // Показываем ~7 меток
-                            } else if (dateRange === 'month') {
-                              step = Math.max(1, Math.ceil(filteredHistory.length / 6)); // Показываем ~6 меток (примерно каждые 5 дней)
-                            } else if (dateRange === '3months') {
-                              step = Math.max(1, Math.ceil(filteredHistory.length / 6)); // Показываем ~6 меток (примерно каждые 15 дней)
-                            } else {
-                              // Для "всё время" показываем максимум 8 меток
-                              step = Math.max(1, Math.ceil(filteredHistory.length / 8));
-                            }
+                            if (dateRange === 'week') step = Math.max(1, Math.ceil(filteredHistory.length / 7));
+                            else if (dateRange === 'month') step = Math.max(1, Math.ceil(filteredHistory.length / 6));
+                            else step = Math.max(1, Math.ceil(filteredHistory.length / 5));
                             
-                            // Фильтруем даты с заданным шагом, но всегда показываем первую и последнюю
                             return filteredHistory
                               .map((item, i) => ({ item, index: i }))
-                              .filter(({ index }) => 
-                                index === 0 || 
-                                index === filteredHistory.length - 1 || 
-                                index % step === 0
-                              )
+                              .filter(({ index }) => index === 0 || index === filteredHistory.length - 1 || index % step === 0)
                               .map(({ item, index }) => (
                                 <div 
                                   key={index} 
-                                  className="text-center"
-                                  style={{ 
-                                    position: 'absolute',
-                                    left: `${(index / Math.max(1, filteredHistory.length - 1)) * 100}%`,
-                                    transform: 'translateX(-50%)'
-                                  }}
+                                  className="absolute transform -translate-x-1/2 whitespace-nowrap"
+                                  style={{ left: `${(index / Math.max(1, filteredHistory.length - 1)) * 100}%` }}
                                 >
                                   {new Date(item.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
                                 </div>
@@ -1764,108 +1737,39 @@ const GroceryTrackerApp = () => {
                           })()}
                         </div>
                       </div>
-
-                      {/* Статистика по продукту */}
-                      <div className="mt-6 grid grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg">
-                        {chartType === 'quantity' ? (
-                          <>
-                            <div>
-                              <div className="text-xs text-gray-500">Всего куплено</div>
-                              <div className="text-lg font-bold text-gray-900">
-                                {filteredHistory.reduce((sum, item) => sum + item.quantity, 0)}
-                              </div>
-                            </div>
-                            <div>
-                              <div className="text-xs text-gray-500">Потрачено</div>
-                              <div className="text-lg font-bold text-gray-900">
-                                €{filteredHistory.reduce((sum, item) => sum + item.price, 0).toFixed(2)}
-                              </div>
-                            </div>
-                            <div>
-                              <div className="text-xs text-gray-500">Частота</div>
-                              <div className="text-lg font-bold text-gray-900">
-                                {(() => {
-                                  if (filteredHistory.length < 2) return '—';
-                                  const dates = filteredHistory.map(h => new Date(h.date).getTime());
-                                  const daysBetween = dates.map((date, i) => 
-                                    i === 0 ? 0 : (date - dates[i - 1]) / (1000 * 60 * 60 * 24)
-                                  ).filter(d => d > 0);
-                                  if (daysBetween.length === 0) return '—';
-                                  const avgDays = Math.round(daysBetween.reduce((sum, d) => sum + d, 0) / daysBetween.length);
-                                  return `${avgDays} дн`;
-                                })()}
-                              </div>
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <div>
-                              <div className="text-xs text-gray-500">Средняя цена</div>
-                              <div className="text-lg font-bold text-gray-900">
-                                €{(filteredHistory.reduce((sum, item) => sum + item.unit_price, 0) / filteredHistory.length).toFixed(2)}
-                              </div>
-                            </div>
-                            <div>
-                              <div className="text-xs text-gray-500">Изменение</div>
-                              <div className={`text-lg font-bold ${
-                                (() => {
-                                  if (!filteredHistory || filteredHistory.length < 2) return 'text-gray-900';
-                                  const firstPrice = filteredHistory[0].unit_price;
-                                  const lastPrice = filteredHistory[filteredHistory.length - 1].unit_price;
-                                  const change = ((lastPrice - firstPrice) / firstPrice) * 100;
-                                  return change > 0 ? 'text-red-600' : change < 0 ? 'text-green-600' : 'text-gray-900';
-                                })()
-                              }`}>
-                                {(() => {
-                                  if (!filteredHistory || filteredHistory.length < 2) return '—';
-                                  const firstPrice = filteredHistory[0].unit_price;
-                                  const lastPrice = filteredHistory[filteredHistory.length - 1].unit_price;
-                                  const change = ((lastPrice - firstPrice) / firstPrice) * 100;
-                                  return `${change > 0 ? '+' : ''}${change.toFixed(1)}%`;
-                                })()}
-                              </div>
-                            </div>
-                            <div>
-                              <div className="text-xs text-gray-500">Диапазон</div>
-                              <div className="text-lg font-bold text-gray-900">
-                                €{Math.min(...filteredHistory.map(h => h.unit_price)).toFixed(2)} - €{Math.max(...filteredHistory.map(h => h.unit_price)).toFixed(2)}
-                              </div>
-                            </div>
-                          </>
-                        )}
-                      </div>
                     </>
                   ) : (
-                    <div className="text-center py-8 text-gray-500">Нет данных для отображения</div>
+                    <div className="text-center py-12 text-surface-400 bg-surface-50 rounded-2xl">Нет данных за этот период</div>
                   )}
-                </div>
-              </>
+              </div>
             )}
-
+            
             {!selectedProductType && (
-              <div className="py-12 text-center text-gray-400">
-                <BarChart3 size={48} className="mx-auto mb-3 opacity-50" />
-                <p>Выберите тип продукта для просмотра динамики</p>
+              <div className="py-12 text-center text-surface-400 bg-surface-50 rounded-2xl border-2 border-dashed border-surface-200">
+                <BarChart3 size={48} className="mx-auto mb-3 opacity-30" />
+                <p className="font-medium">Выберите тип продукта</p>
               </div>
             )}
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl p-6 border border-gray-200">
-          <h3 className="font-semibold mb-4">Топ продуктов по калориям</h3>
-          <div className="space-y-3">
-            {processedProducts.sort((a, b) => b.calories - a.calories).map(product => (
-              <div key={product.id} className="flex items-center justify-between">
+        <div className="bg-white rounded-[24px] p-6 shadow-sm border border-surface-200">
+          <h3 className="font-bold text-surface-900 mb-4">Топ по калориям</h3>
+          <div className="space-y-4">
+            {processedProducts.sort((a, b) => b.calories - a.calories).slice(0, 5).map((product, i) => (
+              <div key={product.id} className="flex items-center justify-between group">
                 <div className="flex-1">
-                  <div className="text-sm font-medium">{product.name}</div>
-                  <div className="w-full bg-gray-100 rounded-full h-2 mt-1">
+                  <div className="flex justify-between mb-1.5">
+                    <span className="text-sm font-bold text-surface-700">{i+1}. {product.name}</span>
+                    <span className="text-sm font-semibold text-primary-600">{product.calories} ккал</span>
+                  </div>
+                  <div className="w-full bg-surface-100 rounded-full h-2.5 overflow-hidden">
                     <div 
-                      className="bg-orange-400 h-2 rounded-full" 
-                      style={{ width: `${(product.calories / 1500) * 100}%` }}
+                      className="h-full rounded-full bg-gradient-to-r from-orange-400 to-red-500 transition-all duration-1000 ease-out" 
+                      style={{ width: `${Math.min(100, (product.calories / 2000) * 100)}%` }}
                     ></div>
                   </div>
                 </div>
-                <div className="ml-4 text-sm font-semibold text-gray-700">{product.calories} ккал</div>
               </div>
             ))}
           </div>
@@ -2003,252 +1907,167 @@ const GroceryTrackerApp = () => {
     };
 
     return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold">Мои продукты</h2>
+      <div className="space-y-6 animate-fadeIn">
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-xl font-bold text-surface-900">Список покупок</h2>
           
-          {/* Кнопка очистки кэша */}
           <button
             onClick={handleClearCache}
             disabled={isClearingCache}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-300 ease-in-out transform ${
+            className={`p-2 rounded-xl transition-all duration-300 ${
               isClearingCache
-                ? 'bg-gray-300 text-gray-500 cursor-not-allowed scale-95 opacity-80'
-                : 'bg-red-600 text-white hover:bg-red-700 hover:scale-105 hover:shadow-lg active:scale-95 active:shadow-md'
+                ? 'bg-surface-100 text-surface-400 cursor-wait'
+                : 'bg-surface-100 text-surface-500 hover:bg-red-50 hover:text-red-600'
             }`}
-            title="Очистить кэш и обновить приложение"
+            title="Сброс кэша"
           >
-            {isClearingCache ? (
-              <>
-                <Loader2 className="animate-spin" size={18} />
-                Очистка...
-              </>
-            ) : (
-              <>
-                <RefreshCw size={18} />
-                Сброс кэша
-              </>
-            )}
+            {isClearingCache ? <Loader2 className="animate-spin" size={20} /> : <RefreshCw size={20} />}
           </button>
         </div>
         
-        {/* Уведомление об успехе */}
+        {/* Success Message */}
         {showSuccessMessage && (
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3">
-            <CheckCircle size={20} className="text-green-600" />
+          <div className="bg-emerald-50/50 border border-emerald-100 rounded-2xl p-4 flex items-center gap-3 backdrop-blur-sm animate-scaleIn">
+            <div className="p-2 bg-emerald-100 rounded-full text-emerald-600">
+               <CheckCircle size={18} />
+            </div>
             <div>
-              <div className="font-medium text-green-800">{successMessage}</div>
-              <div className="text-sm text-green-600">Статистика автоматически пересчитана</div>
+              <div className="font-semibold text-emerald-900 text-sm">{successMessage}</div>
             </div>
           </div>
         )}
 
-        {/* Информация о сбросе кэша */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <div className="flex items-start gap-3">
-            <Info size={20} className="text-blue-600 flex-shrink-0 mt-0.5" />
-            <div className="text-sm text-blue-800">
-              <p className="font-semibold mb-1">Что делает кнопка "Сброс кэша"?</p>
-              <p>Полностью очищает кэш приложения, обновляет все данные и пересчитывает аналитику. Используйте это после внесения изменений в приложение, чтобы не переустанавливать PWA.</p>
-            </div>
-          </div>
-        </div>
-        
-        <div className="space-y-3">
+        <div className="space-y-4">
           {productsLoading ? (
-            <div className="text-center py-8 text-gray-500">Загрузка продуктов...</div>
+             <div className="flex flex-col items-center justify-center py-12 gap-3">
+               <Loader2 className="animate-spin text-surface-400" size={32} />
+               <span className="text-surface-400 font-medium">Загрузка продуктов...</span>
+             </div>
           ) : (
-            processedProducts.map(product => (
-              <div key={product.id} className="bg-white rounded-xl p-4 border border-gray-200 hover:shadow-md transition-shadow">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-gray-900 text-lg">{product.name}</h3>
+            processedProducts.map((product, index) => (
+              <div 
+                key={product.id} 
+                className="bg-white rounded-[24px] p-5 shadow-sm border border-surface-100 hover:shadow-md transition-all duration-300"
+                style={{ animationDelay: `${index * 0.05}s` }}
+              >
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex-1 min-w-0 pr-4">
+                    <h3 className="font-bold text-surface-900 text-lg leading-tight truncate">{product.name}</h3>
                     {product.originalName && (
-                      <div className="text-xs text-gray-400 mt-0.5">{product.originalName}</div>
+                      <div className="text-xs text-surface-400 mt-1 truncate">{product.originalName}</div>
                     )}
-                    <div className="text-sm text-gray-500 mt-1">
-                      Куплено {product.purchaseCount} раз
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-surface-50 text-surface-600 text-xs font-medium">
+                        {product.purchaseCount} покупок
+                      </span>
                     </div>
                   </div>
-                  <div className="text-xl font-bold text-indigo-600">
+                  <div className="text-xl font-bold text-primary-600 bg-primary-50 px-3 py-1 rounded-xl">
                     €{product.price.toFixed(2)}
                   </div>
                 </div>
 
-                {/* Редактирование типа продукта */}
-                <div className="border-t border-gray-100 pt-3 mb-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <span className="text-sm text-gray-600">Тип продукта:</span>
-                      {editingTypeId === product.id ? (
-                        <div className="flex items-center gap-2 mt-1">
-                          <input
-                            type="text"
-                            value={editedProductType}
-                            onChange={(e) => setEditedProductType(e.target.value)}
-                            placeholder="например: молоко, хлеб белый"
-                            className="flex-1 px-3 py-2 border border-indigo-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                            autoFocus
-                          />
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2 mt-1">
-                          {product.product_type ? (
-                            <span className="inline-flex items-center px-2 py-1 bg-purple-100 text-purple-700 rounded text-sm font-medium">
-                              {product.product_type}
-                            </span>
-                          ) : (
-                            <span className="text-sm text-gray-400 italic">
-                              Не указан (кликните для добавления)
-                            </span>
-                          )}
-                        </div>
-                      )}
-                      {editingTypeId === product.id && (
-                        <p className="text-xs text-gray-500 mt-1">
-                          Укажите общую категорию без бренда (напр: "молоко", а не "Простоквашино")
-                        </p>
-                      )}
+                {/* Edit Sections */}
+                <div className="space-y-3 pt-3 border-t border-surface-50">
+                  {/* Type */}
+                  <div className="flex items-center justify-between py-1">
+                    <span className="text-sm text-surface-500 font-medium">Тип</span>
+                    <div className="flex items-center gap-2 flex-1 justify-end">
+                       {editingTypeId === product.id ? (
+                         <div className="flex items-center gap-2 w-full max-w-[200px] animate-fadeIn">
+                           <input
+                             type="text"
+                             value={editedProductType}
+                             onChange={(e) => setEditedProductType(e.target.value)}
+                             placeholder="Тип..."
+                             className="flex-1 px-3 py-1.5 border border-primary-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500/20 bg-surface-50"
+                             autoFocus
+                           />
+                           <button onClick={() => saveProductType(product.id)} className="p-1.5 bg-emerald-100 text-emerald-600 rounded-lg"><Save size={16}/></button>
+                           <button onClick={cancelEditingType} className="p-1.5 bg-surface-100 text-surface-600 rounded-lg"><X size={16}/></button>
+                         </div>
+                       ) : (
+                         <div className="flex items-center gap-2 cursor-pointer group" onClick={() => startEditingType(product)}>
+                            {product.product_type ? (
+                              <span className="px-3 py-1 bg-violet-50 text-violet-600 rounded-lg text-sm font-medium border border-violet-100">
+                                {product.product_type}
+                              </span>
+                            ) : (
+                              <span className="text-sm text-surface-400 italic">Не указан</span>
+                            )}
+                            <Edit2 size={14} className="text-surface-300 group-hover:text-primary-500 transition-colors" />
+                         </div>
+                       )}
                     </div>
+                  </div>
 
-                    <div className="flex items-center gap-2 ml-2">
-                      {editingTypeId === product.id ? (
-                        <>
-                          <button
-                            onClick={() => saveProductType(product.id)}
-                            className="p-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-colors"
-                            title="Сохранить"
-                          >
-                            <Save size={16} />
-                          </button>
-                          <button
-                            onClick={cancelEditingType}
-                            className="p-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
-                            title="Отмена"
-                          >
-                            <X size={16} />
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          onClick={() => startEditingType(product)}
-                          className="p-2 bg-purple-100 text-purple-600 rounded-lg hover:bg-purple-200 transition-colors"
-                          title="Изменить тип продукта"
-                        >
-                          <Edit2 size={16} />
-                        </button>
-                      )}
+                  {/* Calories */}
+                  <div className="flex items-center justify-between py-1">
+                    <span className="text-sm text-surface-500 font-medium">Ккал</span>
+                    <div className="flex items-center gap-2">
+                       {editingId === product.id ? (
+                         <div className="flex items-center gap-2 animate-fadeIn">
+                           <input
+                             type="number"
+                             value={editedCalories}
+                             onChange={(e) => setEditedCalories(e.target.value)}
+                             className="w-20 px-3 py-1.5 border border-primary-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500/20 bg-surface-50"
+                             autoFocus
+                           />
+                           <button onClick={() => saveCalories(product.id)} className="p-1.5 bg-emerald-100 text-emerald-600 rounded-lg"><Save size={16}/></button>
+                           <button onClick={cancelEditing} className="p-1.5 bg-surface-100 text-surface-600 rounded-lg"><X size={16}/></button>
+                         </div>
+                       ) : (
+                         <div className="flex items-center gap-2 cursor-pointer group" onClick={() => startEditing(product)}>
+                            <span className="text-sm font-semibold text-surface-900">{product.calories}</span>
+                            <Edit2 size={14} className="text-surface-300 group-hover:text-primary-500 transition-colors" />
+                         </div>
+                       )}
                     </div>
                   </div>
                 </div>
 
-                {/* Редактирование калорий */}
-                <div className="border-t border-gray-100 pt-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-gray-600">Калорийность:</span>
-                      {editingId === product.id ? (
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="number"
-                            value={editedCalories}
-                            onChange={(e) => setEditedCalories(e.target.value)}
-                            className="w-24 px-2 py-1 border border-indigo-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                            autoFocus
-                          />
-                          <span className="text-sm text-gray-600">ккал</span>
-                        </div>
-                      ) : (
-                        <span className="text-base font-semibold text-gray-900">
-                          {product.calories} ккал
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      {editingId === product.id ? (
-                        <>
-                          <button
-                            onClick={() => saveCalories(product.id)}
-                            className="p-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-colors"
-                            title="Сохранить"
-                          >
-                            <Save size={16} />
-                          </button>
-                          <button
-                            onClick={cancelEditing}
-                            className="p-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
-                            title="Отмена"
-                          >
-                            <X size={16} />
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          onClick={() => startEditing(product)}
-                          className="p-2 bg-indigo-100 text-indigo-600 rounded-lg hover:bg-indigo-200 transition-colors"
-                          title="Изменить калорийность"
-                        >
-                          <Edit2 size={16} />
-                        </button>
-                      )}
+                <div className="mt-4 pt-3 border-t border-surface-50 grid grid-cols-2 gap-4">
+                  <div>
+                    <div className="text-xs text-surface-400 mb-0.5">Последняя покупка</div>
+                    <div className="text-sm font-medium text-surface-700">
+                      {new Date(product.lastPurchase).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}
                     </div>
                   </div>
-                </div>
-
-                <div className="mt-3 pt-3 border-t border-gray-100">
-                  <div className="grid grid-cols-2 gap-3 text-sm">
+                  {product.avgDays && (
                     <div>
-                      <div className="text-gray-500">Последняя покупка</div>
-                      <div className="font-medium text-gray-900">
-                        {new Date(product.lastPurchase).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}
+                      <div className="text-xs text-surface-400 mb-0.5">Частота</div>
+                      <div className="text-sm font-medium text-surface-700">
+                        ~{product.avgDays} дн.
                       </div>
                     </div>
-                    {product.avgDays && (
-                      <div>
-                        <div className="text-gray-500">Частота покупки</div>
-                        <div className="font-medium text-gray-900">
-                          Каждые {product.avgDays} дней
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  )}
                 </div>
               </div>
             ))
           )}
         </div>
         
-        {/* Кнопка "Загрузить еще" */}
         {!productsLoading && hasMoreProducts && processedProducts.length > 0 && loadMoreProducts && (
-          <div className="flex justify-center mt-4">
+          <div className="flex justify-center pt-4">
             <button
               onClick={() => loadMoreProducts(20)}
               disabled={loadingMoreProducts}
-              className={`px-6 py-3 rounded-xl font-semibold transition-colors ${
-                loadingMoreProducts
-                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  : 'bg-indigo-600 text-white hover:bg-indigo-700'
-              }`}
+              className="px-8 py-3 rounded-2xl font-semibold bg-white border border-surface-200 text-surface-900 shadow-sm hover:bg-surface-50 transition-all active:scale-95 disabled:opacity-50"
             >
-              {loadingMoreProducts ? 'Загрузка...' : 'Загрузить еще'}
+              {loadingMoreProducts ? <Loader2 className="animate-spin" /> : 'Загрузить еще'}
             </button>
           </div>
         )}
 
-        <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4">
-          <div className="flex items-start gap-3">
-            <div className="bg-indigo-100 p-2 rounded-lg">
-              <ShoppingCart size={20} className="text-indigo-600" />
+        <div className="bg-gradient-to-br from-primary-900 to-surface-900 rounded-[24px] p-6 text-white shadow-xl">
+          <div className="flex items-center gap-4">
+            <div className="bg-white/10 p-3 rounded-2xl backdrop-blur-sm">
+              <ShoppingCart size={24} className="text-primary-300" />
             </div>
-            <div className="flex-1">
-              <h4 className="font-semibold text-gray-900 mb-1">Всего продуктов: {processedProducts.length}</h4>
-              <div className="text-sm text-gray-600">
-                Общая калорийность: {processedProducts.reduce((sum, p) => sum + p.calories, 0)} ккал
-              </div>
-              <div className="text-sm text-gray-600">
-                Средняя цена: €{(processedProducts.reduce((sum, p) => sum + p.price, 0) / processedProducts.length).toFixed(2)}
-              </div>
+            <div>
+              <div className="text-surface-300 text-sm font-medium mb-1">Итого в списке</div>
+              <div className="text-2xl font-bold">{processedProducts.length} <span className="text-base font-normal text-surface-400">товаров</span></div>
             </div>
           </div>
         </div>
@@ -2257,15 +2076,21 @@ const GroceryTrackerApp = () => {
   };
 
   return (
-    <div className="h-full flex flex-col bg-gray-50">
+    <div className="h-full flex flex-col">
+      {/* Language Selection Modal */}
+      <ReceiptLanguageModal 
+        isOpen={showLanguageModal} 
+        onClose={() => setShowLanguageModal(false)} 
+      />
+
       {/* Уведомление о восстановлении вкладки */}
       {showRestoredMessage && (
         <div className="fixed top-0 left-0 right-0 z-50 message-fade-in">
           <div className="max-w-md mx-auto px-6 pt-4">
-            <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 shadow-lg">
-              <div className="flex items-center gap-2">
-                <RefreshCw size={18} className="text-indigo-600 flex-shrink-0" />
-                <div className="text-sm text-indigo-800 font-medium">
+            <div className="bg-primary-50/90 backdrop-blur-md border border-primary-100 rounded-3xl p-4 shadow-lg mx-4 mt-2">
+              <div className="flex items-center gap-3">
+                <RefreshCw size={20} className="text-primary-600 flex-shrink-0" />
+                <div className="text-sm text-primary-900 font-medium">
                   Раздел восстановлен после обновления
                 </div>
               </div>
@@ -2275,53 +2100,71 @@ const GroceryTrackerApp = () => {
       )}
       
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4 flex-shrink-0 z-10">
+      <div className="px-6 pt-6 pb-2 flex-shrink-0 z-10">
         <div className="max-w-md mx-auto flex items-center justify-between gap-4">
-          <h1 className="text-xl font-bold text-gray-900">Grocery Tracker</h1>
+          <div>
+            <h1 className="text-2xl font-bold text-surface-900 tracking-tight">Grocery Tracker</h1>
+            <p className="text-surface-500 text-sm font-medium">Manage your pantry smart</p>
+          </div>
           <PWAInstallButton />
         </div>
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-md mx-auto px-6 py-6 pb-24">
+      <div className="flex-1 overflow-y-auto no-scrollbar">
+        <div className="max-w-md mx-auto px-6 py-6 pb-32">
           {activeTab === 'home' && <HomePage />}
           {activeTab === 'upload' && <UploadPage />}
           {activeTab === 'products' && <ProductsPage />}
-          {activeTab === 'analytics' && <AnalyticsPage />}
+          {activeTab === 'account' && <AccountPage />}
         </div>
       </div>
 
-      {/* Bottom Navigation */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-6 py-3 z-50 shadow-lg safe-area-bottom">
-        <div className="max-w-md mx-auto flex items-center justify-around">
+      {/* Modern Floating Bottom Navigation */}
+      <div className="fixed bottom-6 left-0 right-0 z-50 px-6 safe-area-bottom pointer-events-none">
+        <div className="pointer-events-auto max-w-[320px] mx-auto bg-white/80 backdrop-blur-xl border border-white/40 rounded-full shadow-glass p-1.5 flex items-center justify-between">
           <button 
             onClick={() => handleTabChange('home')}
-            className={`flex flex-col items-center gap-1 p-2 ${activeTab === 'home' ? 'text-indigo-600' : 'text-gray-400'}`}
+            className={`flex items-center justify-center w-14 h-14 rounded-full transition-all duration-300 ${
+              activeTab === 'home' 
+                ? 'bg-slate-900 text-white shadow-lg scale-105' 
+                : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'
+            }`}
           >
-            <Home size={22} />
-            <span className="text-xs font-medium">Главная</span>
+            <Home size={24} strokeWidth={activeTab === 'home' ? 2.5 : 2} />
           </button>
+          
           <button 
             onClick={() => handleTabChange('upload')}
-            className={`flex flex-col items-center gap-1 p-2 ${activeTab === 'upload' ? 'text-indigo-600' : 'text-gray-400'}`}
+            className={`flex items-center justify-center w-14 h-14 rounded-full transition-all duration-300 ${
+              activeTab === 'upload' 
+                ? 'bg-slate-900 text-white shadow-lg scale-105' 
+                : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'
+            }`}
           >
-            <Camera size={22} />
-            <span className="text-xs font-medium">Чек</span>
+            <Camera size={24} strokeWidth={activeTab === 'upload' ? 2.5 : 2} />
           </button>
+          
           <button 
             onClick={() => handleTabChange('products')}
-            className={`flex flex-col items-center gap-1 p-2 ${activeTab === 'products' ? 'text-indigo-600' : 'text-gray-400'}`}
+            className={`flex items-center justify-center w-14 h-14 rounded-full transition-all duration-300 ${
+              activeTab === 'products' 
+                ? 'bg-slate-900 text-white shadow-lg scale-105' 
+                : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'
+            }`}
           >
-            <ShoppingCart size={22} />
-            <span className="text-xs font-medium">Продукты</span>
+            <ShoppingCart size={24} strokeWidth={activeTab === 'products' ? 2.5 : 2} />
           </button>
+          
           <button 
-            onClick={() => handleTabChange('analytics')}
-            className={`flex flex-col items-center gap-1 p-2 ${activeTab === 'analytics' ? 'text-indigo-600' : 'text-gray-400'}`}
+            onClick={() => handleTabChange('account')}
+            className={`flex items-center justify-center w-14 h-14 rounded-full transition-all duration-300 ${
+              activeTab === 'account' 
+                ? 'bg-slate-900 text-white shadow-lg scale-105' 
+                : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'
+            }`}
           >
-            <BarChart3 size={22} />
-            <span className="text-xs font-medium">Аналитика</span>
+            <User size={24} strokeWidth={activeTab === 'account' ? 2.5 : 2} />
           </button>
         </div>
       </div>

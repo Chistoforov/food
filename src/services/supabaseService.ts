@@ -1,4 +1,4 @@
-import { supabase, Product, Receipt, ProductHistory, MonthlyStats, PendingReceipt } from '../lib/supabase'
+import { supabase, Product, Receipt, ProductHistory, MonthlyStats, PendingReceipt, UserProfile } from '../lib/supabase'
 
 export class SupabaseService {
   // Работа с продуктами
@@ -728,6 +728,15 @@ export class SupabaseService {
     }
   }
 
+  static async updateUserProfile(userId: string, updates: Partial<UserProfile>): Promise<void> {
+    const { error } = await supabase
+      .from('user_profiles')
+      .update(updates)
+      .eq('id', userId)
+
+    if (error) throw error
+  }
+
   // === BACKGROUND RECEIPT PROCESSING ===
   
   /**
@@ -736,7 +745,8 @@ export class SupabaseService {
    */
   static async uploadReceiptForProcessing(
     familyId: number,
-    imageFile: File
+    imageFile: File,
+    userId?: string
   ): Promise<PendingReceipt> {
     try {
       // Generate unique filename
@@ -746,13 +756,22 @@ export class SupabaseService {
 
       console.log('📤 Uploading image to storage:', fileName)
 
-      // Upload image to Supabase Storage
-      const { data: uploadData, error: uploadError } = await supabase.storage
+      // Upload image to Supabase Storage with timeout (30s)
+      const uploadPromise = supabase.storage
         .from('receipts')
         .upload(fileName, imageFile, {
           cacheControl: '3600',
           upsert: false
         })
+
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Upload timed out after 30s')), 30000)
+      )
+
+      const { data: uploadData, error: uploadError } = await Promise.race([
+        uploadPromise,
+        timeoutPromise
+      ]) as any // Type assertion needed for Promise.race result
 
       if (uploadError) {
         console.error('❌ Upload error:', uploadError)
@@ -768,7 +787,8 @@ export class SupabaseService {
           family_id: familyId,
           image_url: uploadData.path,
           status: 'pending',
-          attempts: 0
+          attempts: 0,
+          uploaded_by: userId
         })
         .select()
         .single()
@@ -1560,5 +1580,40 @@ export class SupabaseService {
       console.error('❌ Ошибка отметки типа как досрочно закончившегося:', error)
       throw error
     }
+  }
+
+  // === AUTH & FAMILY MANAGEMENT ===
+  static async inviteUser(email: string, familyId: number) {
+    return await supabase.from('family_invitations').insert({
+      family_id: familyId,
+      email,
+      status: 'pending'
+    })
+  }
+
+  static async getFamilyMembers(familyId: number) {
+     const { data, error } = await supabase
+       .from('user_profiles')
+       .select('*')
+       .eq('family_id', familyId)
+     if (error) throw error;
+     return data;
+  }
+
+  static async getFamilyInvitations(familyId: number) {
+      const { data, error } = await supabase
+        .from('family_invitations')
+        .select('*')
+        .eq('family_id', familyId)
+      if (error) throw error
+      return data
+  }
+  
+  static async cancelInvitation(id: number) {
+      const { error } = await supabase
+        .from('family_invitations')
+        .delete()
+        .eq('id', id)
+      if (error) throw error
   }
 }
