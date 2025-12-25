@@ -96,6 +96,13 @@ const GroceryTrackerApp = () => {
     };
   };
 
+  // Получаем текущий месяц (используем для хука и рендера)
+  const currentMonth = selectedMonth || getCurrentMonth();
+
+  // Инициализируем хуки Supabase (безусловно, чтобы не нарушать Rules of Hooks)
+  // Используем familyId=0 если профиль еще не загружен, чтобы избежать лишних запросов
+  const safeFamilyId = profile?.family_id || 0;
+
   const {
     products,
     loading: productsLoading,
