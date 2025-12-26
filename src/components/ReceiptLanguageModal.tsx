@@ -14,6 +14,7 @@ const LANGUAGES = [
   { code: 'German', label: 'Deutsch', flag: '🇩🇪' },
   { code: 'French', label: 'Français', flag: '🇫🇷' },
   { code: 'Spanish', label: 'Español', flag: '🇪🇸' },
+  { code: 'Portuguese', label: 'Português', flag: '🇵🇹' },
   { code: 'Italian', label: 'Italiano', flag: '🇮🇹' },
   { code: 'Ukrainian', label: 'Українська', flag: '🇺🇦' },
   { code: 'Kazakh', label: 'Қазақ', flag: '🇰🇿' },

@@ -10,6 +10,7 @@ const LANGUAGES = [
   { code: 'German', label: 'Deutsch (German)' },
   { code: 'French', label: 'Français (French)' },
   { code: 'Spanish', label: 'Español (Spanish)' },
+  { code: 'Portuguese', label: 'Português (Portuguese)' },
   { code: 'Italian', label: 'Italiano (Italian)' },
   { code: 'Ukrainian', label: 'Українська (Ukrainian)' },
   { code: 'Kazakh', label: 'Қазақ (Kazakh)' },
