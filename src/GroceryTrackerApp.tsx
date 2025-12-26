@@ -160,30 +160,6 @@ const GroceryTrackerApp = () => {
     loadTypeStats()
   }, [activeTab, safeFamilyId]) 
 
-  // Show loader while auth is initializing
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <Loader2 className="animate-spin text-indigo-600" size={48} />
-      </div>
-    );
-  }
-
-  // Show login page if not authenticated
-  if (!user) {
-    return <LoginPage />;
-  }
-
-  // Show loader if profile is not yet loaded (e.g. creating after signup)
-  if (!profile) {
-     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center flex-col gap-4">
-        <Loader2 className="animate-spin text-indigo-600" size={48} />
-        <p className="text-gray-500">Подготовка вашего аккаунта...</p>
-      </div>
-    );
-  }
-
   // Обертка для setActiveTab с логированием
   const handleTabChange = (newTab: string) => {
     console.log('🔄 [CHANGE] Переключаем вкладку:', {
@@ -265,13 +241,15 @@ const GroceryTrackerApp = () => {
     };
   }, [activeTab]);
 
-
   // Подписка на обновления pending receipts для автоматического обновления статистики
   useEffect(() => {
+    // Не подписываемся, если нет валидного ID семьи
+    if (safeFamilyId === 0) return;
+
     console.log('🔔 Подписываемся на обновления чеков для автообновления статистики');
     
     const unsubscribe = SupabaseService.subscribeToPendingReceipts(
-      selectedFamilyId,
+      safeFamilyId, // Используем safeFamilyId
       (receipt) => {
         console.log('📡 Получено обновление чека:', receipt.status);
         
@@ -287,7 +265,35 @@ const GroceryTrackerApp = () => {
       console.log('🔕 Отписываемся от обновлений чеков');
       unsubscribe();
     };
-  }, [selectedFamilyId, refetchStats]);
+  }, [safeFamilyId, refetchStats]);
+
+  // Show loader while auth is initializing
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Loader2 className="animate-spin text-indigo-600" size={48} />
+      </div>
+    );
+  }
+
+  // Show login page if not authenticated
+  if (!user) {
+    return <LoginPage />;
+  }
+
+  // Show loader if profile is not yet loaded (e.g. creating after signup)
+  if (!profile) {
+     return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center flex-col gap-4">
+        <Loader2 className="animate-spin text-indigo-600" size={48} />
+        <p className="text-gray-500">Подготовка вашего аккаунта...</p>
+      </div>
+    );
+  }
+
+  /* 
+   * REMOVED: Moved all useEffects and handleTabChange to the top to fix React Error #310
+   */
 
 
   const goToPreviousMonth = () => {
