@@ -95,3 +95,4 @@ CREATE TRIGGER on_auth_user_created
 -- For now, we will rely on frontend passing the correct family_id (which comes from the secure profile),
 -- but ideally we should enable RLS on all tables.
 
+

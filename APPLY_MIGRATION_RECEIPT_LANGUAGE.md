@@ -25,3 +25,4 @@ After applying the migration:
 3. Check the "Account" page - you should see the "Receipt Language" selector.
 4. Try uploading a receipt - the system will now use your selected language for recognition.
 
+

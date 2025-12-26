@@ -146,7 +146,10 @@ const GroceryTrackerApp = () => {
 
     const loadTypeStats = async () => {
       try {
-        setLoadingTypeStats(true)
+        // Не показываем лоадер, если данные уже есть (чтобы не мигало при возврате на вкладку)
+        if (Object.keys(productTypeStats).length === 0) {
+          setLoadingTypeStats(true)
+        }
         console.log('📊 Загружаем статистику типов продуктов...')
         const stats = await SupabaseService.getProductTypeStats(safeFamilyId)
         console.log('📊 Загружена статистика типов продуктов:', stats)
@@ -736,7 +739,7 @@ const GroceryTrackerApp = () => {
       </div>
 
       {/* Обзор по типам продуктов */}
-      {!loadingTypeStats && Object.keys(productTypeStats).length > 0 && (() => {
+      {Object.keys(productTypeStats).length > 0 && (() => {
         const sortedTypes = Object.entries(productTypeStats).sort(([, a], [, b]) => {
           const statusPriority = { 'ending-soon': 0, 'ok': 1, 'calculating': 2 };
           if (a.status !== b.status) {
