@@ -130,7 +130,7 @@ const GroceryTrackerApp = () => {
     recalculateAllAnalytics,
     error: statsError,
     refetch: refetchStats
-  } = useMonthlyStats(safeFamilyId, currentMonth.month, currentMonth.year);
+  } = useMonthlyStats(safeFamilyId);
 
   // Загружаем статистику по типам продуктов из КЭША (быстро!)
   const [productTypeStats, setProductTypeStats] = useState<Record<string, {
@@ -614,15 +614,6 @@ const GroceryTrackerApp = () => {
 
           return (
             <>
-              {/* Santa Hat on the Month Title */}
-              <div className="absolute top-[3.8rem] left-[50%] -translate-x-[50%] z-20 pointer-events-none" style={{ transform: 'translateX(-40px) translateY(-24px) rotate(-15deg)' }}>
-                <svg width="40" height="40" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" className="drop-shadow-lg">
-                  <path d="M10 85 C10 85 20 75 50 75 C80 75 90 85 90 85 V95 H10 V85 Z" fill="white" />
-                  <path d="M15 80 C15 80 30 20 50 10 C70 20 85 80 85 80" fill="#EF4444" />
-                  <circle cx="50" cy="10" r="8" fill="white" />
-                </svg>
-              </div>
-
               <div className="absolute top-4 right-20 animate-pulse opacity-50 pointer-events-none">
                 <Snowflake className="w-6 h-6 text-white" />
               </div>
@@ -732,7 +723,7 @@ const GroceryTrackerApp = () => {
         <button
           onClick={async () => {
             try {
-              await recalculateStats();
+              await recalculateStats(currentMonth.month, currentMonth.year);
             } catch (error) {
               console.error('Ошибка пересчета статистики:', error);
             }
