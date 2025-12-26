@@ -21,6 +21,7 @@ console.log('🔍 Environment check:', {
 const GroceryTrackerApp = () => {
   const { user, profile, loading: authLoading } = useAuth();
   const [showLanguageModal, setShowLanguageModal] = useState(false);
+  const [slideDirection, setSlideDirection] = useState<'left' | 'right'>('right');
 
   // Check for receipt language setting
   useEffect(() => {
@@ -297,6 +298,7 @@ const GroceryTrackerApp = () => {
 
 
   const goToPreviousMonth = () => {
+    setSlideDirection('left');
     const date = new Date(currentMonth.year, parseInt(currentMonth.month) - 1, 1);
     date.setMonth(date.getMonth() - 1);
     
@@ -307,6 +309,7 @@ const GroceryTrackerApp = () => {
   };
 
   const goToNextMonth = () => {
+    setSlideDirection('right');
     const date = new Date(currentMonth.year, parseInt(currentMonth.month) - 1, 1);
     date.setMonth(date.getMonth() + 1);
     
@@ -611,6 +614,15 @@ const GroceryTrackerApp = () => {
 
           return (
             <>
+              {/* Santa Hat on the Month Title */}
+              <div className="absolute top-[3.8rem] left-[50%] -translate-x-[50%] z-20 pointer-events-none" style={{ transform: 'translateX(-40px) translateY(-24px) rotate(-15deg)' }}>
+                <svg width="40" height="40" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" className="drop-shadow-lg">
+                  <path d="M10 85 C10 85 20 75 50 75 C80 75 90 85 90 85 V95 H10 V85 Z" fill="white" />
+                  <path d="M15 80 C15 80 30 20 50 10 C70 20 85 80 85 80" fill="#EF4444" />
+                  <circle cx="50" cy="10" r="8" fill="white" />
+                </svg>
+              </div>
+
               <div className="absolute top-4 right-20 animate-pulse opacity-50 pointer-events-none">
                 <Snowflake className="w-6 h-6 text-white" />
               </div>
@@ -625,6 +637,17 @@ const GroceryTrackerApp = () => {
           );
         })()}
 
+        <style>{`
+          @keyframes slideInRight {
+            from { transform: translateX(20px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+          }
+          @keyframes slideInLeft {
+            from { transform: translateX(-20px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+          }
+        `}</style>
+
         {/* Навигация по месяцам */}
         <div className="relative z-10 flex items-center justify-between mb-8">
           <button
@@ -634,15 +657,23 @@ const GroceryTrackerApp = () => {
             <ChevronLeft className="w-5 h-5" />
           </button>
           
-          <h2 className="text-xl font-bold tracking-tight drop-shadow-sm">
-            {(() => {
-              const monthStr = currentMonth.month.includes('-') 
-                ? currentMonth.month.split('-')[1] 
-                : currentMonth.month;
-              const monthName = new Date(currentMonth.year, parseInt(monthStr) - 1).toLocaleString('ru', { month: 'long' });
-              return `${monthName} ${currentMonth.year}`;
-            })()}
-          </h2>
+          <div className="overflow-hidden px-4">
+            <h2 
+              key={`${currentMonth.year}-${currentMonth.month}`}
+              className="text-xl font-bold tracking-tight drop-shadow-sm"
+              style={{ 
+                animation: `${slideDirection === 'right' ? 'slideInRight' : 'slideInLeft'} 0.3s ease-out forwards` 
+              }}
+            >
+              {(() => {
+                const monthStr = currentMonth.month.includes('-') 
+                  ? currentMonth.month.split('-')[1] 
+                  : currentMonth.month;
+                const monthName = new Date(currentMonth.year, parseInt(monthStr) - 1).toLocaleString('ru', { month: 'long' });
+                return `${monthName} ${currentMonth.year}`;
+              })()}
+            </h2>
+          </div>
           
           <button
             onClick={goToNextMonth}
@@ -663,32 +694,35 @@ const GroceryTrackerApp = () => {
               <strong>Ошибка:</strong> {statsError}
             </div>
           </div>
-        ) : statsLoading ? (
-          <div className="flex flex-col items-center justify-center py-12 gap-3">
-            <Loader2 className="animate-spin text-white" size={32} />
-            <span className="text-white/80 font-medium">Считаем расходы...</span>
-          </div>
         ) : (
           <div className="relative z-10">
-            <div className="grid grid-cols-2 gap-6 mb-6">
-              <div className="bg-white/20 rounded-2xl p-4 backdrop-blur-md border border-white/20 shadow-lg shadow-black/5 transition-transform hover:scale-[1.02]">
-                <div className="text-sm text-blue-50 mb-1 font-medium">Потрачено</div>
-                <div className="text-3xl font-bold tracking-tight drop-shadow-sm">€{monthlyStats.totalSpent.toFixed(0)}<span className="text-lg text-blue-50">.{monthlyStats.totalSpent.toFixed(2).split('.')[1]}</span></div>
+            {statsLoading && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/10 backdrop-blur-[2px] rounded-2xl z-20 transition-all duration-300">
+                <Loader2 className="animate-spin text-white drop-shadow-md" size={32} />
               </div>
-              <div className="bg-white/20 rounded-2xl p-4 backdrop-blur-md border border-white/20 shadow-lg shadow-black/5 transition-transform hover:scale-[1.02]">
-                <div className="text-sm text-blue-50 mb-1 font-medium">Калории</div>
-                <div className="text-3xl font-bold tracking-tight drop-shadow-sm">{(monthlyStats.totalCalories / 1000).toFixed(1)}k</div>
-              </div>
-            </div>
+            )}
             
-            <div className="grid grid-cols-2 gap-6">
-              <div>
-                <div className="text-sm text-blue-50 mb-1 font-medium">В день</div>
-                <div className="text-xl font-semibold tracking-tight drop-shadow-sm">{monthlyStats.avgCaloriesPerDay} <span className="text-sm font-normal text-blue-100">ккал</span></div>
+            <div className={`transition-opacity duration-300 ${statsLoading ? 'opacity-80' : 'opacity-100'}`}>
+              <div className="grid grid-cols-2 gap-6 mb-6">
+                <div className="bg-white/20 rounded-2xl p-4 backdrop-blur-md border border-white/20 shadow-lg shadow-black/5 transition-transform hover:scale-[1.02]">
+                  <div className="text-sm text-blue-50 mb-1 font-medium">Потрачено</div>
+                  <div className="text-3xl font-bold tracking-tight drop-shadow-sm">€{monthlyStats.totalSpent.toFixed(0)}<span className="text-lg text-blue-50">.{monthlyStats.totalSpent.toFixed(2).split('.')[1]}</span></div>
+                </div>
+                <div className="bg-white/20 rounded-2xl p-4 backdrop-blur-md border border-white/20 shadow-lg shadow-black/5 transition-transform hover:scale-[1.02]">
+                  <div className="text-sm text-blue-50 mb-1 font-medium">Калории</div>
+                  <div className="text-3xl font-bold tracking-tight drop-shadow-sm">{(monthlyStats.totalCalories / 1000).toFixed(1)}k</div>
+                </div>
               </div>
-              <div>
-                <div className="text-sm text-blue-50 mb-1 font-medium">Чеков</div>
-                <div className="text-xl font-semibold tracking-tight drop-shadow-sm">{monthlyStats.receiptsCount}</div>
+              
+              <div className="grid grid-cols-2 gap-6">
+                <div>
+                  <div className="text-sm text-blue-50 mb-1 font-medium">В день</div>
+                  <div className="text-xl font-semibold tracking-tight drop-shadow-sm">{monthlyStats.avgCaloriesPerDay} <span className="text-sm font-normal text-blue-100">ккал</span></div>
+                </div>
+                <div>
+                  <div className="text-sm text-blue-50 mb-1 font-medium">Чеков</div>
+                  <div className="text-xl font-semibold tracking-tight drop-shadow-sm">{monthlyStats.receiptsCount}</div>
+                </div>
               </div>
             </div>
           </div>
