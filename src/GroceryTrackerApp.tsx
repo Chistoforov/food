@@ -131,6 +131,35 @@ const GroceryTrackerApp = () => {
     refetch: refetchStats
   } = useMonthlyStats(safeFamilyId, currentMonth.month, currentMonth.year);
 
+  // Загружаем статистику по типам продуктов из КЭША (быстро!)
+  const [productTypeStats, setProductTypeStats] = useState<Record<string, {
+      status: 'ending-soon' | 'ok' | 'calculating'
+      productCount: number
+  }>>({})
+  const [loadingTypeStats, setLoadingTypeStats] = useState(false)
+
+  // Кэш автоматически обновляется триггерами при изменениях
+  useEffect(() => {
+    // Only load stats if we have a valid family ID and are on the home tab
+    if (safeFamilyId === 0 || activeTab !== 'home') return;
+
+    const loadTypeStats = async () => {
+      try {
+        setLoadingTypeStats(true)
+        console.log('📊 Загружаем статистику типов продуктов...')
+        const stats = await SupabaseService.getProductTypeStats(safeFamilyId)
+        console.log('📊 Загружена статистика типов продуктов:', stats)
+        setProductTypeStats(stats)
+      } catch (error) {
+        console.error('Ошибка загрузки статистики по категориям:', error)
+      } finally {
+        setLoadingTypeStats(false)
+      }
+    }
+    
+    loadTypeStats()
+  }, [activeTab, safeFamilyId]) 
+
   // Show loader while auth is initializing
   if (authLoading) {
     return (
@@ -411,38 +440,10 @@ const GroceryTrackerApp = () => {
 
   // Главная страница
   const HomePage = () => {
-    const [productTypeStats, setProductTypeStats] = useState<Record<string, {
-      status: 'ending-soon' | 'ok' | 'calculating'
-      productCount: number
-    }>>({})
-    const [loadingTypeStats, setLoadingTypeStats] = useState(false)
     const [deleteTypeConfirm, setDeleteTypeConfirm] = useState<string | null>(null)
     const [deletingType, setDeletingType] = useState(false)
     const [virtualPurchaseLoading, setVirtualPurchaseLoading] = useState<string | null>(null)
     const [earlyDepletionLoading, setEarlyDepletionLoading] = useState<string | null>(null)
-
-    // Загружаем статистику по типам продуктов из КЭША (быстро!)
-    // Кэш автоматически обновляется триггерами при изменениях
-    useEffect(() => {
-      const loadTypeStats = async () => {
-        try {
-          setLoadingTypeStats(true)
-          console.log('📊 Загружаем статистику типов продуктов...')
-          const stats = await SupabaseService.getProductTypeStats(selectedFamilyId)
-          console.log('📊 Загружена статистика типов продуктов:', stats)
-          setProductTypeStats(stats)
-        } catch (error) {
-          console.error('Ошибка загрузки статистики по категориям:', error)
-        } finally {
-          setLoadingTypeStats(false)
-        }
-      }
-      
-      // Загружаем только при открытии главной страницы
-      if (activeTab === 'home') {
-        loadTypeStats()
-      }
-    }, [activeTab, selectedFamilyId]) // Убрали products.length - кэш обновляется автоматически
     
     // Отслеживаем изменения в productTypeStats
     useEffect(() => {
