@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Camera, ShoppingCart, Home, Clock, AlertCircle, CheckCircle, Edit2, Save, X, Upload, Loader2, XCircle, Trash2, ChevronLeft, ChevronRight, Eye, Calendar, RefreshCw, AlertTriangle, Info, Sparkles, User } from 'lucide-react';
+import { Camera, ShoppingCart, Home, Clock, AlertCircle, CheckCircle, Edit2, Save, X, Upload, Loader2, XCircle, Trash2, ChevronLeft, ChevronRight, Eye, Calendar, RefreshCw, AlertTriangle, Info, Sparkles, User, Snowflake } from 'lucide-react';
 import { useProducts, useReceipts, useMonthlyStats } from './hooks/useSupabaseData';
 import { SupabaseService } from './services/supabaseService';
 import type { ProductHistory, Product } from './lib/supabase';
@@ -593,23 +593,48 @@ const GroceryTrackerApp = () => {
       
       {/* Статистика за месяц */}
       <div 
-        className="relative overflow-hidden bg-slate-900 rounded-[32px] p-6 text-white shadow-2xl"
+        className="relative overflow-hidden bg-gradient-to-br from-sky-400 to-blue-600 rounded-[32px] p-6 text-white shadow-xl shadow-blue-500/20 transition-all duration-300 hover:shadow-blue-500/30"
         onTouchStart={handleTouchStart}
       >
         {/* Decorative background elements */}
-        <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/20 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none"></div>
-        <div className="absolute bottom-0 left-0 w-48 h-48 bg-blue-500/20 rounded-full blur-3xl -ml-10 -mb-10 pointer-events-none"></div>
+        <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none"></div>
+        <div className="absolute bottom-0 left-0 w-48 h-48 bg-indigo-500/20 rounded-full blur-3xl -ml-10 -mb-10 pointer-events-none"></div>
+
+        {/* Christmas Decorations */}
+        {(() => {
+          const monthStr = currentMonth.month.includes('-') 
+            ? currentMonth.month.split('-')[1] 
+            : currentMonth.month;
+          const isDecember = parseInt(monthStr) === 12;
+          
+          if (!isDecember) return null;
+
+          return (
+            <>
+              <div className="absolute top-4 right-20 animate-pulse opacity-50 pointer-events-none">
+                <Snowflake className="w-6 h-6 text-white" />
+              </div>
+              <div className="absolute top-12 left-8 animate-pulse opacity-30 pointer-events-none" style={{ animationDelay: '1s' }}>
+                <Snowflake className="w-4 h-4 text-white" />
+              </div>
+              <div className="absolute bottom-8 right-8 animate-pulse opacity-40 pointer-events-none" style={{ animationDelay: '2s' }}>
+                <Snowflake className="w-8 h-8 text-white" />
+              </div>
+              <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10 mix-blend-overlay pointer-events-none"></div>
+            </>
+          );
+        })()}
 
         {/* Навигация по месяцам */}
         <div className="relative z-10 flex items-center justify-between mb-8">
           <button
             onClick={goToPreviousMonth}
-            className="p-3 rounded-2xl bg-white/10 hover:bg-white/20 transition-all active:scale-95 backdrop-blur-sm"
+            className="p-3 rounded-2xl bg-white/20 hover:bg-white/30 transition-all active:scale-95 backdrop-blur-md border border-white/10 shadow-lg shadow-black/5"
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
           
-          <h2 className="text-xl font-bold tracking-tight">
+          <h2 className="text-xl font-bold tracking-tight drop-shadow-sm">
             {(() => {
               const monthStr = currentMonth.month.includes('-') 
                 ? currentMonth.month.split('-')[1] 
@@ -622,10 +647,10 @@ const GroceryTrackerApp = () => {
           <button
             onClick={goToNextMonth}
             disabled={!canGoToNextMonth()}
-            className={`p-3 rounded-2xl transition-all active:scale-95 backdrop-blur-sm ${
+            className={`p-3 rounded-2xl transition-all active:scale-95 backdrop-blur-md border border-white/10 shadow-lg shadow-black/5 ${
               canGoToNextMonth()
-                ? 'bg-white/10 hover:bg-white/20'
-                : 'bg-white/5 text-white/30 cursor-not-allowed'
+                ? 'bg-white/20 hover:bg-white/30'
+                : 'bg-white/10 text-white/30 cursor-not-allowed'
             }`}
           >
             <ChevronRight className="w-5 h-5" />
@@ -639,31 +664,31 @@ const GroceryTrackerApp = () => {
             </div>
           </div>
         ) : statsLoading ? (
-           <div className="flex flex-col items-center justify-center py-12 gap-3">
-             <Loader2 className="animate-spin text-primary-400" size={32} />
-             <span className="text-white/60 font-medium">Считаем расходы...</span>
-           </div>
+          <div className="flex flex-col items-center justify-center py-12 gap-3">
+            <Loader2 className="animate-spin text-white" size={32} />
+            <span className="text-white/80 font-medium">Считаем расходы...</span>
+          </div>
         ) : (
           <div className="relative z-10">
             <div className="grid grid-cols-2 gap-6 mb-6">
-              <div className="bg-white/5 rounded-2xl p-4 backdrop-blur-sm border border-white/10">
-                <div className="text-sm text-white/60 mb-1 font-medium">Потрачено</div>
-                <div className="text-3xl font-bold tracking-tight">€{monthlyStats.totalSpent.toFixed(0)}<span className="text-lg text-white/60">.{monthlyStats.totalSpent.toFixed(2).split('.')[1]}</span></div>
+              <div className="bg-white/20 rounded-2xl p-4 backdrop-blur-md border border-white/20 shadow-lg shadow-black/5 transition-transform hover:scale-[1.02]">
+                <div className="text-sm text-blue-50 mb-1 font-medium">Потрачено</div>
+                <div className="text-3xl font-bold tracking-tight drop-shadow-sm">€{monthlyStats.totalSpent.toFixed(0)}<span className="text-lg text-blue-50">.{monthlyStats.totalSpent.toFixed(2).split('.')[1]}</span></div>
               </div>
-              <div className="bg-white/5 rounded-2xl p-4 backdrop-blur-sm border border-white/10">
-                <div className="text-sm text-white/60 mb-1 font-medium">Калории</div>
-                <div className="text-3xl font-bold tracking-tight">{(monthlyStats.totalCalories / 1000).toFixed(1)}k</div>
+              <div className="bg-white/20 rounded-2xl p-4 backdrop-blur-md border border-white/20 shadow-lg shadow-black/5 transition-transform hover:scale-[1.02]">
+                <div className="text-sm text-blue-50 mb-1 font-medium">Калории</div>
+                <div className="text-3xl font-bold tracking-tight drop-shadow-sm">{(monthlyStats.totalCalories / 1000).toFixed(1)}k</div>
               </div>
             </div>
             
             <div className="grid grid-cols-2 gap-6">
               <div>
-                <div className="text-sm text-white/60 mb-1 font-medium">В день</div>
-                <div className="text-xl font-semibold tracking-tight">{monthlyStats.avgCaloriesPerDay} <span className="text-sm font-normal text-white/40">ккал</span></div>
+                <div className="text-sm text-blue-50 mb-1 font-medium">В день</div>
+                <div className="text-xl font-semibold tracking-tight drop-shadow-sm">{monthlyStats.avgCaloriesPerDay} <span className="text-sm font-normal text-blue-100">ккал</span></div>
               </div>
               <div>
-                <div className="text-sm text-white/60 mb-1 font-medium">Чеков</div>
-                <div className="text-xl font-semibold tracking-tight">{monthlyStats.receiptsCount}</div>
+                <div className="text-sm text-blue-50 mb-1 font-medium">Чеков</div>
+                <div className="text-xl font-semibold tracking-tight drop-shadow-sm">{monthlyStats.receiptsCount}</div>
               </div>
             </div>
           </div>
@@ -679,7 +704,7 @@ const GroceryTrackerApp = () => {
             }
           }}
           disabled={statsLoading}
-          className={`absolute top-6 right-16 p-3 rounded-2xl text-white/60 hover:text-white hover:bg-white/10 transition-all active:scale-95 ${statsLoading ? 'opacity-50' : ''}`}
+          className={`absolute top-6 right-16 p-3 rounded-2xl text-white/80 hover:text-white hover:bg-white/20 transition-all active:scale-95 backdrop-blur-sm ${statsLoading ? 'opacity-50' : ''}`}
         >
           <RefreshCw size={20} className={statsLoading ? 'animate-spin' : ''} />
         </button>
