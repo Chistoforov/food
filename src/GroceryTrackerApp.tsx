@@ -137,7 +137,6 @@ const GroceryTrackerApp = () => {
       status: 'ending-soon' | 'ok' | 'calculating'
       productCount: number
   }>>({})
-  const [loadingTypeStats, setLoadingTypeStats] = useState(false)
 
   // Кэш автоматически обновляется триггерами при изменениях
   useEffect(() => {
@@ -146,18 +145,12 @@ const GroceryTrackerApp = () => {
 
     const loadTypeStats = async () => {
       try {
-        // Не показываем лоадер, если данные уже есть (чтобы не мигало при возврате на вкладку)
-        if (Object.keys(productTypeStats).length === 0) {
-          setLoadingTypeStats(true)
-        }
         console.log('📊 Загружаем статистику типов продуктов...')
         const stats = await SupabaseService.getProductTypeStats(safeFamilyId)
         console.log('📊 Загружена статистика типов продуктов:', stats)
         setProductTypeStats(stats)
       } catch (error) {
         console.error('Ошибка загрузки статистики по категориям:', error)
-      } finally {
-        setLoadingTypeStats(false)
       }
     }
     
