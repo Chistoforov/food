@@ -3,7 +3,6 @@ import { useAuth } from '../contexts/AuthContext'
 import { SupabaseService } from '../services/supabaseService'
 import { UserProfile, FamilyInvitation } from '../lib/supabase'
 import { LogOut, Plus, Mail, X, Check, Loader2, Users, Globe, RefreshCw } from 'lucide-react'
-import { useMonthlyStats } from '../hooks/useSupabaseData'
 import { clearAppCache } from '../utils/cacheHelper'
 
 const LANGUAGES = [
@@ -33,7 +32,6 @@ const AccountPage = () => {
   
   // Cache clearing state
   const [isClearingCache, setIsClearingCache] = useState(false);
-  const { recalculateAllAnalytics } = useMonthlyStats(profile?.family_id || 0);
 
   useEffect(() => {
     if (profile?.family_id) {
