@@ -142,7 +142,7 @@ const AccountPage = () => {
       </div>
 
       {/* Profile Card */}
-      <div className="bg-white rounded-[24px] p-6 shadow-sm border border-slate-100 flex items-center gap-4">
+      <div className="bg-white rounded-[24px] p-4 sm:p-6 shadow-sm border border-slate-100 flex items-center gap-4">
         <div className="w-16 h-16 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-2xl font-bold shadow-lg shadow-indigo-200">
           {user?.email?.charAt(0).toUpperCase()}
         </div>
@@ -158,7 +158,7 @@ const AccountPage = () => {
         <h3 className="font-bold text-slate-900 px-1">Настройки</h3>
         
         {/* Receipt Language Settings */}
-        <div className="bg-white rounded-[24px] p-6 shadow-sm border border-slate-100">
+        <div className="bg-white rounded-[24px] p-4 sm:p-6 shadow-sm border border-slate-100">
           <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
             <Globe size={20} className="text-slate-400" />
             Язык чеков
@@ -290,7 +290,7 @@ const AccountPage = () => {
       {/* Invite Modal */}
       {showInviteModal && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fadeIn">
-              <div className="bg-white rounded-[32px] p-6 w-full max-w-sm shadow-2xl animate-scaleIn">
+              <div className="bg-white rounded-[32px] p-4 sm:p-6 w-full max-w-sm shadow-2xl animate-scaleIn">
                   <h3 className="text-xl font-bold text-slate-900 mb-4">Пригласить в семью</h3>
                   <form onSubmit={handleInvite}>
                       <div className="mb-4">

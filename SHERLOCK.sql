@@ -27,3 +27,4 @@ WHERE event_object_schema = 'public'
   AND action_statement ILIKE '%handle_new_user%';
 
 
+

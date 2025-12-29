@@ -674,7 +674,7 @@ const GroceryTrackerApp = () => {
           <div className="overflow-hidden px-4">
             <h2 
               key={`${currentMonth.year}-${currentMonth.month}`}
-              className="text-xl font-bold tracking-tight drop-shadow-sm"
+              className="text-lg sm:text-xl font-bold tracking-tight drop-shadow-sm"
               style={{ 
                 animation: `${slideDirection === 'right' ? 'slideInRight' : 'slideInLeft'} 0.3s ease-out forwards` 
               }}
@@ -717,28 +717,28 @@ const GroceryTrackerApp = () => {
             )}
             
             <div className={`transition-opacity duration-300 ${statsLoading ? 'opacity-80' : 'opacity-100'}`}>
-              <div className="grid grid-cols-2 gap-4 mb-2">
-                <div className="bg-white/10 rounded-3xl p-5 backdrop-blur-md border border-white/10 shadow-lg shadow-black/5 transition-all duration-300 hover:bg-white/15 hover:scale-[1.02] group">
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="p-2 bg-white/10 rounded-xl group-hover:bg-white/20 transition-colors">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 mb-2">
+                <div className="bg-white/10 rounded-3xl p-4 sm:p-5 backdrop-blur-md border border-white/10 shadow-lg shadow-black/5 transition-all duration-300 hover:bg-white/15 hover:scale-[1.02] group">
+                  <div className="flex items-center gap-2 sm:gap-3 mb-2">
+                    <div className="p-1.5 sm:p-2 bg-white/10 rounded-xl group-hover:bg-white/20 transition-colors">
                       <ShoppingCart size={18} className="text-white/90" />
                     </div>
                     <div className="text-sm text-white/80 font-medium">Потрачено</div>
                   </div>
-                  <div className="text-3xl font-bold tracking-tight text-white drop-shadow-sm">
+                  <div className="text-2xl sm:text-3xl font-bold tracking-tight text-white drop-shadow-sm">
                     €{monthlyStats.totalSpent.toFixed(0)}
-                    <span className="text-lg text-white/60 font-medium">.{monthlyStats.totalSpent.toFixed(2).split('.')[1]}</span>
+                    <span className="text-base sm:text-lg text-white/60 font-medium">.{monthlyStats.totalSpent.toFixed(2).split('.')[1]}</span>
                   </div>
                 </div>
 
-                <div className="bg-white/10 rounded-3xl p-5 backdrop-blur-md border border-white/10 shadow-lg shadow-black/5 transition-all duration-300 hover:bg-white/15 hover:scale-[1.02] group">
-                  <div className="flex items-center gap-3 mb-2">
-                     <div className="p-2 bg-white/10 rounded-xl group-hover:bg-white/20 transition-colors">
+                <div className="bg-white/10 rounded-3xl p-4 sm:p-5 backdrop-blur-md border border-white/10 shadow-lg shadow-black/5 transition-all duration-300 hover:bg-white/15 hover:scale-[1.02] group">
+                  <div className="flex items-center gap-2 sm:gap-3 mb-2">
+                     <div className="p-1.5 sm:p-2 bg-white/10 rounded-xl group-hover:bg-white/20 transition-colors">
                       <CheckCircle size={18} className="text-white/90" />
                     </div>
                     <div className="text-sm text-white/80 font-medium">Чеков</div>
                   </div>
-                  <div className="text-3xl font-bold tracking-tight text-white drop-shadow-sm">
+                  <div className="text-2xl sm:text-3xl font-bold tracking-tight text-white drop-shadow-sm">
                     {monthlyStats.receiptsCount}
                   </div>
                 </div>
@@ -789,35 +789,35 @@ const GroceryTrackerApp = () => {
                 if (typeStatus === 'ending-soon') {
                   cardStyle = "bg-white border-rose-100 shadow-[0_8px_20px_-6px_rgba(244,63,94,0.15)] hover:shadow-[0_12px_24px_-6px_rgba(244,63,94,0.2)] hover:-translate-y-1 ring-1 ring-rose-50";
                   iconBg = "bg-white border-2 border-rose-500 text-rose-500 shadow-sm";
-                  statusColor = "text-rose-600 bg-rose-50 px-2.5 py-1 rounded-lg border border-rose-100 inline-block mt-1";
+                  statusColor = "text-rose-600 bg-rose-50 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-lg border border-rose-100 inline-block mt-0 sm:mt-1";
                 } else if (typeStatus === 'ok') {
                   cardStyle = "bg-white border-emerald-100 shadow-sm hover:shadow-md hover:border-emerald-200 hover:-translate-y-0.5";
                   iconBg = "bg-white border-2 border-emerald-500 text-emerald-500 shadow-sm";
-                  statusColor = "text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-100 inline-block mt-1";
+                  statusColor = "text-emerald-600 bg-emerald-50 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-lg border border-emerald-100 inline-block mt-0 sm:mt-1";
                 } else if (typeStatus === 'calculating') {
                    cardStyle = "bg-white border-amber-100 shadow-sm hover:shadow-md hover:border-amber-200 hover:-translate-y-0.5";
                    iconBg = "bg-white border-2 border-amber-500 text-amber-500 shadow-sm";
-                   statusColor = "text-amber-600 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-100 inline-block mt-1";
+                   statusColor = "text-amber-600 bg-amber-50 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-lg border border-amber-100 inline-block mt-0 sm:mt-1";
                 }
                 
                 return (
                   <div 
                     key={type} 
-                    className={`group relative rounded-[20px] p-3 border transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 ${cardStyle}`}
+                    className={`group relative rounded-[20px] p-2.5 sm:p-3 border transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 ${cardStyle}`}
                     style={{ animationDelay: `${0.1 + index * 0.05}s` }}
                   >
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-3">
                       {/* Icon */}
-                      <div className={`p-3 rounded-2xl flex-shrink-0 ${iconBg} transition-colors`}>
+                      <div className={`p-2 sm:p-3 rounded-2xl flex-shrink-0 ${iconBg} transition-colors`}>
                         {typeStatus === 'ending-soon' ? <AlertCircle size={24} /> : 
                          typeStatus === 'ok' ? <CheckCircle size={24} /> : 
                          <Clock size={24} />}
                       </div>
 
                       {/* Content */}
-                      <div className="flex-1 min-w-0 py-1">
-                        <h4 className="font-bold text-surface-900 capitalize text-lg leading-tight truncate pr-2">{type}</h4>
-                        <div className={`text-xs font-bold uppercase tracking-wider ${statusColor} mt-0.5`}>
+                      <div className="flex-1 min-w-0 py-0.5 sm:py-1">
+                        <h4 className="font-bold text-surface-900 capitalize text-base sm:text-lg leading-tight truncate pr-1 sm:pr-2">{type}</h4>
+                        <div className={`text-[10px] sm:text-xs font-bold uppercase tracking-wider ${statusColor} mt-0.5`}>
                           {typeStatus === 'ending-soon' && 'Заканчивается'}
                           {typeStatus === 'ok' && 'В наличии'}
                           {typeStatus === 'calculating' && 'Расчет...'}
@@ -830,7 +830,7 @@ const GroceryTrackerApp = () => {
                            <button
                              onClick={() => handleEarlyDepletion(type)}
                              disabled={earlyDepletionLoading === type}
-                             className="px-4 py-2.5 rounded-xl bg-orange-50 text-orange-600 text-sm font-bold hover:bg-orange-100 transition-colors flex items-center justify-center gap-2"
+                             className="px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl bg-orange-50 text-orange-600 text-sm font-bold hover:bg-orange-100 transition-colors flex items-center justify-center gap-2"
                            >
                              <AlertTriangle size={16} />
                              <span className="hidden sm:inline">Кончилось</span>
@@ -841,10 +841,10 @@ const GroceryTrackerApp = () => {
                           <button
                             onClick={() => handleVirtualPurchase(type)}
                             disabled={isLoading}
-                            className="px-4 py-2.5 rounded-xl bg-emerald-500 text-white text-sm font-bold hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20 active:scale-95 flex items-center justify-center gap-2"
+                            className="px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl bg-emerald-500 text-white text-sm font-bold hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20 active:scale-95 flex items-center justify-center gap-2"
                           >
                              <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} strokeWidth={2.5} />
-                             <span>В наличии</span>
+                             <span className="hidden sm:inline">В наличии</span>
                           </button>
                         )}
                       </div>
@@ -1610,7 +1610,7 @@ const GroceryTrackerApp = () => {
             processedProducts.map((product, index) => (
               <div 
                 key={product.id} 
-                className="bg-white rounded-[24px] p-5 shadow-sm border border-surface-100 hover:shadow-md transition-all duration-300"
+                className="bg-white rounded-[24px] p-4 sm:p-5 shadow-sm border border-surface-100 hover:shadow-md transition-all duration-300"
                 style={{ animationDelay: `${index * 0.05}s` }}
               >
                 <div className="flex items-start justify-between mb-4">
@@ -1763,7 +1763,7 @@ const GroceryTrackerApp = () => {
       )}
       
       {/* Header */}
-      <div className="px-6 pt-6 pb-2 flex-shrink-0 z-10">
+      <div className="px-4 sm:px-6 pt-6 pb-2 flex-shrink-0 z-10">
         <div className="max-w-md mx-auto flex items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-surface-900 tracking-tight">Grocery Tracker</h1>
@@ -1775,7 +1775,7 @@ const GroceryTrackerApp = () => {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto no-scrollbar">
-        <div className="max-w-md mx-auto px-6 py-6 pb-32">
+        <div className="max-w-md mx-auto px-4 sm:px-6 py-6 pb-32">
           {activeTab === 'home' && <HomePage />}
           {activeTab === 'upload' && <UploadPage />}
           {activeTab === 'products' && <ProductsPage />}
@@ -1784,7 +1784,7 @@ const GroceryTrackerApp = () => {
       </div>
 
       {/* Modern Floating Bottom Navigation */}
-      <div className="fixed bottom-6 left-0 right-0 z-50 px-6 safe-area-bottom pointer-events-none">
+      <div className="fixed bottom-6 left-0 right-0 z-50 px-4 sm:px-6 safe-area-bottom pointer-events-none">
         <div className="pointer-events-auto max-w-[320px] mx-auto bg-white/80 backdrop-blur-xl border border-white/40 rounded-full shadow-glass p-1.5 flex items-center justify-between">
           <button 
             onClick={() => handleTabChange('home')}

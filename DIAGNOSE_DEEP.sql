@@ -22,3 +22,4 @@ WHERE event_object_schema = 'auth'
   AND event_object_table = 'identities';
 
 
+

@@ -18,3 +18,4 @@ WHERE tgrelid = 'auth.users'::regclass
 AND tgname = 'on_auth_user_created';
 
 
+
