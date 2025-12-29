@@ -1,16 +1,16 @@
 import { useState, useEffect } from 'react';
-import { ShoppingCart, Home, Clock, AlertCircle, CheckCircle, Edit2, Save, X, Loader2, Trash2, ChevronLeft, ChevronRight, RefreshCw, AlertTriangle, User, Snowflake, Camera } from 'lucide-react';
+import { ShoppingCart, Home, AlertTriangle, User, Loader2, Camera, RefreshCw } from 'lucide-react';
 import { useProducts, useReceipts, useMonthlyStats } from './hooks/useSupabaseData';
 import { SupabaseService } from './services/supabaseService';
-import ConfirmationModal from './components/ConfirmationModal';
 import ReceiptLanguageModal from './components/ReceiptLanguageModal';
 import PWAInstallButton from './components/PWAInstallButton';
-// import { getColorScheme } from './components/ProductTypePatterns';
 import { useAuth } from './contexts/AuthContext';
 import { clearAppCache } from './utils/cacheHelper';
 import LoginPage from './components/LoginPage';
 import AccountPage from './components/AccountPage';
 import UploadPage from './components/UploadPage';
+import HomePage from './components/HomePage';
+import ProductsPage from './components/ProductsPage';
 
 // Проверяем переменные окружения при загрузке
 console.log('🔍 Environment check:', {
@@ -314,11 +314,6 @@ const GroceryTrackerApp = () => {
     );
   }
 
-  /* 
-   * REMOVED: Moved all useEffects and handleTabChange to the top to fix React Error #310
-   */
-
-
   const goToPreviousMonth = () => {
     setSlideDirection('left');
     const date = new Date(currentMonth.year, parseInt(currentMonth.month) - 1, 1);
@@ -350,39 +345,6 @@ const GroceryTrackerApp = () => {
 
   const canGoToNextMonth = () => {
     return !isCurrentMonth();
-  };
-
-  // Обработчики для свайпов
-  const handleTouchStart = (e: React.TouchEvent) => {
-    const touch = e.touches[0];
-    const startX = touch.clientX;
-    const startY = touch.clientY;
-    
-    const handleTouchEnd = (e: TouchEvent) => {
-      const touch = e.changedTouches[0];
-      const endX = touch.clientX;
-      const endY = touch.clientY;
-      
-      const deltaX = endX - startX;
-      const deltaY = endY - startY;
-      
-      // Проверяем, что это горизонтальный свайп (не вертикальный)
-      if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
-        if (deltaX > 0) {
-          // Свайп вправо - предыдущий месяц
-          goToPreviousMonth();
-        } else {
-          // Свайп влево - следующий месяц (если возможно)
-          if (canGoToNextMonth()) {
-            goToNextMonth();
-          }
-        }
-      }
-      
-      document.removeEventListener('touchend', handleTouchEnd);
-    };
-    
-    document.addEventListener('touchend', handleTouchEnd);
   };
 
   // Обрабатываем данные для совместимости с существующим UI
@@ -461,658 +423,6 @@ const GroceryTrackerApp = () => {
     highlights: []
   };
 
-  // Главная страница
-  const HomePage = () => {
-    const [deleteTypeConfirm, setDeleteTypeConfirm] = useState<string | null>(null)
-    const [deletingType, setDeletingType] = useState(false)
-    const [virtualPurchaseLoading, setVirtualPurchaseLoading] = useState<string | null>(null)
-    const [earlyDepletionLoading, setEarlyDepletionLoading] = useState<string | null>(null)
-    
-    // Отслеживаем изменения в productTypeStats
-    useEffect(() => {
-      console.log('🔄 [STATE CHANGE] productTypeStats обновлен:', productTypeStats)
-    }, [productTypeStats])
-
-    const handleDeleteProductType = async () => {
-      if (!deleteTypeConfirm) return
-      
-      try {
-        setDeletingType(true)
-        console.log('🗑️ Удаляем тип продукта:', deleteTypeConfirm)
-        
-        await SupabaseService.deleteProductType(deleteTypeConfirm, selectedFamilyId)
-        
-        // Обновляем статистику типов
-        const stats = await SupabaseService.getProductTypeStats(selectedFamilyId)
-        setProductTypeStats(stats)
-        
-        console.log('✅ Тип продукта успешно удален')
-        setDeleteTypeConfirm(null)
-      } catch (error) {
-        console.error('❌ Ошибка удаления типа продукта:', error)
-        alert('Ошибка удаления типа продукта. Попробуйте еще раз.')
-      } finally {
-        setDeletingType(false)
-      }
-    }
-
-    const handleVirtualPurchase = async (productType: string) => {
-      try {
-        setVirtualPurchaseLoading(productType)
-        console.log('🔄 Добавляем виртуальную покупку для типа:', productType)
-        
-        // Добавляем виртуальную покупку для всех продуктов этого типа
-        // Используем метод, который получает продукты напрямую из БД
-        const updatedCount = await SupabaseService.addVirtualPurchaseForType(productType, selectedFamilyId)
-        
-        if (updatedCount === 0) {
-          console.warn('⚠️ Нет продуктов для этого типа')
-          alert('Не найдено продуктов этого типа')
-          return
-        }
-        
-        console.log(`✅ Виртуальные покупки добавлены для ${updatedCount} продуктов`)
-        
-        // ВАЖНО: Ждем немного, чтобы триггеры БД успели сработать
-        console.log('⏳ Ждем завершения обновлений в БД...')
-        await new Promise(resolve => setTimeout(resolve, 500))
-        
-        // ВАЖНО: Явно пересчитываем кэш типов продуктов ПЕРЕД его чтением
-        // Триггеры БД срабатывают асинхронно и могут не успеть обновить кэш
-        console.log('🔄 Пересчитываем кэш статистики типов продуктов...')
-        await SupabaseService.recalculateProductTypeStats(selectedFamilyId)
-        
-        // Ждем еще немного после пересчета кэша
-        await new Promise(resolve => setTimeout(resolve, 300))
-        
-        // Обновляем список продуктов (чтобы получить новые статусы)
-        console.log('🔄 Обновляем список продуктов...')
-        await refetchProducts()
-        
-        // Обновляем статистику типов из пересчитанного кэша
-        console.log('🔄 Загружаем обновленную статистику типов...')
-        const stats = await SupabaseService.getProductTypeStats(selectedFamilyId)
-        console.log('📊 Новая статистика типов:', stats)
-        // Создаем новый объект, чтобы React точно заметил изменения
-        setProductTypeStats({...stats})
-        
-        console.log('✅ Продукты и статистика обновлены')
-      } catch (error) {
-        console.error('❌ Ошибка добавления виртуальной покупки:', error)
-        alert('Ошибка обновления. Попробуйте еще раз.')
-      } finally {
-        setVirtualPurchaseLoading(null)
-      }
-    }
-
-    const handleEarlyDepletion = async (productType: string) => {
-      try {
-        setEarlyDepletionLoading(productType)
-        console.log('⚠️ Отмечаем продукты типа как досрочно закончившиеся:', productType)
-        
-        // Отмечаем все продукты этого типа как досрочно закончившиеся
-        const updatedCount = await SupabaseService.markTypeAsDepletedEarly(productType, selectedFamilyId)
-        
-        if (updatedCount === 0) {
-          console.warn('⚠️ Нет продуктов для этого типа')
-          alert('Не найдено продуктов этого типа')
-          return
-        }
-        
-        console.log(`✅ ${updatedCount} продуктов отмечены как досрочно закончившиеся`)
-        
-        // ВАЖНО: Ждем немного, чтобы триггеры БД успели сработать
-        console.log('⏳ Ждем завершения обновлений в БД...')
-        await new Promise(resolve => setTimeout(resolve, 500))
-        
-        // ВАЖНО: Явно пересчитываем кэш типов продуктов ПЕРЕД его чтением
-        // Триггеры БД срабатывают асинхронно и могут не успеть обновить кэш
-        console.log('🔄 Пересчитываем кэш статистики типов продуктов...')
-        await SupabaseService.recalculateProductTypeStats(selectedFamilyId)
-        
-        // Ждем еще немного после пересчета кэша
-        await new Promise(resolve => setTimeout(resolve, 300))
-        
-        // Обновляем список продуктов (чтобы получить новые статусы)
-        console.log('🔄 Обновляем список продуктов...')
-        await refetchProducts()
-        
-        // Обновляем статистику типов из пересчитанного кэша
-        console.log('🔄 Загружаем обновленную статистику типов...')
-        const stats = await SupabaseService.getProductTypeStats(selectedFamilyId)
-        console.log('📊 Новая статистика типов:', stats)
-        // Создаем новый объект, чтобы React точно заметил изменения
-        setProductTypeStats({...stats})
-        
-        console.log('✅ Продукты и статистика обновлены')
-      } catch (error) {
-        console.error('❌ Ошибка отметки досрочного окончания:', error)
-        alert('Ошибка обновления. Попробуйте еще раз.')
-      } finally {
-        setEarlyDepletionLoading(null)
-      }
-    }
-
-    return (
-    <div className="space-y-8 animate-fadeIn">
-      {/* Модалка подтверждения удаления типа */}
-      <ConfirmationModal
-        isOpen={!!deleteTypeConfirm}
-        onClose={() => setDeleteTypeConfirm(null)}
-        onConfirm={handleDeleteProductType}
-        title="Удалить тип продукта?"
-        message={`Вы уверены, что хотите удалить тип продукта "${deleteTypeConfirm}"?\n\nУ всех продуктов этого типа будет очищен тип, и они перестанут отслеживаться как группа.\n\nЭто действие нельзя отменить.`}
-        confirmText="Да, удалить"
-        cancelText="Отмена"
-        isLoading={deletingType}
-        variant="danger"
-      />
-      
-      {/* Статистика за месяц */}
-      <div 
-        className="relative overflow-hidden bg-gradient-to-br from-[#8B5CF6] via-[#6366F1] to-[#3B82F6] rounded-[36px] p-6 text-white shadow-2xl shadow-indigo-500/30 transition-all duration-500 hover:shadow-indigo-500/40 ring-1 ring-white/20"
-        onTouchStart={handleTouchStart}
-      >
-        {/* Decorative background elements */}
-        <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none"></div>
-        <div className="absolute bottom-0 left-0 w-48 h-48 bg-indigo-500/20 rounded-full blur-3xl -ml-10 -mb-10 pointer-events-none"></div>
-
-        {/* Christmas Decorations */}
-        {(() => {
-          const monthStr = currentMonth.month.includes('-') 
-            ? currentMonth.month.split('-')[1] 
-            : currentMonth.month;
-          const isDecember = parseInt(monthStr) === 12;
-          
-          if (!isDecember) return null;
-
-          return (
-            <>
-              <div className="absolute top-4 right-20 animate-pulse opacity-50 pointer-events-none">
-                <Snowflake className="w-6 h-6 text-white" />
-              </div>
-              <div className="absolute top-12 left-8 animate-pulse opacity-30 pointer-events-none" style={{ animationDelay: '1s' }}>
-                <Snowflake className="w-4 h-4 text-white" />
-              </div>
-              <div className="absolute bottom-8 right-8 animate-pulse opacity-40 pointer-events-none" style={{ animationDelay: '2s' }}>
-                <Snowflake className="w-8 h-8 text-white" />
-              </div>
-              <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10 mix-blend-overlay pointer-events-none"></div>
-            </>
-          );
-        })()}
-
-        <style>{`
-          @keyframes slideInRight {
-            from { transform: translateX(20px); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
-          }
-          @keyframes slideInLeft {
-            from { transform: translateX(-20px); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
-          }
-        `}</style>
-
-        {/* Навигация по месяцам */}
-        <div className="relative z-10 flex items-center justify-between mb-8">
-          <button
-            onClick={goToPreviousMonth}
-            className="p-3 rounded-2xl bg-white/20 hover:bg-white/30 transition-all active:scale-95 backdrop-blur-md border border-white/10 shadow-lg shadow-black/5"
-          >
-            <ChevronLeft className="w-5 h-5" />
-          </button>
-          
-          <div className="overflow-hidden px-4">
-            <h2 
-              key={`${currentMonth.year}-${currentMonth.month}`}
-              className="text-lg sm:text-xl font-bold tracking-tight drop-shadow-sm"
-              style={{ 
-                animation: `${slideDirection === 'right' ? 'slideInRight' : 'slideInLeft'} 0.3s ease-out forwards` 
-              }}
-            >
-              {(() => {
-                const monthStr = currentMonth.month.includes('-') 
-                  ? currentMonth.month.split('-')[1] 
-                  : currentMonth.month;
-                const monthName = new Date(currentMonth.year, parseInt(monthStr) - 1).toLocaleString('ru', { month: 'long' });
-                return `${monthName} ${currentMonth.year}`;
-              })()}
-            </h2>
-          </div>
-          
-          <button
-            onClick={goToNextMonth}
-            disabled={!canGoToNextMonth()}
-            className={`p-3 rounded-2xl transition-all active:scale-95 backdrop-blur-md border border-white/10 shadow-lg shadow-black/5 ${
-              canGoToNextMonth()
-                ? 'bg-white/20 hover:bg-white/30'
-                : 'bg-white/10 text-white/30 cursor-not-allowed'
-            }`}
-          >
-            <ChevronRight className="w-5 h-5" />
-          </button>
-        </div>
-
-        {statsError ? (
-          <div className="bg-red-500/20 border border-red-500/30 rounded-2xl p-4 mb-4 backdrop-blur-md">
-            <div className="text-red-200 text-sm">
-              <strong>Ошибка:</strong> {statsError}
-            </div>
-          </div>
-        ) : (
-          <div className="relative z-10">
-            {statsLoading && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/10 backdrop-blur-[2px] rounded-2xl z-20 transition-all duration-300">
-                <Loader2 className="animate-spin text-white drop-shadow-md" size={32} />
-              </div>
-            )}
-            
-            <div className={`transition-opacity duration-300 ${statsLoading ? 'opacity-80' : 'opacity-100'}`}>
-              <div className="grid grid-cols-2 gap-3 sm:gap-4 mb-2">
-                <div className="bg-white/10 rounded-3xl p-4 sm:p-5 backdrop-blur-md border border-white/10 shadow-lg shadow-black/5 transition-all duration-300 hover:bg-white/15 hover:scale-[1.02] group">
-                  <div className="flex items-center gap-2 sm:gap-3 mb-2">
-                    <div className="p-1.5 sm:p-2 bg-white/10 rounded-xl group-hover:bg-white/20 transition-colors">
-                      <ShoppingCart size={18} className="text-white/90" />
-                    </div>
-                    <div className="text-sm text-white/80 font-medium">Потрачено</div>
-                  </div>
-                  <div className="text-2xl sm:text-3xl font-bold tracking-tight text-white drop-shadow-sm">
-                    €{monthlyStats.totalSpent.toFixed(0)}
-                    <span className="text-base sm:text-lg text-white/60 font-medium">.{monthlyStats.totalSpent.toFixed(2).split('.')[1]}</span>
-                  </div>
-                </div>
-
-                <div className="bg-white/10 rounded-3xl p-4 sm:p-5 backdrop-blur-md border border-white/10 shadow-lg shadow-black/5 transition-all duration-300 hover:bg-white/15 hover:scale-[1.02] group">
-                  <div className="flex items-center gap-2 sm:gap-3 mb-2">
-                     <div className="p-1.5 sm:p-2 bg-white/10 rounded-xl group-hover:bg-white/20 transition-colors">
-                      <CheckCircle size={18} className="text-white/90" />
-                    </div>
-                    <div className="text-sm text-white/80 font-medium">Чеков</div>
-                  </div>
-                  <div className="text-2xl sm:text-3xl font-bold tracking-tight text-white drop-shadow-sm">
-                    {monthlyStats.receiptsCount}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-        
-      </div>
-
-      {/* Обзор по типам продуктов */}
-      {Object.keys(productTypeStats).length > 0 && (() => {
-        const sortedTypes = Object.entries(productTypeStats).sort(([, a], [, b]) => {
-          const statusPriority = { 'ending-soon': 0, 'ok': 1, 'calculating': 2 };
-          if (a.status !== b.status) {
-            return statusPriority[a.status] - statusPriority[b.status];
-          }
-          return b.productCount - a.productCount;
-        });
-
-        return sortedTypes.length > 0 && (
-          <div className="animate-fadeIn" style={{animationDelay: '0.1s'}}>
-            <h3 className="text-xl font-bold text-surface-900 mb-4 px-1">Мои продукты</h3>
-            <div className="flex flex-col gap-3">
-              {sortedTypes.map(([type, typeData], index) => {
-                const typeStatus = typeData.status;
-                const isLoading = virtualPurchaseLoading === type;
-                
-                // Determine styling based on status
-                let cardStyle = "bg-white border-slate-100 shadow-sm hover:shadow-md";
-                let iconBg = "bg-slate-100 text-slate-500";
-                let statusColor = "text-slate-500";
-                
-                if (typeStatus === 'ending-soon') {
-                  cardStyle = "bg-white border-rose-100 shadow-[0_8px_20px_-6px_rgba(244,63,94,0.15)] hover:shadow-[0_12px_24px_-6px_rgba(244,63,94,0.2)] hover:-translate-y-1 ring-1 ring-rose-50";
-                  iconBg = "bg-white border-2 border-rose-500 text-rose-500 shadow-sm";
-                  statusColor = "text-rose-600 bg-rose-50 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-lg border border-rose-100 inline-block mt-0 sm:mt-1";
-                } else if (typeStatus === 'ok') {
-                  cardStyle = "bg-white border-emerald-100 shadow-sm hover:shadow-md hover:border-emerald-200 hover:-translate-y-0.5";
-                  iconBg = "bg-white border-2 border-emerald-500 text-emerald-500 shadow-sm";
-                  statusColor = "text-emerald-600 bg-emerald-50 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-lg border border-emerald-100 inline-block mt-0 sm:mt-1";
-                } else if (typeStatus === 'calculating') {
-                   cardStyle = "bg-white border-amber-100 shadow-sm hover:shadow-md hover:border-amber-200 hover:-translate-y-0.5";
-                   iconBg = "bg-white border-2 border-amber-500 text-amber-500 shadow-sm";
-                   statusColor = "text-amber-600 bg-amber-50 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-lg border border-amber-100 inline-block mt-0 sm:mt-1";
-                }
-                
-                return (
-                  <div 
-                    key={type} 
-                    className={`group relative rounded-[20px] p-2.5 sm:p-3 border transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 ${cardStyle}`}
-                    style={{ animationDelay: `${0.1 + index * 0.05}s` }}
-                  >
-                    <div className="flex items-center gap-3">
-                      {/* Icon */}
-                      <div className={`p-2 sm:p-3 rounded-2xl flex-shrink-0 ${iconBg} transition-colors`}>
-                        {typeStatus === 'ending-soon' ? <AlertCircle size={24} /> : 
-                         typeStatus === 'ok' ? <CheckCircle size={24} /> : 
-                         <Clock size={24} />}
-                      </div>
-
-                      {/* Content */}
-                      <div className="flex-1 min-w-0 py-0.5 sm:py-1">
-                        <h4 className="font-bold text-surface-900 capitalize text-base sm:text-lg leading-tight truncate pr-1 sm:pr-2">{type}</h4>
-                        <div className={`text-[10px] sm:text-xs font-bold uppercase tracking-wider ${statusColor} mt-0.5`}>
-                          {typeStatus === 'ending-soon' && 'Заканчивается'}
-                          {typeStatus === 'ok' && 'В наличии'}
-                          {typeStatus === 'calculating' && 'Расчет...'}
-                        </div>
-                      </div>
-
-                      {/* Action Button */}
-                      <div className="flex-shrink-0">
-                        {typeStatus === 'ok' && (
-                           <button
-                             onClick={() => handleEarlyDepletion(type)}
-                             disabled={earlyDepletionLoading === type}
-                             className="px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl bg-orange-50 text-orange-600 text-sm font-bold hover:bg-orange-100 transition-colors flex items-center justify-center gap-2"
-                           >
-                             <AlertTriangle size={16} />
-                             <span className="hidden sm:inline">Кончилось</span>
-                           </button>
-                        )}
-                        
-                        {typeStatus === 'ending-soon' && (
-                          <button
-                            onClick={() => handleVirtualPurchase(type)}
-                            disabled={isLoading}
-                            className="px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl bg-emerald-500 text-white text-sm font-bold hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20 active:scale-95 flex items-center justify-center gap-2"
-                          >
-                             <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} strokeWidth={2.5} />
-                             <span className="hidden sm:inline">В наличии</span>
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Delete Button - Absolute top right */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleteTypeConfirm(type);
-                      }}
-                      className="absolute -top-2 -right-2 opacity-0 group-hover:opacity-100 bg-white shadow-sm border border-surface-100 p-1.5 rounded-full text-surface-400 hover:text-red-500 hover:bg-red-50 transition-all z-10"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })()}
-    </div>
-    );
-  };
-
-  // Страница продуктов
-  const ProductsPage = () => {
-    const [editingId, setEditingId] = useState<number | null>(null);
-    const [editedCalories, setEditedCalories] = useState<string>('');
-    const [editingTypeId, setEditingTypeId] = useState<number | null>(null);
-    const [editedProductType, setEditedProductType] = useState<string>('');
-    const [showSuccessMessage, setShowSuccessMessage] = useState(false);
-    const [successMessage, setSuccessMessage] = useState<string>('');
-    const [isClearingCache, setIsClearingCache] = useState(false);
-
-    const startEditing = (product: typeof processedProducts[0]) => {
-      setEditingId(product.id);
-      setEditedCalories(product.calories.toString());
-    };
-
-    const startEditingType = (product: typeof processedProducts[0]) => {
-      setEditingTypeId(product.id);
-      setEditedProductType(product.product_type || '');
-    };
-
-    const cancelEditing = () => {
-      setEditingId(null);
-      setEditedCalories('');
-    };
-
-    const cancelEditingType = () => {
-      setEditingTypeId(null);
-      setEditedProductType('');
-    };
-
-    const saveCalories = async (productId: number) => {
-      const newCalories = parseInt(editedCalories);
-      if (!isNaN(newCalories) && newCalories >= 0) {
-        try {
-          await updateProduct(productId, { calories: newCalories });
-          setEditingId(null);
-          setEditedCalories('');
-          
-          // Показываем уведомление о пересчете статистики
-          setSuccessMessage('Калорийность обновлена');
-          setShowSuccessMessage(true);
-          setTimeout(() => setShowSuccessMessage(false), 3000);
-        } catch (error) {
-          console.error('Ошибка обновления калорий:', error);
-        }
-      }
-    };
-
-    const saveProductType = async (productId: number) => {
-      try {
-        // Приводим к нижнему регистру и убираем лишние пробелы
-        const normalizedType = editedProductType.trim().toLowerCase();
-        
-        await updateProduct(productId, { product_type: normalizedType || undefined });
-        
-        // Пересчитываем статистику для этого продукта
-        await SupabaseService.updateProductStats(productId, selectedFamilyId);
-        
-        setEditingTypeId(null);
-        setEditedProductType('');
-        
-        // Показываем уведомление
-        setSuccessMessage('Тип продукта обновлен. Прогноз пересчитан с учетом группы.');
-        setShowSuccessMessage(true);
-        setTimeout(() => setShowSuccessMessage(false), 5000);
-      } catch (error) {
-        console.error('Ошибка обновления типа продукта:', error);
-      }
-    };
-
-    const handleClearCache = async () => {
-      try {
-        setIsClearingCache(true);
-        console.log('🧹 Начинаем очистку кэша...');
-
-        // Используем общую функцию очистки кэша
-        // true - сохраняем авторизацию (чтобы не разлогинивало)
-        await clearAppCache(selectedFamilyId, true);
-
-        setSuccessMessage('Кэш очищен! Аналитика пересчитана. Приложение обновлено.');
-        setShowSuccessMessage(true);
-        
-        // Перезагружаем страницу через 2 секунды
-        setTimeout(() => {
-          console.log('🔄 Перезагружаем страницу...');
-          window.location.reload();
-        }, 2000);
-        
-      } catch (error) {
-        console.error('❌ Ошибка очистки кэша:', error);
-        alert('Ошибка: ' + (error instanceof Error ? error.message : 'Неизвестная ошибка'));
-      } finally {
-        setIsClearingCache(false);
-      }
-    };
-
-    return (
-      <div className="space-y-6 animate-fadeIn">
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="text-xl font-bold text-surface-900">Список покупок</h2>
-          
-          <button
-            onClick={handleClearCache}
-            disabled={isClearingCache}
-            className={`p-2 rounded-xl transition-all duration-300 ${
-              isClearingCache
-                ? 'bg-surface-100 text-surface-400 cursor-wait'
-                : 'bg-surface-100 text-surface-500 hover:bg-red-50 hover:text-red-600'
-            }`}
-            title="Сброс кэша"
-          >
-            {isClearingCache ? <Loader2 className="animate-spin" size={20} /> : <RefreshCw size={20} />}
-          </button>
-        </div>
-        
-        {/* Success Message */}
-        {showSuccessMessage && (
-          <div className="bg-emerald-50/50 border border-emerald-100 rounded-2xl p-4 flex items-center gap-3 backdrop-blur-sm animate-scaleIn">
-            <div className="p-2 bg-emerald-100 rounded-full text-emerald-600">
-               <CheckCircle size={18} />
-            </div>
-            <div>
-              <div className="font-semibold text-emerald-900 text-sm">{successMessage}</div>
-            </div>
-          </div>
-        )}
-
-        <div className="space-y-4">
-          {productsLoading ? (
-             <div className="flex flex-col items-center justify-center py-12 gap-3">
-               <Loader2 className="animate-spin text-surface-400" size={32} />
-               <span className="text-surface-400 font-medium">Загрузка продуктов...</span>
-             </div>
-          ) : (
-            processedProducts.map((product, index) => (
-              <div 
-                key={product.id} 
-                className="bg-white rounded-[24px] p-4 sm:p-5 shadow-sm border border-surface-100 hover:shadow-md transition-all duration-300"
-                style={{ animationDelay: `${index * 0.05}s` }}
-              >
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex-1 min-w-0 pr-4">
-                    <h3 className="font-bold text-surface-900 text-lg leading-tight truncate">{product.name}</h3>
-                    {product.originalName && (
-                      <div className="text-xs text-surface-400 mt-1 truncate">{product.originalName}</div>
-                    )}
-                    <div className="flex items-center gap-2 mt-2">
-                      <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-surface-50 text-surface-600 text-xs font-medium">
-                        {product.purchaseCount} покупок
-                      </span>
-                    </div>
-                  </div>
-                  <div className="text-xl font-bold text-primary-600 bg-primary-50 px-3 py-1 rounded-xl">
-                    €{product.price.toFixed(2)}
-                  </div>
-                </div>
-
-                {/* Edit Sections */}
-                <div className="space-y-3 pt-3 border-t border-surface-50">
-                  {/* Type */}
-                  <div className="flex items-center justify-between py-1">
-                    <span className="text-sm text-surface-500 font-medium">Тип</span>
-                    <div className="flex items-center gap-2 flex-1 justify-end">
-                       {editingTypeId === product.id ? (
-                         <div className="flex items-center gap-2 w-full max-w-[200px] animate-fadeIn">
-                           <input
-                             type="text"
-                             value={editedProductType}
-                             onChange={(e) => setEditedProductType(e.target.value)}
-                             placeholder="Тип..."
-                             className="flex-1 px-3 py-1.5 border border-primary-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500/20 bg-surface-50"
-                             autoFocus
-                           />
-                           <button onClick={() => saveProductType(product.id)} className="p-1.5 bg-emerald-100 text-emerald-600 rounded-lg"><Save size={16}/></button>
-                           <button onClick={cancelEditingType} className="p-1.5 bg-surface-100 text-surface-600 rounded-lg"><X size={16}/></button>
-                         </div>
-                       ) : (
-                         <div className="flex items-center gap-2 cursor-pointer group" onClick={() => startEditingType(product)}>
-                            {product.product_type ? (
-                              <span className="px-3 py-1 bg-violet-50 text-violet-600 rounded-lg text-sm font-medium border border-violet-100">
-                                {product.product_type}
-                              </span>
-                            ) : (
-                              <span className="text-sm text-surface-400 italic">Не указан</span>
-                            )}
-                            <Edit2 size={14} className="text-surface-300 group-hover:text-primary-500 transition-colors" />
-                         </div>
-                       )}
-                    </div>
-                  </div>
-
-                  {/* Calories */}
-                  <div className="flex items-center justify-between py-1">
-                    <span className="text-sm text-surface-500 font-medium">Ккал</span>
-                    <div className="flex items-center gap-2">
-                       {editingId === product.id ? (
-                         <div className="flex items-center gap-2 animate-fadeIn">
-                           <input
-                             type="number"
-                             value={editedCalories}
-                             onChange={(e) => setEditedCalories(e.target.value)}
-                             className="w-20 px-3 py-1.5 border border-primary-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500/20 bg-surface-50"
-                             autoFocus
-                           />
-                           <button onClick={() => saveCalories(product.id)} className="p-1.5 bg-emerald-100 text-emerald-600 rounded-lg"><Save size={16}/></button>
-                           <button onClick={cancelEditing} className="p-1.5 bg-surface-100 text-surface-600 rounded-lg"><X size={16}/></button>
-                         </div>
-                       ) : (
-                         <div className="flex items-center gap-2 cursor-pointer group" onClick={() => startEditing(product)}>
-                            <span className="text-sm font-semibold text-surface-900">{product.calories}</span>
-                            <Edit2 size={14} className="text-surface-300 group-hover:text-primary-500 transition-colors" />
-                         </div>
-                       )}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-4 pt-3 border-t border-surface-50 grid grid-cols-2 gap-4">
-                  <div>
-                    <div className="text-xs text-surface-400 mb-0.5">Последняя покупка</div>
-                    <div className="text-sm font-medium text-surface-700">
-                      {new Date(product.lastPurchase).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}
-                    </div>
-                  </div>
-                  {product.avgDays && (
-                    <div>
-                      <div className="text-xs text-surface-400 mb-0.5">Частота</div>
-                      <div className="text-sm font-medium text-surface-700">
-                        ~{product.avgDays} дн.
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-        
-        {!productsLoading && hasMoreProducts && processedProducts.length > 0 && loadMoreProducts && (
-          <div className="flex justify-center pt-4">
-            <button
-              onClick={() => loadMoreProducts(20)}
-              disabled={loadingMoreProducts}
-              className="px-8 py-3 rounded-2xl font-semibold bg-white border border-surface-200 text-surface-900 shadow-sm hover:bg-surface-50 transition-all active:scale-95 disabled:opacity-50"
-            >
-              {loadingMoreProducts ? <Loader2 className="animate-spin" /> : 'Загрузить еще'}
-            </button>
-          </div>
-        )}
-
-        <div className="bg-gradient-to-br from-primary-900 to-surface-900 rounded-[24px] p-6 text-white shadow-xl">
-          <div className="flex items-center gap-4">
-            <div className="bg-white/10 p-3 rounded-2xl backdrop-blur-sm">
-              <ShoppingCart size={24} className="text-primary-300" />
-            </div>
-            <div>
-              <div className="text-surface-300 text-sm font-medium mb-1">Итого в списке</div>
-              <div className="text-2xl font-bold">{processedProducts.length} <span className="text-base font-normal text-surface-400">товаров</span></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
   const handleDeleteReceiptAction = async (receiptId: number) => {
     await deleteReceipt(receiptId);
     await recalculateAllAnalytics();
@@ -1163,7 +473,24 @@ const GroceryTrackerApp = () => {
       {/* Content */}
       <div className="flex-1 overflow-y-auto no-scrollbar">
         <div className="max-w-md mx-auto px-4 sm:px-6 py-6 pb-32">
-          {activeTab === 'home' && <HomePage />}
+          {activeTab === 'home' && (
+            <HomePage 
+              monthlyStats={monthlyStats}
+              currentMonth={currentMonth}
+              productTypeStats={productTypeStats}
+              setProductTypeStats={setProductTypeStats}
+              familyId={selectedFamilyId}
+              onNavigateMonth={{
+                prev: goToPreviousMonth,
+                next: goToNextMonth,
+                canNext: canGoToNextMonth
+              }}
+              slideDirection={slideDirection}
+              statsError={statsError}
+              statsLoading={statsLoading}
+              refetchProducts={refetchProducts}
+            />
+          )}
           {activeTab === 'upload' && (
             <UploadPage 
               familyId={selectedFamilyId}
@@ -1177,7 +504,17 @@ const GroceryTrackerApp = () => {
               onDateUpdated={handleDateUpdated}
             />
           )}
-          {activeTab === 'products' && <ProductsPage />}
+          {activeTab === 'products' && (
+            <ProductsPage 
+              products={processedProducts}
+              loading={productsLoading}
+              hasMore={hasMoreProducts}
+              loadMore={loadMoreProducts}
+              loadingMore={loadingMoreProducts}
+              updateProduct={updateProduct}
+              familyId={selectedFamilyId}
+            />
+          )}
           {activeTab === 'account' && <AccountPage />}
         </div>
       </div>
