@@ -90,15 +90,30 @@ const AccountPage = () => {
         console.log('✅ Все кэши удалены');
       }
 
-      // 2. Очищаем localStorage (кроме критичных данных)
+      // 2. Очищаем localStorage (но сохраняем авторизацию и настройки)
       const savedTab = localStorage.getItem('groceryTrackerActiveTab');
-      console.log('🧹 Очищаем localStorage...');
+      // Сохраняем ключи авторизации Supabase
+      const supabaseKeys = Object.keys(localStorage).filter(key => key.startsWith('sb-'));
+      const supabaseItems: Record<string, string> = {};
+      supabaseKeys.forEach(key => {
+        const val = localStorage.getItem(key);
+        if (val) supabaseItems[key] = val;
+      });
+
+      console.log('🧹 Очищаем localStorage (сохраняя авторизацию)...');
       localStorage.clear();
-      // Восстанавливаем только текущую вкладку
+      
+      // Восстанавливаем вкладку
       if (savedTab) {
         localStorage.setItem('groceryTrackerActiveTab', savedTab);
       }
-      console.log('✅ localStorage очищен');
+      
+      // Восстанавливаем авторизацию Supabase
+      Object.entries(supabaseItems).forEach(([key, val]) => {
+        localStorage.setItem(key, val);
+      });
+      
+      console.log('✅ localStorage очищен, авторизация сохранена');
 
       // 3. Пересчитываем всю аналитику
       console.log('📊 Пересчитываем аналитику...');
