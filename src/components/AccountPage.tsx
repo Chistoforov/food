@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { SupabaseService } from '../services/supabaseService'
 import { UserProfile, FamilyInvitation } from '../lib/supabase'
-import { LogOut, Plus, Mail, X, Check, Loader2, Users, Globe, Trash2, RefreshCw } from 'lucide-react'
+import { LogOut, Plus, Mail, X, Check, Loader2, Users, Globe, RefreshCw } from 'lucide-react'
 import { useMonthlyStats } from '../hooks/useSupabaseData'
 
 const LANGUAGES = [
