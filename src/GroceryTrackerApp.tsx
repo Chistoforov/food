@@ -760,13 +760,13 @@ const GroceryTrackerApp = () => {
                 let statusColor = "text-slate-500";
                 
                 if (typeStatus === 'ending-soon') {
-                  cardStyle = "bg-rose-50/50 border-rose-100 shadow-sm ring-1 ring-rose-100 hover:shadow-md hover:bg-rose-50";
-                  iconBg = "bg-white text-rose-500 shadow-sm";
-                  statusColor = "text-rose-600";
+                  cardStyle = "bg-white border-rose-100 shadow-[0_8px_20px_-6px_rgba(244,63,94,0.15)] hover:shadow-[0_12px_24px_-6px_rgba(244,63,94,0.2)] hover:-translate-y-1 ring-1 ring-rose-50";
+                  iconBg = "bg-gradient-to-br from-rose-500 to-red-600 text-white shadow-lg shadow-rose-500/30";
+                  statusColor = "text-rose-600 bg-rose-50 px-2.5 py-1 rounded-lg border border-rose-100 inline-block mt-1";
                 } else if (typeStatus === 'ok') {
-                  cardStyle = "bg-white border-slate-100 shadow-sm hover:shadow-md hover:border-indigo-100";
-                  iconBg = "bg-emerald-50 text-emerald-600";
-                  statusColor = "text-emerald-600";
+                  cardStyle = "bg-white border-slate-100 shadow-sm hover:shadow-md hover:border-indigo-100 hover:-translate-y-0.5";
+                  iconBg = "bg-slate-50 text-slate-400";
+                  statusColor = "text-slate-400";
                 }
                 
                 return (
@@ -810,9 +810,9 @@ const GroceryTrackerApp = () => {
                           <button
                             onClick={() => handleVirtualPurchase(type)}
                             disabled={isLoading}
-                            className="px-4 py-2.5 rounded-xl bg-emerald-50 text-emerald-600 text-sm font-bold hover:bg-emerald-100 transition-colors flex items-center justify-center gap-2"
+                            className="px-4 py-2.5 rounded-xl bg-emerald-500 text-white text-sm font-bold hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20 active:scale-95 flex items-center justify-center gap-2"
                           >
-                             <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
+                             <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} strokeWidth={2.5} />
                              <span>В наличии</span>
                           </button>
                         )}
