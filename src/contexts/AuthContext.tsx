@@ -85,7 +85,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                 .eq('id', userId)
                 .single()
              
-             if (retryError) throw retryError
+             if (retryError) {
+                // Last resort: Try to create profile manually via RPC
+                console.log('⚠️ Profile not found after retry. Attempting to create via RPC...');
+                const { data: newProfile, error: rpcError } = await supabase.rpc('create_my_profile');
+                
+                if (rpcError) {
+                   console.error('❌ Failed to create profile via RPC:', rpcError);
+                   throw retryError;
+                }
+                
+                if (newProfile) {
+                   console.log('✅ Profile created successfully via RPC');
+                   setProfile(newProfile as UserProfile);
+                   return;
+                }
+             }
              setProfile(retryData)
         } else {
             throw error
