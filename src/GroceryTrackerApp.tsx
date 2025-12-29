@@ -1,8 +1,7 @@
-import { useState, useRef, useEffect } from 'react';
-import { Camera, ShoppingCart, Home, Clock, AlertCircle, CheckCircle, Edit2, Save, X, Upload, Loader2, XCircle, Trash2, ChevronLeft, ChevronRight, Eye, Calendar, RefreshCw, AlertTriangle, Info, Sparkles, User, Snowflake } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ShoppingCart, Home, Clock, AlertCircle, CheckCircle, Edit2, Save, X, Loader2, Trash2, ChevronLeft, ChevronRight, RefreshCw, AlertTriangle, User, Snowflake, Camera } from 'lucide-react';
 import { useProducts, useReceipts, useMonthlyStats } from './hooks/useSupabaseData';
 import { SupabaseService } from './services/supabaseService';
-import type { ProductHistory, Product } from './lib/supabase';
 import ConfirmationModal from './components/ConfirmationModal';
 import ReceiptLanguageModal from './components/ReceiptLanguageModal';
 import PWAInstallButton from './components/PWAInstallButton';
