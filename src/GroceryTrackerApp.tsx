@@ -747,20 +747,6 @@ const GroceryTrackerApp = () => {
           </div>
         )}
         
-        {/* Кнопка обновления */}
-        <button
-          onClick={async () => {
-            try {
-              await recalculateStats(currentMonth.month, currentMonth.year);
-            } catch (error) {
-              console.error('Ошибка пересчета статистики:', error);
-            }
-          }}
-          disabled={statsLoading}
-          className={`absolute top-6 right-16 p-3 rounded-2xl text-white/80 hover:text-white hover:bg-white/20 transition-all active:scale-95 backdrop-blur-sm ${statsLoading ? 'opacity-50' : ''}`}
-        >
-          <RefreshCw size={20} className={statsLoading ? 'animate-spin' : ''} />
-        </button>
       </div>
 
       {/* Обзор по типам продуктов */}
