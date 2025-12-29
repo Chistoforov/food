@@ -132,6 +132,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }
 
   const signOut = async () => {
+    // Устанавливаем флаг, что после следующего входа нужно сбросить кэш
+    localStorage.setItem('needs_cache_reset', 'true')
+    
     await supabase.auth.signOut()
     setProfile(null)
     setUser(null)

@@ -4,6 +4,7 @@ import { SupabaseService } from '../services/supabaseService'
 import { UserProfile, FamilyInvitation } from '../lib/supabase'
 import { LogOut, Plus, Mail, X, Check, Loader2, Users, Globe, RefreshCw } from 'lucide-react'
 import { useMonthlyStats } from '../hooks/useSupabaseData'
+import { clearAppCache } from '../utils/cacheHelper'
 
 const LANGUAGES = [
   { code: 'Russian', label: 'Русский (Russian)' },
@@ -79,67 +80,9 @@ const AccountPage = () => {
       setIsClearingCache(true);
       console.log('🧹 Начинаем очистку кэша...');
 
-      // 1. Очищаем все кэши браузера
-      if ('caches' in window) {
-        const cacheNames = await caches.keys();
-        console.log('📦 Найдено кэшей:', cacheNames.length);
-        await Promise.all(cacheNames.map(name => {
-          console.log('🗑️ Удаляем кэш:', name);
-          return caches.delete(name);
-        }));
-        console.log('✅ Все кэши удалены');
-      }
-
-      // 2. Очищаем localStorage (но сохраняем авторизацию и настройки)
-      const savedTab = localStorage.getItem('groceryTrackerActiveTab');
-      // Сохраняем ключи авторизации Supabase
-      const supabaseKeys = Object.keys(localStorage).filter(key => key.startsWith('sb-'));
-      const supabaseItems: Record<string, string> = {};
-      supabaseKeys.forEach(key => {
-        const val = localStorage.getItem(key);
-        if (val) supabaseItems[key] = val;
-      });
-
-      console.log('🧹 Очищаем localStorage (сохраняя авторизацию)...');
-      localStorage.clear();
-      
-      // Восстанавливаем вкладку
-      if (savedTab) {
-        localStorage.setItem('groceryTrackerActiveTab', savedTab);
-      }
-      
-      // Восстанавливаем авторизацию Supabase
-      Object.entries(supabaseItems).forEach(([key, val]) => {
-        localStorage.setItem(key, val);
-      });
-      
-      console.log('✅ localStorage очищен, авторизация сохранена');
-
-      // 3. Пересчитываем всю аналитику
-      console.log('📊 Пересчитываем аналитику...');
-      // Note: we can't easily use the hook function here directly if we're not inside the context properly or if we want to be safe
-      // but we imported useMonthlyStats hook above, so we can try to use recalculateAllAnalytics from it if available
-      // OR better, use SupabaseService directly if possible, but recalculateAllAnalytics is likely a hook wrapper around a stored procedure
-      
-      // Let's call the stored procedure directly via SupabaseService if we added it there, or rely on the hook
-      if (recalculateAllAnalytics) {
-         await recalculateAllAnalytics();
-      } else {
-         // Fallback if hook isn't available or working
-         console.warn('⚠️ Hook recalculateAllAnalytics not available, skipping DB recalculation');
-      }
-      
-      console.log('✅ Аналитика пересчитана');
-
-      // 4. Обновляем Service Worker
-      if ('serviceWorker' in navigator) {
-        console.log('🔄 Обновляем Service Worker...');
-        const registrations = await navigator.serviceWorker.getRegistrations();
-        for (const registration of registrations) {
-          await registration.update();
-        }
-        console.log('✅ Service Worker обновлен');
-      }
+      // Используем общую функцию очистки
+      // true - сохраняем авторизацию
+      await clearAppCache(profile?.family_id, true);
 
       setSuccess('Кэш очищен! Приложение перезагрузится...');
       

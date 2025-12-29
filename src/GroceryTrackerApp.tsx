@@ -8,6 +8,7 @@ import ReceiptLanguageModal from './components/ReceiptLanguageModal';
 import PWAInstallButton from './components/PWAInstallButton';
 // import { getColorScheme } from './components/ProductTypePatterns';
 import { useAuth } from './contexts/AuthContext';
+import { clearAppCache } from './utils/cacheHelper';
 import LoginPage from './components/LoginPage';
 import AccountPage from './components/AccountPage';
 
@@ -22,6 +23,32 @@ const GroceryTrackerApp = () => {
   const { user, profile, loading: authLoading } = useAuth();
   const [showLanguageModal, setShowLanguageModal] = useState(false);
   const [slideDirection, setSlideDirection] = useState<'left' | 'right'>('right');
+
+  // Автоматическая очистка кэша при входе (если был установлен флаг)
+  useEffect(() => {
+    const checkAndClearCache = async () => {
+      const needsReset = localStorage.getItem('needs_cache_reset');
+      
+      // Ждем пока загрузится профиль, так как нам нужен family_id для пересчета аналитики
+      if (needsReset === 'true' && profile?.family_id) {
+        console.log('🧹 Обнаружен флаг сброса кэша после входа. Выполняем очистку...');
+        
+        // Удаляем флаг СРАЗУ, чтобы избежать циклов
+        localStorage.removeItem('needs_cache_reset');
+        
+        try {
+          // Очищаем кэш, сохраняя авторизацию (true)
+          await clearAppCache(profile.family_id, true);
+          console.log('✅ Кэш очищен, перезагрузка...');
+          window.location.reload();
+        } catch (e) {
+          console.error('❌ Ошибка при авто-очистке кэша:', e);
+        }
+      }
+    };
+    
+    checkAndClearCache();
+  }, [profile]);
 
   // Check for receipt language setting
   useEffect(() => {
@@ -1521,41 +1548,9 @@ const GroceryTrackerApp = () => {
         setIsClearingCache(true);
         console.log('🧹 Начинаем очистку кэша...');
 
-        // 1. Очищаем все кэши браузера
-        if ('caches' in window) {
-          const cacheNames = await caches.keys();
-          console.log('📦 Найдено кэшей:', cacheNames.length);
-          await Promise.all(cacheNames.map(name => {
-            console.log('🗑️ Удаляем кэш:', name);
-            return caches.delete(name);
-          }));
-          console.log('✅ Все кэши удалены');
-        }
-
-        // 2. Очищаем localStorage (кроме критичных данных)
-        const savedTab = localStorage.getItem('groceryTrackerActiveTab');
-        console.log('🧹 Очищаем localStorage...');
-        localStorage.clear();
-        // Восстанавливаем только текущую вкладку
-        if (savedTab) {
-          localStorage.setItem('groceryTrackerActiveTab', savedTab);
-        }
-        console.log('✅ localStorage очищен');
-
-        // 3. Пересчитываем всю аналитику
-        console.log('📊 Пересчитываем аналитику...');
-        await recalculateAllAnalytics();
-        console.log('✅ Аналитика пересчитана');
-
-        // 4. Обновляем Service Worker
-        if ('serviceWorker' in navigator) {
-          console.log('🔄 Обновляем Service Worker...');
-          const registrations = await navigator.serviceWorker.getRegistrations();
-          for (const registration of registrations) {
-            await registration.update();
-          }
-          console.log('✅ Service Worker обновлен');
-        }
+        // Используем общую функцию очистки кэша
+        // true - сохраняем авторизацию (чтобы не разлогинивало)
+        await clearAppCache(selectedFamilyId, true);
 
         setSuccessMessage('Кэш очищен! Аналитика пересчитана. Приложение обновлено.');
         setShowSuccessMessage(true);
