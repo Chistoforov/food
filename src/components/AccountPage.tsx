@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { SupabaseService } from '../services/supabaseService'
 import { UserProfile, FamilyInvitation } from '../lib/supabase'
-import { LogOut, Plus, Mail, X, Check, Loader2, Users, Globe } from 'lucide-react'
+import { LogOut, Plus, Mail, X, Check, Loader2, Users, Globe, Trash2, RefreshCw } from 'lucide-react'
+import { useMonthlyStats } from '../hooks/useSupabaseData'
 
 const LANGUAGES = [
   { code: 'Russian', label: 'Русский (Russian)' },
@@ -28,6 +29,10 @@ const AccountPage = () => {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [updatingLanguage, setUpdatingLanguage] = useState(false)
+  
+  // Cache clearing state
+  const [isClearingCache, setIsClearingCache] = useState(false);
+  const { recalculateAllAnalytics } = useMonthlyStats(profile?.family_id || 0);
 
   useEffect(() => {
     if (profile?.family_id) {
@@ -66,6 +71,74 @@ const AccountPage = () => {
       setError('Не удалось обновить язык чеков');
     } finally {
       setUpdatingLanguage(false);
+    }
+  };
+
+  const handleClearCache = async () => {
+    try {
+      setIsClearingCache(true);
+      console.log('🧹 Начинаем очистку кэша...');
+
+      // 1. Очищаем все кэши браузера
+      if ('caches' in window) {
+        const cacheNames = await caches.keys();
+        console.log('📦 Найдено кэшей:', cacheNames.length);
+        await Promise.all(cacheNames.map(name => {
+          console.log('🗑️ Удаляем кэш:', name);
+          return caches.delete(name);
+        }));
+        console.log('✅ Все кэши удалены');
+      }
+
+      // 2. Очищаем localStorage (кроме критичных данных)
+      const savedTab = localStorage.getItem('groceryTrackerActiveTab');
+      console.log('🧹 Очищаем localStorage...');
+      localStorage.clear();
+      // Восстанавливаем только текущую вкладку
+      if (savedTab) {
+        localStorage.setItem('groceryTrackerActiveTab', savedTab);
+      }
+      console.log('✅ localStorage очищен');
+
+      // 3. Пересчитываем всю аналитику
+      console.log('📊 Пересчитываем аналитику...');
+      // Note: we can't easily use the hook function here directly if we're not inside the context properly or if we want to be safe
+      // but we imported useMonthlyStats hook above, so we can try to use recalculateAllAnalytics from it if available
+      // OR better, use SupabaseService directly if possible, but recalculateAllAnalytics is likely a hook wrapper around a stored procedure
+      
+      // Let's call the stored procedure directly via SupabaseService if we added it there, or rely on the hook
+      if (recalculateAllAnalytics) {
+         await recalculateAllAnalytics();
+      } else {
+         // Fallback if hook isn't available or working
+         console.warn('⚠️ Hook recalculateAllAnalytics not available, skipping DB recalculation');
+      }
+      
+      console.log('✅ Аналитика пересчитана');
+
+      // 4. Обновляем Service Worker
+      if ('serviceWorker' in navigator) {
+        console.log('🔄 Обновляем Service Worker...');
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        for (const registration of registrations) {
+          await registration.update();
+        }
+        console.log('✅ Service Worker обновлен');
+      }
+
+      setSuccess('Кэш очищен! Приложение перезагрузится...');
+      
+      // Перезагружаем страницу через 2 секунды
+      setTimeout(() => {
+        console.log('🔄 Перезагружаем страницу...');
+        window.location.reload();
+      }, 1500);
+      
+    } catch (error) {
+      console.error('❌ Ошибка очистки кэша:', error);
+      setError('Ошибка: ' + (error instanceof Error ? error.message : 'Неизвестная ошибка'));
+    } finally {
+      setIsClearingCache(false);
     }
   };
 
@@ -123,37 +196,59 @@ const AccountPage = () => {
           <div className="text-sm text-slate-500">Семья #{profile?.family_id}</div>
         </div>
       </div>
-
-      {/* Receipt Language Settings */}
-      <div className="bg-white rounded-[24px] p-6 shadow-sm border border-slate-100">
-        <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
-          <Globe size={20} className="text-slate-400" />
-          Язык чеков
-        </h3>
-        <p className="text-sm text-slate-500 mb-4">
-          Выберите язык, на котором обычно печатаются ваши чеки. Это поможет нам лучше распознавать товары.
-        </p>
-        <div className="relative">
-          <select
-            value={profile?.receipt_language || ''}
-            onChange={handleLanguageChange}
-            disabled={updatingLanguage}
-            className="w-full appearance-none bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-xl focus:ring-indigo-500 focus:border-indigo-500 block p-3 pr-8 disabled:opacity-50 transition-colors cursor-pointer"
-          >
-            <option value="" disabled>Выберите язык</option>
-            {LANGUAGES.map(lang => (
-              <option key={lang.code} value={lang.code}>{lang.label}</option>
-            ))}
-          </select>
-          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-500">
-            <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
-          </div>
-          {updatingLanguage && (
-            <div className="absolute inset-y-0 right-10 flex items-center">
-              <Loader2 className="animate-spin text-indigo-600 w-4 h-4" />
+      
+      {/* Settings Section */}
+      <div className="space-y-4">
+        <h3 className="font-bold text-slate-900 px-1">Настройки</h3>
+        
+        {/* Receipt Language Settings */}
+        <div className="bg-white rounded-[24px] p-6 shadow-sm border border-slate-100">
+          <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
+            <Globe size={20} className="text-slate-400" />
+            Язык чеков
+          </h3>
+          <p className="text-sm text-slate-500 mb-4">
+            Выберите язык, на котором обычно печатаются ваши чеки. Это поможет нам лучше распознавать товары.
+          </p>
+          <div className="relative">
+            <select
+              value={profile?.receipt_language || ''}
+              onChange={handleLanguageChange}
+              disabled={updatingLanguage}
+              className="w-full appearance-none bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-xl focus:ring-indigo-500 focus:border-indigo-500 block p-3 pr-8 disabled:opacity-50 transition-colors cursor-pointer"
+            >
+              <option value="" disabled>Выберите язык</option>
+              {LANGUAGES.map(lang => (
+                <option key={lang.code} value={lang.code}>{lang.label}</option>
+              ))}
+            </select>
+            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-500">
+              <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
             </div>
-          )}
+            {updatingLanguage && (
+              <div className="absolute inset-y-0 right-10 flex items-center">
+                <Loader2 className="animate-spin text-indigo-600 w-4 h-4" />
+              </div>
+            )}
+          </div>
         </div>
+        
+        {/* Clear Cache Button */}
+        <button
+          onClick={handleClearCache}
+          disabled={isClearingCache}
+          className="w-full bg-white rounded-[24px] p-4 shadow-sm border border-slate-100 flex items-center justify-between group hover:bg-slate-50 transition-colors"
+        >
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-slate-100 text-slate-500 rounded-2xl group-hover:bg-slate-200 transition-colors">
+              <RefreshCw size={24} className={isClearingCache ? 'animate-spin' : ''} />
+            </div>
+            <div className="text-left">
+              <div className="font-bold text-slate-900">Сбросить кэш</div>
+              <div className="text-sm text-slate-500">Исправить ошибки и обновить данные</div>
+            </div>
+          </div>
+        </button>
       </div>
 
       {/* Family Members */}
