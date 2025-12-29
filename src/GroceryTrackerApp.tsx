@@ -153,7 +153,6 @@ const GroceryTrackerApp = () => {
   const {
     stats: monthlyStatsData,
     loading: statsLoading,
-    recalculateStats,
     recalculateAllAnalytics,
     error: statsError,
     refetch: refetchStats
