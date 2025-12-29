@@ -744,7 +744,7 @@ const GroceryTrackerApp = () => {
         return sortedTypes.length > 0 && (
           <div className="animate-fadeIn" style={{animationDelay: '0.1s'}}>
             <h3 className="text-xl font-bold text-surface-900 mb-4 px-1">Мои продукты</h3>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-3">
               {sortedTypes.map(([type, typeData], index) => {
                 const typeStatus = typeData.status;
                 const isLoading = virtualPurchaseLoading === type;
@@ -767,45 +767,37 @@ const GroceryTrackerApp = () => {
                 return (
                   <div 
                     key={type} 
-                    className={`group relative rounded-[24px] p-4 border transition-all duration-300 hover:shadow-lg hover:-translate-y-1 ${cardStyle}`}
+                    className={`group relative rounded-[20px] p-3 border transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 ${cardStyle}`}
                     style={{ animationDelay: `${0.1 + index * 0.05}s` }}
                   >
-                    <div className="flex flex-col h-full min-h-[140px]">
-                      <div className="flex justify-between items-start mb-3">
-                         <div className={`p-2.5 rounded-2xl ${iconBg} transition-colors`}>
-                           {typeStatus === 'ending-soon' ? <AlertCircle size={20} /> : 
-                            typeStatus === 'ok' ? <CheckCircle size={20} /> : 
-                            <Clock size={20} />}
-                         </div>
-                         
-                         <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setDeleteTypeConfirm(type);
-                          }}
-                          className="opacity-0 group-hover:opacity-100 p-2 text-surface-400 hover:text-red-500 transition-all"
-                        >
-                          <Trash2 size={16} />
-                        </button>
+                    <div className="flex items-center gap-4">
+                      {/* Icon */}
+                      <div className={`p-3 rounded-2xl flex-shrink-0 ${iconBg} transition-colors`}>
+                        {typeStatus === 'ending-soon' ? <AlertCircle size={24} /> : 
+                         typeStatus === 'ok' ? <CheckCircle size={24} /> : 
+                         <Clock size={24} />}
                       </div>
 
-                      <h4 className="font-bold text-surface-900 capitalize text-lg leading-tight mb-1">{type}</h4>
-                      
-                      <div className={`text-xs font-semibold uppercase tracking-wider mb-auto ${statusColor}`}>
-                        {typeStatus === 'ending-soon' && 'Заканчивается'}
-                        {typeStatus === 'ok' && 'В наличии'}
-                        {typeStatus === 'calculating' && 'Расчет...'}
+                      {/* Content */}
+                      <div className="flex-1 min-w-0 py-1">
+                        <h4 className="font-bold text-surface-900 capitalize text-lg leading-tight truncate pr-2">{type}</h4>
+                        <div className={`text-xs font-bold uppercase tracking-wider ${statusColor} mt-0.5`}>
+                          {typeStatus === 'ending-soon' && 'Заканчивается'}
+                          {typeStatus === 'ok' && 'В наличии'}
+                          {typeStatus === 'calculating' && 'Расчет...'}
+                        </div>
                       </div>
 
-                      <div className="flex items-center gap-2 mt-4 pt-4 border-t border-black/5">
+                      {/* Action Button */}
+                      <div className="flex-shrink-0">
                         {typeStatus === 'ok' && (
                            <button
                              onClick={() => handleEarlyDepletion(type)}
                              disabled={earlyDepletionLoading === type}
-                             className="flex-1 py-2 rounded-xl bg-orange-50 text-orange-600 text-sm font-semibold hover:bg-orange-100 transition-colors flex items-center justify-center gap-1.5"
+                             className="px-4 py-2.5 rounded-xl bg-orange-50 text-orange-600 text-sm font-bold hover:bg-orange-100 transition-colors flex items-center justify-center gap-2"
                            >
-                             <AlertTriangle size={14} />
-                             <span>Кончилось</span>
+                             <AlertTriangle size={16} />
+                             <span className="hidden sm:inline">Кончилось</span>
                            </button>
                         )}
                         
@@ -813,14 +805,25 @@ const GroceryTrackerApp = () => {
                           <button
                             onClick={() => handleVirtualPurchase(type)}
                             disabled={isLoading}
-                            className="flex-1 py-2 rounded-xl bg-emerald-50 text-emerald-600 text-sm font-semibold hover:bg-emerald-100 transition-colors flex items-center justify-center gap-1.5"
+                            className="px-4 py-2.5 rounded-xl bg-emerald-50 text-emerald-600 text-sm font-bold hover:bg-emerald-100 transition-colors flex items-center justify-center gap-2"
                           >
-                             <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
-                             <span>Купил</span>
+                             <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
+                             <span>В наличии</span>
                           </button>
                         )}
                       </div>
                     </div>
+
+                    {/* Delete Button - Absolute top right */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeleteTypeConfirm(type);
+                      }}
+                      className="absolute -top-2 -right-2 opacity-0 group-hover:opacity-100 bg-white shadow-sm border border-surface-100 p-1.5 rounded-full text-surface-400 hover:text-red-500 hover:bg-red-50 transition-all z-10"
+                    >
+                      <Trash2 size={14} />
+                    </button>
                   </div>
                 );
               })}
@@ -905,7 +908,7 @@ const GroceryTrackerApp = () => {
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
         <div className="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
           {/* Header */}
-          <div className="sticky top-0 bg-white border-b border-gray-200 p-6">
+          <div className="sticky top-0 bg-white border-b border-gray-200 p-6 z-10">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold text-gray-900">Детали чека</h2>
               <button
@@ -1182,7 +1185,7 @@ const GroceryTrackerApp = () => {
     };
 
     return (
-      <div className="space-y-8 animate-fadeIn">
+      <>
         {/* Receipt Detail Modal */}
         {selectedReceiptId && (
           <ReceiptDetailModal
@@ -1192,7 +1195,8 @@ const GroceryTrackerApp = () => {
           />
         )}
 
-        <div className="flex items-center justify-between">
+        <div className="space-y-8 animate-fadeIn">
+          <div className="flex items-center justify-between">
             <h2 className="text-xl font-bold text-surface-900">Сканировать чек</h2>
             <div className="text-xs font-medium text-primary-600 bg-primary-50 px-3 py-1 rounded-full">AI Powered</div>
         </div>
@@ -1428,6 +1432,7 @@ const GroceryTrackerApp = () => {
           )}
         </div>
       </div>
+      </>
     );
   };
 

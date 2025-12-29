@@ -96,3 +96,4 @@ CREATE TRIGGER on_auth_user_created
 -- but ideally we should enable RLS on all tables.
 
 
+

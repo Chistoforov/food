@@ -26,3 +26,4 @@ After applying the migration:
 4. Try uploading a receipt - the system will now use your selected language for recognition.
 
 
+
