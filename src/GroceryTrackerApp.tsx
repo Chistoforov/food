@@ -592,7 +592,7 @@ const GroceryTrackerApp = () => {
       
       {/* Статистика за месяц */}
       <div 
-        className="relative overflow-hidden bg-gradient-to-br from-sky-400 to-blue-600 rounded-[32px] p-6 text-white shadow-xl shadow-blue-500/20 transition-all duration-300 hover:shadow-blue-500/30"
+        className="relative overflow-hidden bg-gradient-to-br from-[#8B5CF6] via-[#6366F1] to-[#3B82F6] rounded-[36px] p-6 text-white shadow-2xl shadow-indigo-500/30 transition-all duration-500 hover:shadow-indigo-500/40 ring-1 ring-white/20"
         onTouchStart={handleTouchStart}
       >
         {/* Decorative background elements */}
@@ -690,25 +690,30 @@ const GroceryTrackerApp = () => {
             )}
             
             <div className={`transition-opacity duration-300 ${statsLoading ? 'opacity-80' : 'opacity-100'}`}>
-              <div className="grid grid-cols-2 gap-6 mb-6">
-                <div className="bg-white/20 rounded-2xl p-4 backdrop-blur-md border border-white/20 shadow-lg shadow-black/5 transition-transform hover:scale-[1.02]">
-                  <div className="text-sm text-blue-50 mb-1 font-medium">Потрачено</div>
-                  <div className="text-3xl font-bold tracking-tight drop-shadow-sm">€{monthlyStats.totalSpent.toFixed(0)}<span className="text-lg text-blue-50">.{monthlyStats.totalSpent.toFixed(2).split('.')[1]}</span></div>
+              <div className="grid grid-cols-2 gap-4 mb-2">
+                <div className="bg-white/10 rounded-3xl p-5 backdrop-blur-md border border-white/10 shadow-lg shadow-black/5 transition-all duration-300 hover:bg-white/15 hover:scale-[1.02] group">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="p-2 bg-white/10 rounded-xl group-hover:bg-white/20 transition-colors">
+                      <ShoppingCart size={18} className="text-white/90" />
+                    </div>
+                    <div className="text-sm text-white/80 font-medium">Потрачено</div>
+                  </div>
+                  <div className="text-3xl font-bold tracking-tight text-white drop-shadow-sm">
+                    €{monthlyStats.totalSpent.toFixed(0)}
+                    <span className="text-lg text-white/60 font-medium">.{monthlyStats.totalSpent.toFixed(2).split('.')[1]}</span>
+                  </div>
                 </div>
-                <div className="bg-white/20 rounded-2xl p-4 backdrop-blur-md border border-white/20 shadow-lg shadow-black/5 transition-transform hover:scale-[1.02]">
-                  <div className="text-sm text-blue-50 mb-1 font-medium">Калории</div>
-                  <div className="text-3xl font-bold tracking-tight drop-shadow-sm">{(monthlyStats.totalCalories / 1000).toFixed(1)}k</div>
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-6">
-                <div>
-                  <div className="text-sm text-blue-50 mb-1 font-medium">В день</div>
-                  <div className="text-xl font-semibold tracking-tight drop-shadow-sm">{monthlyStats.avgCaloriesPerDay} <span className="text-sm font-normal text-blue-100">ккал</span></div>
-                </div>
-                <div>
-                  <div className="text-sm text-blue-50 mb-1 font-medium">Чеков</div>
-                  <div className="text-xl font-semibold tracking-tight drop-shadow-sm">{monthlyStats.receiptsCount}</div>
+
+                <div className="bg-white/10 rounded-3xl p-5 backdrop-blur-md border border-white/10 shadow-lg shadow-black/5 transition-all duration-300 hover:bg-white/15 hover:scale-[1.02] group">
+                  <div className="flex items-center gap-3 mb-2">
+                     <div className="p-2 bg-white/10 rounded-xl group-hover:bg-white/20 transition-colors">
+                      <CheckCircle size={18} className="text-white/90" />
+                    </div>
+                    <div className="text-sm text-white/80 font-medium">Чеков</div>
+                  </div>
+                  <div className="text-3xl font-bold tracking-tight text-white drop-shadow-sm">
+                    {monthlyStats.receiptsCount}
+                  </div>
                 </div>
               </div>
             </div>
@@ -750,17 +755,17 @@ const GroceryTrackerApp = () => {
                 const isLoading = virtualPurchaseLoading === type;
                 
                 // Determine styling based on status
-                let cardStyle = "bg-white border-surface-100";
-                let iconBg = "bg-surface-100 text-surface-500";
-                let statusColor = "text-surface-500";
+                let cardStyle = "bg-white border-slate-100 shadow-sm hover:shadow-md";
+                let iconBg = "bg-slate-100 text-slate-500";
+                let statusColor = "text-slate-500";
                 
                 if (typeStatus === 'ending-soon') {
-                  cardStyle = "bg-red-50 border-red-100 shadow-sm ring-1 ring-red-100";
-                  iconBg = "bg-red-100 text-red-600";
-                  statusColor = "text-red-600";
+                  cardStyle = "bg-rose-50/50 border-rose-100 shadow-sm ring-1 ring-rose-100 hover:shadow-md hover:bg-rose-50";
+                  iconBg = "bg-white text-rose-500 shadow-sm";
+                  statusColor = "text-rose-600";
                 } else if (typeStatus === 'ok') {
-                  cardStyle = "bg-white border-surface-200";
-                  iconBg = "bg-emerald-100 text-emerald-600";
+                  cardStyle = "bg-white border-slate-100 shadow-sm hover:shadow-md hover:border-indigo-100";
+                  iconBg = "bg-emerald-50 text-emerald-600";
                   statusColor = "text-emerald-600";
                 }
                 
