@@ -303,27 +303,27 @@ const HomePage: React.FC<HomePageProps> = ({
             <div className={`transition-opacity duration-300 ${statsLoading ? 'opacity-80' : 'opacity-100'}`}>
               <div className="grid grid-cols-2 gap-3 sm:gap-4 mb-2">
                 <div className="bg-white/10 rounded-3xl p-4 sm:p-5 backdrop-blur-md border border-white/10 shadow-lg shadow-black/5 transition-all duration-300 hover:bg-white/15 hover:scale-[1.02] group">
-                  <div className="flex items-center gap-2 sm:gap-3 mb-2">
-                    <div className="p-1.5 sm:p-2 bg-white/10 rounded-xl group-hover:bg-white/20 transition-colors">
-                      <ShoppingCart size={18} className="text-white/90" />
+                  <div className="flex flex-col items-start">
+                    <div className="p-2 bg-white/10 rounded-xl group-hover:bg-white/20 transition-colors mb-2">
+                      <ShoppingCart size={20} className="text-white/90" />
                     </div>
-                    <div className="text-sm text-white/80 font-medium">Потрачено</div>
-                  </div>
-                  <div className="text-2xl sm:text-3xl font-bold tracking-tight text-white drop-shadow-sm">
-                    €{monthlyStats.totalSpent.toFixed(0)}
-                    <span className="text-base sm:text-lg text-white/60 font-medium">.{monthlyStats.totalSpent.toFixed(2).split('.')[1]}</span>
+                    <div className="text-sm text-white/80 font-medium mb-0.5">Потрачено</div>
+                    <div className="text-2xl sm:text-3xl font-bold tracking-tight text-white drop-shadow-sm">
+                      €{monthlyStats.totalSpent.toFixed(0)}
+                      <span className="text-base sm:text-lg text-white/60 font-medium">.{monthlyStats.totalSpent.toFixed(2).split('.')[1]}</span>
+                    </div>
                   </div>
                 </div>
 
                 <div className="bg-white/10 rounded-3xl p-4 sm:p-5 backdrop-blur-md border border-white/10 shadow-lg shadow-black/5 transition-all duration-300 hover:bg-white/15 hover:scale-[1.02] group">
-                  <div className="flex items-center gap-2 sm:gap-3 mb-2">
-                     <div className="p-1.5 sm:p-2 bg-white/10 rounded-xl group-hover:bg-white/20 transition-colors">
-                      <CheckCircle size={18} className="text-white/90" />
+                  <div className="flex flex-col items-start">
+                    <div className="p-2 bg-white/10 rounded-xl group-hover:bg-white/20 transition-colors mb-2">
+                      <CheckCircle size={20} className="text-white/90" />
                     </div>
-                    <div className="text-sm text-white/80 font-medium">Чеков</div>
-                  </div>
-                  <div className="text-2xl sm:text-3xl font-bold tracking-tight text-white drop-shadow-sm">
-                    {monthlyStats.receiptsCount}
+                    <div className="text-sm text-white/80 font-medium mb-0.5">Чеков</div>
+                    <div className="text-2xl sm:text-3xl font-bold tracking-tight text-white drop-shadow-sm">
+                      {monthlyStats.receiptsCount}
+                    </div>
                   </div>
                 </div>
               </div>
