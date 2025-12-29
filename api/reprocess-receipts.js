@@ -13,14 +13,22 @@ if (!supabaseUrl || !supabaseKey) {
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// Perplexity API configuration
-const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY;
-const PERPLEXITY_API_URL = 'https://api.perplexity.ai/chat/completions';
+// OpenAI API configuration
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
+
+// Model parameters as requested
+const MODEL_CONFIG = {
+  model: "gpt-4.1",
+  temperature: 0,
+  top_p: 1,
+  response_format: { type: "json_object" }
+};
 
 /**
- * Parses receipt image using Perplexity API (same as process-receipt.js)
+ * Parses receipt image using OpenAI API
  */
-async function parseReceiptWithPerplexity(imageUrl) {
+async function parseReceiptWithOpenAI(imageUrl) {
   const prompt = `Проанализируй этот чек из магазина и извлеки следующую информацию в формате JSON:
 
 {
@@ -99,16 +107,16 @@ async function parseReceiptWithPerplexity(imageUrl) {
 
 ПРАВИЛО: calories = (калории на 100г/100мл) × (quantity в граммах/мл)
 
-Верни только JSON без дополнительного текста.`;
+Верни только JSON объект без дополнительного текста.`;
 
-  const response = await fetch(PERPLEXITY_API_URL, {
+  const response = await fetch(OPENAI_API_URL, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${PERPLEXITY_API_KEY}`,
+      'Authorization': `Bearer ${OPENAI_API_KEY}`,
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      model: 'sonar-pro',
+      ...MODEL_CONFIG,
       messages: [
         {
           role: 'user',
@@ -126,23 +134,23 @@ async function parseReceiptWithPerplexity(imageUrl) {
           ]
         }
       ],
-      temperature: 0.1,
       max_tokens: 2000
     })
   });
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Perplexity API error: ${response.status} ${errorText}`);
+    throw new Error(`OpenAI API error: ${response.status} ${errorText}`);
   }
 
   const data = await response.json();
   const content = data.choices[0].message.content;
   
   // Extract JSON from response
+  // OpenAI with json_object mode should return valid JSON, but we'll be safe
   const jsonMatch = content.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
-    throw new Error('No JSON found in Perplexity response');
+    throw new Error('No JSON found in OpenAI response');
   }
 
   const parsedData = JSON.parse(jsonMatch[0]);
@@ -337,8 +345,8 @@ export default async function handler(req, res) {
       try {
         console.log(`📄 Обрабатываем чек #${receipt.id} от ${receipt.date}`);
         
-        // Parse receipt with Perplexity
-        const parsedData = await parseReceiptWithPerplexity(receipt.image_url);
+        // Parse receipt with OpenAI
+        const parsedData = await parseReceiptWithOpenAI(receipt.image_url);
         
         // Update product types
         const updatedCount = await updateProductTypes(familyId, parsedData);

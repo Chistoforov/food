@@ -14,9 +14,17 @@ if (!supabaseUrl || !supabaseKey) {
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// Perplexity API configuration
-const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY;
-const PERPLEXITY_API_URL = 'https://api.perplexity.ai/chat/completions';
+// OpenAI API configuration
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
+
+// Model parameters as requested
+const MODEL_CONFIG = {
+  model: "gpt-4.1",
+  temperature: 0,
+  top_p: 1,
+  response_format: { type: "json_object" }
+};
 
 /**
  * Get existing product types with examples for the family
@@ -59,9 +67,9 @@ async function getExistingProductTypes(familyId) {
 }
 
 /**
- * Parses receipt image using Perplexity API
+ * Parses receipt image using OpenAI API
  */
-async function parseReceiptWithPerplexity(imageUrl, existingProductTypes = null, language = 'Russian') {
+async function parseReceiptWithOpenAI(imageUrl, existingProductTypes = null, language = 'Russian') {
   // Build the product type instruction with existing types if available
   let productTypeInstruction = `КРИТИЧЕСКИ ВАЖНО про productType:
   - "productType" - это ОБЩАЯ КАТЕГОРИЯ продукта, БЕЗ брендов и конкретных названий
@@ -111,9 +119,9 @@ ${existingProductTypes}
 {
   "items": [
     {
-      "name": "название продукта на языке ${language} (понятное и читаемое)",
+      "name": "название продукта на русском языке (понятное и читаемое)",
       "originalName": "оригинальное название с чека (как написано в магазине)",
-      "productType": "общая категория продукта (см. правила ниже)",
+      "productType": "общая категория продукта на русском языке (см. правила ниже)",
       "quantity": число (сколько единиц товара куплено),
       "unit": "единица измерения (кг, л, шт, г, мл)",
       "price": цена (число - ТОЧНАЯ цена из чека),
@@ -125,9 +133,9 @@ ${existingProductTypes}
 }
 
 ВАЖНО про названия:
-- "name" - это красивое название на языке ${language} (например: "Молоко 3.2% 1L", "Хлеб белый", "Яблоки")
+- "name" - это красивое название на русском языке (переведи, если нужно) (например: "Молоко 3.2% 1L", "Хлеб белый", "Яблоки")
 - "originalName" - это точное название с чека как оно написано (например: "MILK 3.2% 1L", "BREAD WHITE", "APPLES")
-- Если чек на том же языке, то оба поля могут быть одинаковыми
+- Если чек на русском, то оба поля могут быть одинаковыми
 
 ${productTypeInstruction}
 
@@ -159,16 +167,18 @@ ${productTypeInstruction}
 
 ПРАВИЛО: calories = (калории на 100г/100мл) × (quantity в граммах/мл)
 
-Верни только JSON без дополнительного текста.`;
+Верни только JSON объект без дополнительного текста и без markdown форматирования.`;
 
-  const response = await fetch(PERPLEXITY_API_URL, {
+  console.log('Sending request to OpenAI with model:', MODEL_CONFIG.model);
+
+  const response = await fetch(OPENAI_API_URL, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${PERPLEXITY_API_KEY}`,
+      'Authorization': `Bearer ${OPENAI_API_KEY}`,
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      model: 'sonar-pro',
+      ...MODEL_CONFIG,
       messages: [
         {
           role: 'user',
@@ -186,31 +196,27 @@ ${productTypeInstruction}
           ]
         }
       ],
-      temperature: 0.2,
       max_tokens: 2000
     })
   });
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(`Perplexity API error: ${response.status} - ${JSON.stringify(errorData)}`);
+    console.error('OpenAI API Error:', errorData);
+    throw new Error(`OpenAI API error: ${response.status} - ${JSON.stringify(errorData)}`);
   }
 
   const data = await response.json();
   const responseText = data.choices?.[0]?.message?.content;
   
   if (!responseText) {
-    throw new Error('No response from Perplexity API');
+    throw new Error('No response from OpenAI API');
   }
 
   // Parse JSON response
   let jsonText = responseText.trim();
   
-  // Remove <think> tags and their content
-  jsonText = jsonText.replace(/<think>[\s\S]*?<\/think>/g, '');
-  jsonText = jsonText.replace(/<[^>]+>/g, '');
-  
-  // Remove markdown code blocks
+  // Remove markdown code blocks if present (though response_format should prevent this)
   if (jsonText.startsWith('```json')) {
     jsonText = jsonText.replace(/```json\n?/g, '').replace(/```\n?$/g, '');
   } else if (jsonText.startsWith('```')) {
@@ -219,16 +225,13 @@ ${productTypeInstruction}
   
   jsonText = jsonText.trim();
 
-  // Handle escaped JSON string
+  // Handle escaped JSON string if it happens
   if ((jsonText.startsWith('"') && jsonText.endsWith('"')) || 
       (jsonText.startsWith("'") && jsonText.endsWith("'"))) {
     try {
       jsonText = JSON.parse(jsonText);
     } catch (e) {
-      jsonText = jsonText.slice(1, -1)
-        .replace(/\\"/g, '"')
-        .replace(/\\'/g, "'")
-        .replace(/\\\\/g, '\\');
+      // ignore
     }
   }
 
@@ -651,9 +654,9 @@ export default async function handler(req, res) {
       }
     }
 
-    // Parse receipt with Perplexity
+    // Parse receipt with OpenAI
     console.log('Parsing receipt:', pendingReceiptId);
-    const parsedData = await parseReceiptWithPerplexity(urlData.publicUrl, existingProductTypes, receiptLanguage);
+    const parsedData = await parseReceiptWithOpenAI(urlData.publicUrl, existingProductTypes, receiptLanguage);
 
     // Process and save receipt
     console.log('Processing receipt:', pendingReceiptId);

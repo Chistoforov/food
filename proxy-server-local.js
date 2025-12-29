@@ -1,7 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import perplexityHandler from './api/perplexity.js';
+// Perplexity/OpenAI handler removed as client-side processing is deprecated
+// import perplexityHandler from './api/perplexity.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -29,20 +30,13 @@ app.use(express.json());
 // res.status(...).json(...)
 // Express response object supports these.
 
-app.all('/api/perplexity', async (req, res) => {
-  try {
-    await perplexityHandler(req, res);
-  } catch (error) {
-    console.error('Error in proxy:', error);
-    if (!res.headersSent) {
-      res.status(500).json({ error: 'Internal Proxy Error' });
-    }
-  }
-});
+// Route removed
+// app.all('/api/perplexity', async (req, res) => { ... });
 
 app.listen(PORT, () => {
   console.log(`Proxy server running on http://localhost:${PORT}`);
   console.log(`Targeting Perplexity API with key: ${process.env.PERPLEXITY_API_KEY ? 'Present' : 'Missing'}`);
 });
+
 
 
