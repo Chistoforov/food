@@ -62,7 +62,9 @@ export class SupabaseService {
       .from('receipts')
       .select('*')
       .eq('family_id', familyId)
-      .order('date', { ascending: false })
+      // Сортируем по дате добавления (created_at), чтобы новые загрузки всегда были сверху
+      // даже если дата чека старая
+      .order('created_at', { ascending: false })
 
     if (limit !== undefined) {
       query = query.limit(limit)
