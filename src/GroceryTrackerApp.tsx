@@ -147,7 +147,8 @@ const GroceryTrackerApp = () => {
     deleteReceipt,
     loadMore: loadMoreReceipts,
     loadingMore: loadingMoreReceipts,
-    hasMore: hasMoreReceipts
+    hasMore: hasMoreReceipts,
+    refetch: refetchReceipts
   } = useReceipts(safeFamilyId);
 
   const {
@@ -278,8 +279,9 @@ const GroceryTrackerApp = () => {
         
         // Когда чек успешно обработан, автоматически обновляем статистику
         if (receipt.status === 'completed') {
-          console.log('✅ Чек обработан, автоматически обновляем статистику');
+          console.log('✅ Чек обработан, автоматически обновляем статистику и список чеков');
           refetchStats();
+          refetchReceipts();
         }
       }
     );
@@ -288,7 +290,7 @@ const GroceryTrackerApp = () => {
       console.log('🔕 Отписываемся от обновлений чеков');
       unsubscribe();
     };
-  }, [safeFamilyId, refetchStats]);
+  }, [safeFamilyId, refetchStats, refetchReceipts]);
 
   // Show loader while auth is initializing
   if (authLoading) {

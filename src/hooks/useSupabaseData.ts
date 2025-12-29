@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { SupabaseService } from '../services/supabaseService'
 import { Product, Receipt, ProductHistory, MonthlyStats } from '../lib/supabase'
 
@@ -10,7 +10,7 @@ export const useProducts = (familyId: number) => {
   const [hasMore, setHasMore] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
 
-  const fetchProducts = async (limit?: number, offset?: number, append: boolean = false) => {
+  const fetchProducts = useCallback(async (limit?: number, offset?: number, append: boolean = false) => {
     try {
       if (append) {
         setLoadingMore(true)
@@ -36,12 +36,12 @@ export const useProducts = (familyId: number) => {
       setLoading(false)
       setLoadingMore(false)
     }
-  }
+  }, [familyId])
 
-  const loadMore = async (limit: number) => {
+  const loadMore = useCallback(async (limit: number) => {
     if (!hasMore || loadingMore) return
     await fetchProducts(limit, products.length, true)
-  }
+  }, [hasMore, loadingMore, products.length, fetchProducts])
 
   const updateProduct = async (id: number, updates: Partial<Product>) => {
     try {
@@ -89,7 +89,7 @@ export const useProducts = (familyId: number) => {
       // Загружаем первые 100 продуктов при инициализации (достаточно для аналитики)
       fetchProducts(100, 0, false)
     }
-  }, [familyId])
+  }, [familyId, fetchProducts])
 
   return {
     products,
@@ -113,7 +113,7 @@ export const useReceipts = (familyId: number) => {
   const [hasMore, setHasMore] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
 
-  const fetchReceipts = async (limit?: number, offset?: number, append: boolean = false) => {
+  const fetchReceipts = useCallback(async (limit?: number, offset?: number, append: boolean = false) => {
     try {
       if (append) {
         setLoadingMore(true)
@@ -139,12 +139,12 @@ export const useReceipts = (familyId: number) => {
       setLoading(false)
       setLoadingMore(false)
     }
-  }
+  }, [familyId])
 
-  const loadMore = async (limit: number) => {
+  const loadMore = useCallback(async (limit: number) => {
     if (!hasMore || loadingMore) return
     await fetchReceipts(limit, receipts.length, true)
-  }
+  }, [hasMore, loadingMore, receipts.length, fetchReceipts])
 
   const createReceipt = async (receipt: Omit<Receipt, 'id' | 'created_at'>) => {
     try {
@@ -185,7 +185,7 @@ export const useReceipts = (familyId: number) => {
       // Загружаем первые 20 чеков при инициализации
       fetchReceipts(20, 0, false)
     }
-  }, [familyId])
+  }, [familyId, fetchReceipts])
 
   return {
     receipts,
@@ -206,7 +206,7 @@ export const useProductHistory = (productId: number, familyId: number) => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const fetchHistory = async () => {
+  const fetchHistory = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
@@ -217,7 +217,7 @@ export const useProductHistory = (productId: number, familyId: number) => {
     } finally {
       setLoading(false)
     }
-  }
+  }, [productId, familyId])
 
   const addHistory = async (historyItem: Omit<ProductHistory, 'id' | 'created_at'>) => {
     try {
@@ -235,7 +235,7 @@ export const useProductHistory = (productId: number, familyId: number) => {
     if (productId && familyId) {
       fetchHistory()
     }
-  }, [productId, familyId])
+  }, [productId, familyId, fetchHistory])
 
   return {
     history,
@@ -252,7 +252,7 @@ export const useProductTypeHistory = (productType: string | null, familyId: numb
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const fetchHistory = async () => {
+  const fetchHistory = useCallback(async () => {
     if (!productType) {
       setHistory([])
       setLoading(false)
@@ -269,7 +269,7 @@ export const useProductTypeHistory = (productType: string | null, familyId: numb
     } finally {
       setLoading(false)
     }
-  }
+  }, [productType, familyId])
 
   useEffect(() => {
     if (productType && familyId) {
@@ -278,7 +278,7 @@ export const useProductTypeHistory = (productType: string | null, familyId: numb
       setHistory([])
       setLoading(false)
     }
-  }, [productType, familyId])
+  }, [productType, familyId, fetchHistory])
 
   return {
     history,
@@ -294,7 +294,7 @@ export const useMonthlyStats = (familyId: number, month?: string, year?: number)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const fetchStats = async () => {
+  const fetchStats = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
@@ -305,7 +305,7 @@ export const useMonthlyStats = (familyId: number, month?: string, year?: number)
     } finally {
       setLoading(false)
     }
-  }
+  }, [familyId, month, year])
 
   const createOrUpdateStats = async (statsData: Omit<MonthlyStats, 'id' | 'created_at' | 'updated_at'>) => {
     try {
@@ -325,7 +325,7 @@ export const useMonthlyStats = (familyId: number, month?: string, year?: number)
     }
   }
 
-  const recalculateStats = async (month?: string, year?: number) => {
+  const recalculateStats = useCallback(async (month?: string, year?: number) => {
     try {
       setError(null)
       setLoading(true) // Показываем индикатор загрузки
@@ -354,9 +354,9 @@ export const useMonthlyStats = (familyId: number, month?: string, year?: number)
     } finally {
       setLoading(false)
     }
-  }
+  }, [familyId, fetchStats])
 
-  const recalculateAllAnalytics = async () => {
+  const recalculateAllAnalytics = useCallback(async () => {
     try {
       setError(null)
       setLoading(true) // Показываем индикатор загрузки
@@ -374,13 +374,13 @@ export const useMonthlyStats = (familyId: number, month?: string, year?: number)
     } finally {
       setLoading(false)
     }
-  }
+  }, [familyId, fetchStats])
 
   useEffect(() => {
     if (familyId) {
       fetchStats()
     }
-  }, [familyId, month, year])
+  }, [familyId, month, year, fetchStats])
 
   return {
     stats,

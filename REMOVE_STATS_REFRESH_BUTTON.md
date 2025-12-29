@@ -8,3 +8,4 @@
 ## Файлы
 - `src/GroceryTrackerApp.tsx`: удален блок кода с кнопкой `<RefreshCw />`.
 
+
