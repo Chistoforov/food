@@ -497,6 +497,8 @@ async function processReceipt(familyId, parsedData) {
           price: item.price,
           calories: item.calories,
           purchase_count: (product.purchase_count || 0) + 1,
+          // НЕ обновляем название продукта, чтобы сохранить общее название (например "Сыр")
+          // original_name обновляем, чтобы знать последнее реальное название
           original_name: item.originalName || product.original_name,
           product_type: finalProductType || product.product_type
         })
