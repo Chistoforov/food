@@ -103,11 +103,9 @@ async function probeOrders(cookies) {
 
   const trSet = new Set();
   if (loggedIn) {
-    const re1 = /trNumber=(\d{18,22})/g;
-    const re2 = /data-tr-number="(\d{18,22})"/g;
+    const re = /trNumber=(\d{20,30})/g;
     let m;
-    while ((m = re1.exec(html))) trSet.add(m[1]);
-    while ((m = re2.exec(html))) trSet.add(m[1]);
+    while ((m = re.exec(html))) trSet.add(m[1]);
   }
 
   return {
