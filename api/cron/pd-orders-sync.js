@@ -198,7 +198,11 @@ async function fetchOrderList(cookies) {
 
 async function fetchOrderDetail(trNumber, cookies) {
   const path = `/on/demandware.store/Sites-pingo-doce-Site/default/Order-Detail?trNumber=${encodeURIComponent(trNumber)}&digitalReceipt=`;
-  const r = await pdFetch(path, cookies, { 'X-Requested-With': 'XMLHttpRequest' });
+  const r = await pdFetch(path, cookies, {
+    'X-Requested-With': 'XMLHttpRequest',
+    // ВАЖНО: без Referer PD редиректит на /home/login и мы принимаем это за session-expired.
+    Referer: 'https://www.pingodoce.pt/home/area-pessoal?menu=orders',
+  });
   // Настоящий expired: редирект на login ИЛИ 401/403.
   const sessionExpired = /\/home\/login/.test(r.url) || r.status === 401 || r.status === 403;
   if (sessionExpired) return { items: [], setCookieHeaders: r.setCookieHeaders, sessionExpired: true, parseError: null };
