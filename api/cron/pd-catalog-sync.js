@@ -284,7 +284,7 @@ export default async function handler(req, res) {
       const s = await walkCategory(supabase, cookieHeader, slug, deadline);
       results.push({ category: slug, ...s });
     } catch (err) {
-      results.push({ category: slug, error: err instanceof Error ? err.message : String(err) });
+      results.push({ category: slug, error: err instanceof Error ? (err.stack || err.message) : JSON.stringify(err) });
     }
     processedIndex++;
   }
