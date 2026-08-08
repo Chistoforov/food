@@ -199,15 +199,20 @@ async function fetchOrderList(cookies) {
 async function fetchOrderDetail(trNumber, cookies) {
   const path = `/on/demandware.store/Sites-pingo-doce-Site/default/Order-Detail?trNumber=${encodeURIComponent(trNumber)}&digitalReceipt=`;
   const r = await pdFetch(path, cookies, { 'X-Requested-With': 'XMLHttpRequest' });
-  if (/\/home\/login/.test(r.url) || r.status !== 200) return { items: [], setCookieHeaders: r.setCookieHeaders, expired: true };
+  // Настоящий expired: редирект на login ИЛИ 401/403.
+  const sessionExpired = /\/home\/login/.test(r.url) || r.status === 401 || r.status === 403;
+  if (sessionExpired) return { items: [], setCookieHeaders: r.setCookieHeaders, sessionExpired: true, parseError: null };
+  // Индивидуальный glitch (не-JSON, success:false и т.п.) — не роняем весь batch.
   let json;
   try {
     json = JSON.parse(r.body);
-  } catch {
-    return { items: [], setCookieHeaders: r.setCookieHeaders, expired: true };
+  } catch (e) {
+    return { items: [], setCookieHeaders: r.setCookieHeaders, sessionExpired: false, parseError: `not-json (status=${r.status})` };
   }
-  if (!json.success || !json.html) return { items: [], setCookieHeaders: r.setCookieHeaders, expired: true };
-  return { items: parseOrderDetail(json.html), setCookieHeaders: r.setCookieHeaders, expired: false };
+  if (!json.success || !json.html) {
+    return { items: [], setCookieHeaders: r.setCookieHeaders, sessionExpired: false, parseError: 'success=false or no html' };
+  }
+  return { items: parseOrderDetail(json.html), setCookieHeaders: r.setCookieHeaders, sessionExpired: false, parseError: null };
 }
 
 // ---------- DB ----------
@@ -326,16 +331,23 @@ export default async function handler(req, res) {
   const results = [];
   let errors = 0;
 
+  let sessionExpiredMid = false;
   for (const listEntry of toProcess) {
     // Rate-limit ~350ms между запросами к PD
     await new Promise((r) => setTimeout(r, 350));
     try {
       const detail = await fetchOrderDetail(listEntry.trNumber, cookies);
-      if (detail.expired) {
+      if (detail.sessionExpired) {
         await supabase.from('pd_session').update({ status: 'expired' }).eq('family_id', PD_FAMILY_ID);
+        sessionExpiredMid = true;
         break;
       }
       if (detail.setCookieHeaders.length > 0) cookies = mergeSetCookie(cookies, detail.setCookieHeaders);
+      if (detail.parseError) {
+        errors++;
+        results.push({ tr: listEntry.trNumber, error: detail.parseError });
+        continue;
+      }
       const r = await processOrder(supabase, PD_FAMILY_ID, listEntry, detail);
       results.push({ tr: listEntry.trNumber, ...r });
     } catch (err) {
@@ -344,13 +356,12 @@ export default async function handler(req, res) {
     }
   }
 
-  // Сохраняем обновлённые cookies
+  // Сохраняем обновлённые cookies. Статус не понижаем до 'ok' если mid-run отвалилась сессия.
   await supabase
     .from('pd_session')
     .update({
       cookies_encrypted: '\\x' + encrypt(JSON.stringify(cookies)).toString('hex'),
-      status: 'ok',
-      last_success_at: new Date().toISOString(),
+      ...(sessionExpiredMid ? { status: 'expired' } : { status: 'ok', last_success_at: new Date().toISOString() }),
     })
     .eq('family_id', PD_FAMILY_ID);
 
@@ -362,7 +373,9 @@ export default async function handler(req, res) {
     processed_this_run: results.filter((r) => !r.error && !r.skipped).length,
     skipped_existing: results.filter((r) => r.skipped).length,
     errors,
-    remaining: Math.max(0, allOrders.length - existingSet.size - toProcess.length),
+    error_details: results.filter((r) => r.error).slice(0, 5),
+    remaining: Math.max(0, allOrders.length - existingSet.size - results.filter((r) => !r.error).length),
+    session_expired_mid: sessionExpiredMid,
     elapsed_ms: Date.now() - started,
     sample_results: results.slice(0, 5),
   });
