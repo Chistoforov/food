@@ -12,24 +12,11 @@ const SOFT_TIMEOUT_MS = 240_000;
 const PAGE_SIZE = 100;
 const RATE_LIMIT_MS = 350;
 
-// Известные leaf-категории верхнего уровня PD. Полный обход = ~1000-2500 товаров каждый.
-// Можно расширить/сузить; после первого прогона поймём что реально есть.
-const LEAF_CATEGORIES = [
+// Fallback список — используется если auto-discover не сработал.
+const FALLBACK_CATEGORIES = [
   'frutas-e-vegetais',
   'talho',
   'peixaria',
-  'padaria-e-pastelaria',
-  'charcutaria-e-queijos',
-  'laticinios-e-ovos',
-  'mercearia',
-  'congelados',
-  'bebidas',
-  'saude-e-beleza',
-  'higiene-e-limpeza',
-  'bebe',
-  'animais',
-  'lar',
-  'brinquedos-e-livros',
 ];
 
 // ---------- crypto ----------
@@ -67,6 +54,26 @@ async function pdFetch(path, cookieHeader, extraHeaders = {}) {
 }
 
 // ---------- HTML parsing ----------
+
+// Обходит /home/produtos/ и извлекает все leaf-slug'и (глубина >= 2 сегмента).
+// Пропускает промо / бренды / freshpage.
+async function discoverCategories(cookieHeader) {
+  const r = await pdFetch('/home/produtos/', cookieHeader);
+  if (r.status !== 200) return [];
+  const paths = new Set();
+  const re = /href="\/home\/produtos\/([^"?#]+?)"/g;
+  let m;
+  while ((m = re.exec(r.body))) {
+    const rel = m[1].replace(/\/$/, '');
+    if (!rel) continue;
+    const segments = rel.split('/');
+    if (segments.length < 2) continue; // только вложенные — parent-категории пропускаем
+    const top = segments[0];
+    if (['promocoes', 'as-nossas-marcas', 'freshpage'].includes(top)) continue;
+    paths.add(rel);
+  }
+  return [...paths].sort();
+}
 
 // Извлекает cgid из data-url кнопки "Ver mais" (Search-UpdateGrid?cgid=X&...)
 function extractCgid(html) {
@@ -289,8 +296,15 @@ export default async function handler(req, res) {
     }
   } catch {}
 
-  // Cursor: какие категории обработать. Query ?categories=a,b,c — override дефолта.
-  const requested = req.query?.categories ? String(req.query.categories).split(',') : LEAF_CATEGORIES;
+  // Cursor: какие категории обработать.
+  // ?categories=a,b,c — override; иначе auto-discover с /home/produtos/.
+  let requested;
+  if (req.query?.categories) {
+    requested = String(req.query.categories).split(',');
+  } else {
+    requested = await discoverCategories(cookieHeader);
+    if (requested.length === 0) requested = FALLBACK_CATEGORIES;
+  }
   const skipFirst = Number(req.query?.skip || 0);
   const categories = requested.slice(skipFirst);
 
@@ -314,14 +328,22 @@ export default async function handler(req, res) {
   return res.status(200).json({
     ok: true,
     elapsed_ms: Date.now() - started,
-    processed_categories: processedIndex,
-    remaining_categories: remaining,
+    discovered_total: requested.length,
+    processed_this_run: processedIndex,
+    remaining_count: remaining.length,
+    next_skip: skipFirst + processedIndex,
+    remaining_first_5: remaining.slice(0, 5),
     totals: {
       tiles: results.reduce((s, r) => s + (r.tilesParsed || 0), 0),
       upserted: results.reduce((s, r) => s + (r.upserted || 0), 0),
       price_changes: results.reduce((s, r) => s + (r.priceChanges || 0), 0),
       pages: results.reduce((s, r) => s + (r.pagesFetched || 0), 0),
     },
-    per_category: results,
+    sample_categories: results.slice(0, 8).map((r) => ({
+      category: r.category,
+      tiles: r.tilesParsed,
+      upserted: r.upserted,
+      error: r.error?.slice(0, 200),
+    })),
   });
 }
