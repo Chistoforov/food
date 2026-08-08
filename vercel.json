@@ -16,8 +16,12 @@
   ],
   "crons": [
     {
+      "path": "/api/cron/pd-orders-sync",
+      "schedule": "0 5 * * *"
+    },
+    {
       "path": "/api/recalculate-statuses",
-      "schedule": "0 1 * * *"
+      "schedule": "0 6 * * *"
     },
     {
       "path": "/api/cron/pd-probe",
