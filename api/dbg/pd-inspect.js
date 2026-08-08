@@ -59,15 +59,12 @@ export default async function handler(req, res) {
     const re = /trNumber=(\d{20,30})/g;
     let m;
     while ((m = re.exec(html))) seen.add(m[1]);
-    // Забираем ВСЕ (сортировка PD — по дате desc, но проверим через возврат)
     const all = [...seen];
-    // Возьмём 5 первых и 5 последних, чтобы увидеть диапазон
     return res.status(200).json({
       status: r.status,
       final_url: r.url,
       total: all.length,
-      first_5: all.slice(0, 5),
-      last_5: all.slice(-5),
+      all_trs: all,
     });
   }
 
