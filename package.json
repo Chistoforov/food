@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "proxy": "node proxy-server-local.js"
+    "proxy": "node proxy-server-local.js",
+    "scraper:upload-cookies": "tsx scraper/scripts/upload-cookies.ts",
+    "scraper:probe": "tsx -e \"import('./scraper/src/probe.js').then(m => m.runProbe(Number(process.env.PD_FAMILY_ID ?? 1)))\""
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.76.1",
@@ -19,12 +21,15 @@
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@types/node": "^22.10.0",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
+    "@vercel/node": "^5.0.0",
     "@vitejs/plugin-react": "^4.3.1",
     "autoprefixer": "^10.4.19",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.3",
+    "tsx": "^4.19.2",
     "typescript": "^5.5.3",
     "vite": "^5.3.1"
   }
