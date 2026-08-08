@@ -316,7 +316,8 @@ export default async function handler(req, res) {
     await supabase.from('pd_session').update({ status: 'expired' }).eq('family_id', PD_FAMILY_ID);
     return res.status(200).json({ ok: false, reason: 'session-expired' });
   }
-  if (listResult.setCookieHeaders.length > 0) cookies = mergeSetCookie(cookies, listResult.setCookieHeaders);
+  // НЕ мержим Set-Cookie от Order-List: экспериментально это ломало Order-Detail
+  // (после merge на второй запрос приходил redirect на /home/login).
 
   const allOrders = listResult.orders;
   const trs = allOrders.map((o) => o.trNumber);
