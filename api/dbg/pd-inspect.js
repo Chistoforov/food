@@ -28,8 +28,9 @@ export default async function handler(req, res) {
   if (process.env.CRON_SECRET && req.headers.authorization !== `Bearer ${process.env.CRON_SECRET}`) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
+  const listMode = req.query?.list === '1';
   const tr = req.query?.tr;
-  if (!tr) return res.status(400).json({ error: 'need ?tr=<trNumber>' });
+  if (!listMode && !tr) return res.status(400).json({ error: 'need ?tr=<trNumber> or ?list=1' });
 
   const supabase = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
   const { data: session } = await supabase
@@ -42,6 +43,33 @@ export default async function handler(req, res) {
   const cookieNames = cookies.map((c) => c.name).sort();
   const hasSecureToken = cookieNames.includes('dwsecuretoken');
   const cookieHeader = cookies.map((c) => `${c.name}=${c.value}`).join('; ');
+
+  if (listMode) {
+    const r = await fetch('https://www.pingodoce.pt/home/area-pessoal?menu=orders', {
+      redirect: 'follow',
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36',
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        Cookie: cookieHeader,
+      },
+    });
+    const html = await r.text();
+    const seen = new Set();
+    const re = /trNumber=(\d{20,30})/g;
+    let m;
+    while ((m = re.exec(html))) seen.add(m[1]);
+    // Забираем ВСЕ (сортировка PD — по дате desc, но проверим через возврат)
+    const all = [...seen];
+    // Возьмём 5 первых и 5 последних, чтобы увидеть диапазон
+    return res.status(200).json({
+      status: r.status,
+      final_url: r.url,
+      total: all.length,
+      first_5: all.slice(0, 5),
+      last_5: all.slice(-5),
+    });
+  }
 
   const path = `/on/demandware.store/Sites-pingo-doce-Site/default/Order-Detail?trNumber=${encodeURIComponent(tr)}&digitalReceipt=`;
   const r = await fetch('https://www.pingodoce.pt' + path, {
