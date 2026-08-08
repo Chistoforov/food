@@ -55,6 +55,27 @@ async function pdFetch(path, cookieHeader, extraHeaders = {}) {
 
 // ---------- HTML parsing ----------
 
+function decodeEntities(s) {
+  if (!s) return s;
+  return s
+    .replace(/&Aacute;/g, 'Á').replace(/&aacute;/g, 'á')
+    .replace(/&Eacute;/g, 'É').replace(/&eacute;/g, 'é')
+    .replace(/&Iacute;/g, 'Í').replace(/&iacute;/g, 'í')
+    .replace(/&Oacute;/g, 'Ó').replace(/&oacute;/g, 'ó')
+    .replace(/&Uacute;/g, 'Ú').replace(/&uacute;/g, 'ú')
+    .replace(/&Atilde;/g, 'Ã').replace(/&atilde;/g, 'ã')
+    .replace(/&Otilde;/g, 'Õ').replace(/&otilde;/g, 'õ')
+    .replace(/&Ntilde;/g, 'Ñ').replace(/&ntilde;/g, 'ñ')
+    .replace(/&Ccedil;/g, 'Ç').replace(/&ccedil;/g, 'ç')
+    .replace(/&Acirc;/g, 'Â').replace(/&acirc;/g, 'â')
+    .replace(/&Ecirc;/g, 'Ê').replace(/&ecirc;/g, 'ê')
+    .replace(/&Ocirc;/g, 'Ô').replace(/&ocirc;/g, 'ô')
+    .replace(/&amp;/g, '&')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&quot;/g, '"')
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)));
+}
+
 // Обходит /home/produtos/ и извлекает все leaf-slug'и (глубина >= 2 сегмента).
 // Пропускает промо / бренды / freshpage.
 async function discoverCategories(cookieHeader) {
@@ -100,10 +121,10 @@ function parseTiles(html) {
       if (item && item.item_id) {
         items.push({
           external_id: String(item.item_id),
-          name: item.item_name || '',
-          brand: item.item_brand || null,
-          category1: item.item_category || null, // подкатегория
-          category2: item.item_category2 || null, // главная категория
+          name: decodeEntities(item.item_name || ''),
+          brand: decodeEntities(item.item_brand) || null,
+          category1: decodeEntities(item.item_category) || null,
+          category2: decodeEntities(item.item_category2) || null,
           price: typeof item.price === 'number' ? item.price : parseFloat(item.price) || null,
         });
       }
