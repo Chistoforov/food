@@ -200,13 +200,16 @@ async function fetchOrderDetail(trNumber, cookies) {
   const path = `/on/demandware.store/Sites-pingo-doce-Site/default/Order-Detail?trNumber=${encodeURIComponent(trNumber)}&digitalReceipt=`;
   const r = await pdFetch(path, cookies, {
     'X-Requested-With': 'XMLHttpRequest',
-    // ВАЖНО: без Referer PD редиректит на /home/login и мы принимаем это за session-expired.
     Referer: 'https://www.pingodoce.pt/home/area-pessoal?menu=orders',
   });
-  // Настоящий expired: редирект на login ИЛИ 401/403.
-  const sessionExpired = /\/home\/login/.test(r.url) || r.status === 401 || r.status === 403;
+  // Настоящий expired: редирект на /home/login или 401. 403 — Akamai WAF на конкретный
+  // чек (наблюдалось: часть старых чеков возвращает Access Denied HTML, сессия при
+  // этом жива). Skipам эти чеки, не роняя batch.
+  const sessionExpired = /\/home\/login/.test(r.url) || r.status === 401;
   if (sessionExpired) return { items: [], setCookieHeaders: r.setCookieHeaders, sessionExpired: true, parseError: null };
-  // Индивидуальный glitch (не-JSON, success:false и т.п.) — не роняем весь batch.
+  if (r.status === 403) {
+    return { items: [], setCookieHeaders: r.setCookieHeaders, sessionExpired: false, parseError: 'access-denied-403' };
+  }
   let json;
   try {
     json = JSON.parse(r.body);
