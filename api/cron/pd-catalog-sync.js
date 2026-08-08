@@ -77,11 +77,13 @@ function extractCgid(html) {
 // Все tiles на странице → массив item-объектов из data-gtm-info.items[0]
 function parseTiles(html) {
   const items = [];
-  const re = /data-gtm-info="([^"]+)"/g;
+  // PD использует и двойные ("...") и одинарные ('...') кавычки в разных местах.
+  const re = /data-gtm-info=(["'])(.+?)\1/g;
   let m;
   while ((m = re.exec(html))) {
+    const raw = m[2];
     try {
-      const decoded = m[1]
+      const decoded = raw
         .replace(/&quot;/g, '"')
         .replace(/&amp;/g, '&')
         .replace(/&lt;/g, '<')
