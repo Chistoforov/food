@@ -128,6 +128,18 @@ function extractDetailsMap(html) {
 async function upsertBatch(supabase, batch) {
   if (batch.length === 0) return { upserted: 0, priceChanges: 0 };
 
+  // Дедуплицируем по external_id — PD часто показывает один продукт дважды
+  // на странице (featured + обычный слот). Postgres ON CONFLICT не любит
+  // дубли в одном INSERT.
+  const seen = new Set();
+  const uniqBatch = [];
+  for (const b of batch) {
+    if (seen.has(b.external_id)) continue;
+    seen.add(b.external_id);
+    uniqBatch.push(b);
+  }
+  batch = uniqBatch;
+
   // 1. Upsert catalog_products by external_id
   const rows = batch.map((b) => ({
     external_id: b.external_id,
