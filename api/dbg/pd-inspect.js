@@ -71,16 +71,40 @@ export default async function handler(req, res) {
     });
   }
 
+  const withList = req.query?.withList === '1';
+
+  const UA =
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36';
+  const commonHeaders = {
+    'User-Agent': UA,
+    Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'pt-PT,pt;q=0.9,en;q=0.8',
+    Cookie: cookieHeader,
+  };
+
+  let listStep = null;
+  if (withList) {
+    const rl = await fetch('https://www.pingodoce.pt/home/area-pessoal?menu=orders', {
+      redirect: 'follow',
+      headers: commonHeaders,
+    });
+    const listSetCookie = rl.headers.getSetCookie ? rl.headers.getSetCookie() : [];
+    const bodyHead = (await rl.text()).slice(0, 200);
+    listStep = {
+      status: rl.status,
+      final_url: rl.url,
+      set_cookie_headers: listSetCookie,
+      body_head_200: bodyHead,
+    };
+  }
+
   const path = `/on/demandware.store/Sites-pingo-doce-Site/default/Order-Detail?trNumber=${encodeURIComponent(tr)}&digitalReceipt=`;
   const r = await fetch('https://www.pingodoce.pt' + path, {
     redirect: 'follow',
     headers: {
-      'User-Agent':
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36',
-      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      'Accept-Language': 'pt-PT,pt;q=0.9,en;q=0.8',
+      ...commonHeaders,
       'X-Requested-With': 'XMLHttpRequest',
-      Cookie: cookieHeader,
+      Referer: 'https://www.pingodoce.pt/home/area-pessoal?menu=orders',
     },
   });
   const setCookieHeaders = r.headers.getSetCookie ? r.headers.getSetCookie() : [];
@@ -90,14 +114,14 @@ export default async function handler(req, res) {
     tr,
     cookie_names_in_jar: cookieNames,
     has_dwsecuretoken: hasSecureToken,
+    list_step: listStep,
     order_detail: {
       status: r.status,
       final_url: r.url,
       content_type: r.headers.get('content-type'),
       body_head_600: body.slice(0, 600),
       body_length: body.length,
-      set_cookie_count: setCookieHeaders.length,
-      set_cookie_names: setCookieHeaders.map((h) => h.split('=')[0]),
+      set_cookie_headers: setCookieHeaders,
     },
   });
 }
