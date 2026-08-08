@@ -202,11 +202,15 @@ async function upsertBatch(supabase, batch) {
 // ---------- category walker ----------
 
 async function walkCategory(supabase, cookieHeader, categorySlug, deadline) {
-  const stats = { pagesFetched: 0, tilesParsed: 0, upserted: 0, priceChanges: 0, cgid: null };
+  const stats = { pagesFetched: 0, tilesParsed: 0, upserted: 0, priceChanges: 0, cgid: null, dbg: {} };
 
   // 1. Initial fetch — получить cgid + первые tiles
   const first = await pdFetch(`/home/produtos/${categorySlug}`, cookieHeader);
   stats.pagesFetched++;
+  stats.dbg.firstStatus = first.status;
+  stats.dbg.firstUrl = first.url;
+  stats.dbg.firstBytes = first.body.length;
+  stats.dbg.firstTilesInHtml = (first.body.match(/data-gtm-info=/g) || []).length;
   const cgid = extractCgid(first.body);
   stats.cgid = cgid;
   const tiles = parseTiles(first.body);
@@ -234,6 +238,9 @@ async function walkCategory(supabase, cookieHeader, categorySlug, deadline) {
       Referer: `${BASE}/home/produtos/${categorySlug}`,
     });
     stats.pagesFetched++;
+    if (!stats.dbg.grid) {
+      stats.dbg.grid = { status: r.status, url: r.url, bytes: r.body.length, tilesInHtml: (r.body.match(/data-gtm-info=/g) || []).length };
+    }
     const pageTiles = parseTiles(r.body);
     const pageDetails = extractDetailsMap(r.body);
     for (const t of pageTiles) {
