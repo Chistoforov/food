@@ -29,7 +29,7 @@
     },
     {
       "path": "/api/cron/pd-probe",
-      "schedule": "0 11,14,17,20 * * *"
+      "schedule": "0 * * * *"
     }
   ],
   "headers": [
