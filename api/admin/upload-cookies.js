@@ -85,7 +85,7 @@ export default async function handler(req, res) {
     .from('pd_session')
     .upsert({
       family_id: PD_FAMILY_ID,
-      cookies_encrypted: encrypted,
+      cookies_encrypted: '\\x' + encrypted.toString('hex'),
       status: 'ok',
       updated_at: new Date().toISOString(),
     }, { onConflict: 'family_id' });
