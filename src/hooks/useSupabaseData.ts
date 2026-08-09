@@ -48,12 +48,6 @@ export const useProducts = (familyId: number) => {
       setError(null)
       const updatedProduct = await SupabaseService.updateProduct(id, updates)
       setProducts(prev => prev.map(p => p.id === id ? updatedProduct : p))
-      
-      // Если изменилась калорийность, пересчитываем статистику
-      if (updates.calories !== undefined) {
-        await SupabaseService.recalculateStatsForProduct(id, familyId)
-      }
-      
       return updatedProduct
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ошибка обновления продукта')

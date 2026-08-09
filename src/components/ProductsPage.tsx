@@ -12,8 +12,6 @@ interface ProcessedProduct {
   avgDays: number | null;
   predictedEnd: string | null;
   status: 'ending-soon' | 'ok' | 'calculating';
-  calories: number;
-  price: number;
   purchaseCount: number;
 }
 
@@ -36,50 +34,20 @@ const ProductsPage: React.FC<ProductsPageProps> = ({
   updateProduct,
   familyId
 }) => {
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [editedCalories, setEditedCalories] = useState<string>('');
   const [editingTypeId, setEditingTypeId] = useState<number | null>(null);
   const [editedProductType, setEditedProductType] = useState<string>('');
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string>('');
   const [isClearingCache, setIsClearingCache] = useState(false);
 
-  const startEditing = (product: ProcessedProduct) => {
-    setEditingId(product.id);
-    setEditedCalories(product.calories.toString());
-  };
-
   const startEditingType = (product: ProcessedProduct) => {
     setEditingTypeId(product.id);
     setEditedProductType(product.product_type || '');
   };
 
-  const cancelEditing = () => {
-    setEditingId(null);
-    setEditedCalories('');
-  };
-
   const cancelEditingType = () => {
     setEditingTypeId(null);
     setEditedProductType('');
-  };
-
-  const saveCalories = async (productId: number) => {
-    const newCalories = parseInt(editedCalories);
-    if (!isNaN(newCalories) && newCalories >= 0) {
-      try {
-        await updateProduct(productId, { calories: newCalories });
-        setEditingId(null);
-        setEditedCalories('');
-        
-        // Показываем уведомление о пересчете статистики
-        setSuccessMessage('Калорийность обновлена');
-        setShowSuccessMessage(true);
-        setTimeout(() => setShowSuccessMessage(false), 3000);
-      } catch (error) {
-        console.error('Ошибка обновления калорий:', error);
-      }
-    }
   };
 
   const saveProductType = async (productId: number) => {
@@ -186,9 +154,6 @@ const ProductsPage: React.FC<ProductsPageProps> = ({
                     </span>
                   </div>
                 </div>
-                <div className="text-xl font-bold text-primary-600 bg-primary-50 px-3 py-1 rounded-xl">
-                  €{product.price.toFixed(2)}
-                </div>
               </div>
 
               {/* Edit Sections */}
@@ -219,31 +184,6 @@ const ProductsPage: React.FC<ProductsPageProps> = ({
                           ) : (
                             <span className="text-sm text-surface-400 italic">Не указан</span>
                           )}
-                          <Edit2 size={14} className="text-surface-300 group-hover:text-primary-500 transition-colors" />
-                       </div>
-                     )}
-                  </div>
-                </div>
-
-                {/* Calories */}
-                <div className="flex items-center justify-between py-1">
-                  <span className="text-sm text-surface-500 font-medium">Ккал</span>
-                  <div className="flex items-center gap-2">
-                     {editingId === product.id ? (
-                       <div className="flex items-center gap-2 animate-fadeIn">
-                         <input
-                           type="number"
-                           value={editedCalories}
-                           onChange={(e) => setEditedCalories(e.target.value)}
-                           className="w-20 px-3 py-1.5 border border-primary-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500/20 bg-surface-50"
-                           autoFocus
-                         />
-                         <button onClick={() => saveCalories(product.id)} className="p-1.5 bg-emerald-100 text-emerald-600 rounded-lg"><Save size={16}/></button>
-                         <button onClick={cancelEditing} className="p-1.5 bg-surface-100 text-surface-600 rounded-lg"><X size={16}/></button>
-                       </div>
-                     ) : (
-                       <div className="flex items-center gap-2 cursor-pointer group" onClick={() => startEditing(product)}>
-                          <span className="text-sm font-semibold text-surface-900">{product.calories}</span>
                           <Edit2 size={14} className="text-surface-300 group-hover:text-primary-500 transition-colors" />
                        </div>
                      )}

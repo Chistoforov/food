@@ -2,24 +2,11 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { SupabaseService } from '../services/supabaseService'
 import { UserProfile, FamilyInvitation } from '../lib/supabase'
-import { LogOut, Plus, Mail, X, Check, Loader2, Users, Globe, RefreshCw } from 'lucide-react'
+import { LogOut, Plus, Mail, X, Check, Loader2, Users, RefreshCw } from 'lucide-react'
 import { clearAppCache } from '../utils/cacheHelper'
 
-const LANGUAGES = [
-  { code: 'Russian', label: 'Русский (Russian)' },
-  { code: 'English', label: 'English' },
-  { code: 'German', label: 'Deutsch (German)' },
-  { code: 'French', label: 'Français (French)' },
-  { code: 'Spanish', label: 'Español (Spanish)' },
-  { code: 'Portuguese', label: 'Português (Portuguese)' },
-  { code: 'Italian', label: 'Italiano (Italian)' },
-  { code: 'Ukrainian', label: 'Українська (Ukrainian)' },
-  { code: 'Kazakh', label: 'Қазақ (Kazakh)' },
-  { code: 'Belarusian', label: 'Беларуская (Belarusian)' },
-];
-
 const AccountPage = () => {
-  const { user, profile, signOut, refreshProfile } = useAuth()
+  const { user, profile, signOut } = useAuth()
   const [members, setMembers] = useState<UserProfile[]>([])
   const [invitations, setInvitations] = useState<FamilyInvitation[]>([])
   const [loading, setLoading] = useState(true)
@@ -28,8 +15,7 @@ const AccountPage = () => {
   const [inviting, setInviting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
-  const [updatingLanguage, setUpdatingLanguage] = useState(false)
-  
+
   // Cache clearing state
   const [isClearingCache, setIsClearingCache] = useState(false);
 
@@ -54,24 +40,6 @@ const AccountPage = () => {
       setLoading(false)
     }
   }
-
-  const handleLanguageChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newLang = e.target.value;
-    if (!user) return;
-    
-    try {
-      setUpdatingLanguage(true);
-      await SupabaseService.updateUserProfile(user.id, { receipt_language: newLang });
-      await refreshProfile();
-      setSuccess('Язык чеков обновлен');
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (err) {
-      console.error('Error updating language:', err);
-      setError('Не удалось обновить язык чеков');
-    } finally {
-      setUpdatingLanguage(false);
-    }
-  };
 
   const handleClearCache = async () => {
     try {
@@ -156,39 +124,7 @@ const AccountPage = () => {
       {/* Settings Section */}
       <div className="space-y-4">
         <h3 className="font-bold text-slate-900 px-1">Настройки</h3>
-        
-        {/* Receipt Language Settings */}
-        <div className="bg-white rounded-[24px] p-4 sm:p-6 shadow-sm border border-slate-100">
-          <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
-            <Globe size={20} className="text-slate-400" />
-            Язык чеков
-          </h3>
-          <p className="text-sm text-slate-500 mb-4">
-            Выберите язык, на котором обычно печатаются ваши чеки. Это поможет нам лучше распознавать товары.
-          </p>
-          <div className="relative">
-            <select
-              value={profile?.receipt_language || ''}
-              onChange={handleLanguageChange}
-              disabled={updatingLanguage}
-              className="w-full appearance-none bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-xl focus:ring-indigo-500 focus:border-indigo-500 block p-3 pr-8 disabled:opacity-50 transition-colors cursor-pointer"
-            >
-              <option value="" disabled>Выберите язык</option>
-              {LANGUAGES.map(lang => (
-                <option key={lang.code} value={lang.code}>{lang.label}</option>
-              ))}
-            </select>
-            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-500">
-              <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
-            </div>
-            {updatingLanguage && (
-              <div className="absolute inset-y-0 right-10 flex items-center">
-                <Loader2 className="animate-spin text-indigo-600 w-4 h-4" />
-              </div>
-            )}
-          </div>
-        </div>
-        
+
         {/* Clear Cache Button */}
         <button
           onClick={handleClearCache}

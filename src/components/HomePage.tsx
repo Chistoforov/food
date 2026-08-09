@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { ShoppingCart, Clock, AlertCircle, CheckCircle, Trash2, ChevronLeft, ChevronRight, RefreshCw, AlertTriangle, Snowflake } from 'lucide-react';
+import { ShoppingCart, Clock, AlertCircle, CheckCircle, Trash2, ChevronLeft, ChevronRight, RefreshCw, AlertTriangle, Snowflake, Eye, Receipt as ReceiptIcon } from 'lucide-react';
 import { SupabaseService } from '../services/supabaseService';
 import ConfirmationModal from './ConfirmationModal';
+import ReceiptDetailModal from './ReceiptDetailModal';
 import { Loader2 } from 'lucide-react';
+import { Receipt } from '../lib/supabase';
 
 interface HomePageProps {
   monthlyStats: {
@@ -22,6 +24,13 @@ interface HomePageProps {
   statsError: string | null;
   statsLoading: boolean;
   refetchProducts: () => Promise<void>;
+  receipts: Receipt[];
+  receiptsLoading: boolean;
+  hasMoreReceipts: boolean;
+  loadMoreReceipts?: (limit: number) => Promise<void>;
+  loadingMoreReceipts: boolean;
+  onDeleteReceipt: (id: number) => Promise<void>;
+  onDateUpdated: () => Promise<void>;
 }
 
 const HomePage: React.FC<HomePageProps> = ({
@@ -34,12 +43,35 @@ const HomePage: React.FC<HomePageProps> = ({
   slideDirection,
   statsError,
   statsLoading,
-  refetchProducts
+  refetchProducts,
+  receipts,
+  receiptsLoading,
+  hasMoreReceipts,
+  loadMoreReceipts,
+  loadingMoreReceipts,
+  onDeleteReceipt,
+  onDateUpdated
 }) => {
   const [deleteTypeConfirm, setDeleteTypeConfirm] = useState<string | null>(null);
   const [deletingType, setDeletingType] = useState(false);
   const [virtualPurchaseLoading, setVirtualPurchaseLoading] = useState<string | null>(null);
   const [earlyDepletionLoading, setEarlyDepletionLoading] = useState<string | null>(null);
+  const [selectedReceiptId, setSelectedReceiptId] = useState<number | null>(null);
+  const [deleteConfirmReceiptId, setDeleteConfirmReceiptId] = useState<number | null>(null);
+  const [deletingReceiptId, setDeletingReceiptId] = useState<number | null>(null);
+
+  const handleDeleteReceipt = async (receiptId: number) => {
+    try {
+      setDeletingReceiptId(receiptId);
+      await onDeleteReceipt(receiptId);
+      setDeleteConfirmReceiptId(null);
+    } catch (error) {
+      console.error('❌ Ошибка удаления чека:', error);
+      alert('Не удалось удалить чек. Попробуйте ещё раз.');
+    } finally {
+      setDeletingReceiptId(null);
+    }
+  };
 
   // Отслеживаем изменения в productTypeStats
   useEffect(() => {
@@ -332,6 +364,16 @@ const HomePage: React.FC<HomePageProps> = ({
         )}
       </div>
 
+      {selectedReceiptId && (
+        <ReceiptDetailModal
+          receiptId={selectedReceiptId}
+          familyId={familyId}
+          receipts={receipts}
+          onClose={() => setSelectedReceiptId(null)}
+          onDateUpdated={onDateUpdated}
+        />
+      )}
+
       {Object.keys(productTypeStats).length > 0 && (() => {
         const sortedTypes = Object.entries(productTypeStats).sort(([, a], [, b]) => {
           const statusPriority = { 'ending-soon': 0, 'ok': 1, 'calculating': 2 };
@@ -430,6 +472,105 @@ const HomePage: React.FC<HomePageProps> = ({
           </div>
         );
       })()}
+
+      {/* Чеки */}
+      <div className="animate-fadeIn" style={{animationDelay: '0.2s'}}>
+        <div className="flex items-center justify-between mb-4 px-1">
+          <h3 className="text-xl font-bold text-surface-900">Чеки</h3>
+          {receipts.length > 0 && (
+            <span className="text-xs font-bold bg-surface-100 text-surface-500 px-2 py-1 rounded-lg">{receipts.length}</span>
+          )}
+        </div>
+
+        <div className="space-y-3">
+          {receiptsLoading ? (
+            <div className="flex flex-col items-center justify-center py-12 gap-3">
+              <Loader2 className="animate-spin text-surface-400" size={24} />
+            </div>
+          ) : receipts.length === 0 ? (
+            <div className="text-center py-12 text-surface-400 bg-surface-50 rounded-[24px] border border-dashed border-surface-200">
+              <ReceiptIcon size={32} className="mx-auto mb-3 opacity-30" />
+              <p className="font-medium">Пока нет чеков</p>
+            </div>
+          ) : (
+            receipts.map((receipt, index) => (
+              <div
+                key={receipt.id}
+                className="bg-white rounded-[24px] p-5 border border-surface-100 hover:shadow-lg hover:border-surface-200 transition-all duration-300 group"
+                style={{ animationDelay: `${index * 0.05}s` }}
+              >
+                {deleteConfirmReceiptId === receipt.id ? (
+                  <div className="space-y-4 animate-fadeIn">
+                    <div className="flex items-center gap-3 text-red-600 bg-red-50 p-3 rounded-xl">
+                      <AlertCircle size={20} />
+                      <span className="font-bold text-sm">Удалить этот чек?</span>
+                    </div>
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => handleDeleteReceipt(receipt.id)}
+                        disabled={deletingReceiptId === receipt.id}
+                        className="flex-1 bg-red-600 text-white px-4 py-3 rounded-xl font-bold text-sm hover:bg-red-700 transition-colors shadow-lg shadow-red-200"
+                      >
+                        {deletingReceiptId === receipt.id ? <Loader2 className="animate-spin mx-auto"/> : 'Удалить'}
+                      </button>
+                      <button
+                        onClick={() => setDeleteConfirmReceiptId(null)}
+                        disabled={deletingReceiptId === receipt.id}
+                        className="flex-1 bg-surface-100 text-surface-900 px-4 py-3 rounded-xl font-bold text-sm hover:bg-surface-200 transition-colors"
+                      >
+                        Отмена
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <div
+                      className="flex-1 cursor-pointer"
+                      onClick={() => setSelectedReceiptId(receipt.id)}
+                    >
+                      <div className="font-bold text-surface-900 text-lg mb-0.5">
+                        {new Date(receipt.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}
+                      </div>
+                      <div className="text-sm text-surface-500 font-medium">{receipt.items_count} товаров</div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="text-right">
+                        <div className="font-bold text-primary-600 text-lg">€{Number(receipt.total_amount || 0).toFixed(2)}</div>
+                      </div>
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => setSelectedReceiptId(receipt.id)}
+                          className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-colors"
+                        >
+                          <Eye size={20} />
+                        </button>
+                        <button
+                          onClick={() => setDeleteConfirmReceiptId(receipt.id)}
+                          className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors"
+                        >
+                          <Trash2 size={20} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+
+        {!receiptsLoading && hasMoreReceipts && receipts.length > 0 && loadMoreReceipts && (
+          <div className="flex justify-center mt-6">
+            <button
+              onClick={() => loadMoreReceipts(20)}
+              disabled={loadingMoreReceipts}
+              className="px-8 py-3 rounded-2xl font-bold bg-white border border-surface-200 text-surface-900 shadow-sm hover:bg-surface-50 transition-all active:scale-95"
+            >
+              {loadingMoreReceipts ? <Loader2 className="animate-spin" /> : 'Показать ещё'}
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

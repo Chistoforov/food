@@ -1,4 +1,4 @@
-import { supabase, Product, Receipt, ProductHistory, MonthlyStats, PendingReceipt, UserProfile } from '../lib/supabase'
+import { supabase, Product, Receipt, ProductHistory, MonthlyStats, UserProfile } from '../lib/supabase'
 
 export class SupabaseService {
   // Работа с продуктами
@@ -406,28 +406,10 @@ export class SupabaseService {
     }
   }
 
-  // Альтернативный метод пересчета статистики без RPC
+  // Альтернативный метод пересчета статистики без RPC — сумма чеков за месяц
   static async recalculateMonthlyStatsAlternative(familyId: number, month: string, year: number): Promise<void> {
     console.log('🔄 Используем альтернативный метод пересчета статистики для:', { month, year })
-    
-    // Получаем все покупки за указанный месяц
-    const { data: history, error: historyError } = await supabase
-      .from('product_history')
-      .select(`
-        quantity,
-        date,
-        products(calories)
-      `)
-      .eq('family_id', familyId)
-      .gte('date', `${year}-${month.padStart(2, '0')}-01`)
-      .lt('date', `${year}-${String(parseInt(month) + 1).padStart(2, '0')}-01`)
 
-    if (historyError) {
-      console.error('❌ Ошибка получения истории покупок:', historyError)
-      throw historyError
-    }
-
-    // Получаем все чеки за указанный месяц
     const { data: receipts, error: receiptsError } = await supabase
       .from('receipts')
       .select('total_amount')
@@ -440,46 +422,10 @@ export class SupabaseService {
       throw receiptsError
     }
 
-    // Вычисляем статистику
     const totalSpent = receipts?.reduce((sum, receipt) => sum + (receipt.total_amount || 0), 0) || 0
-    const totalCalories = history?.reduce((sum, item: any) => {
-      // Проверяем, что products существует и имеет calories
-      const calories = (item.products && typeof item.products.calories === 'number') ? item.products.calories : 0
-      const quantity = item.quantity || 0
-      return sum + (calories * quantity)
-    }, 0) || 0
-    
-    const daysInMonth = new Date(year, parseInt(month), 0).getDate()
-    const avgCaloriesPerDay = daysInMonth > 0 ? Math.round(totalCalories / daysInMonth) : 0
     const receiptsCount = receipts?.length || 0
-
-    console.log('📊 Вычисленная статистика:', {
-      totalSpent,
-      totalCalories,
-      avgCaloriesPerDay,
-      receiptsCount,
-      daysInMonth,
-      historyLength: history?.length || 0,
-      receiptsData: receipts?.map(r => r.total_amount),
-      historyData: history?.map((h: any) => ({ 
-        calories: h.products?.calories, 
-        quantity: h.quantity 
-      }))
-    })
-
-    // Обновляем или создаем запись статистики
     const monthKey = `${year}-${month.padStart(2, '0')}`
-    
-    console.log('💾 Сохраняем статистику:', {
-      family_id: familyId,
-      month: monthKey,
-      year: year,
-      total_spent: totalSpent,
-      total_calories: totalCalories,
-      avg_calories_per_day: avgCaloriesPerDay,
-      receipts_count: receiptsCount
-    })
-    
+
     const { error: upsertError } = await supabase
       .from('monthly_stats')
       .upsert({
@@ -487,8 +433,6 @@ export class SupabaseService {
         month: monthKey,
         year: year,
         total_spent: totalSpent,
-        total_calories: totalCalories,
-        avg_calories_per_day: avgCaloriesPerDay,
         receipts_count: receiptsCount
       }, {
         onConflict: 'family_id,month,year'
@@ -499,118 +443,7 @@ export class SupabaseService {
       throw upsertError
     }
 
-    console.log('✅ Статистика успешно пересчитана альтернативным методом')
-  }
-
-  // Метод для пересчета статистики при изменении калорийности продукта
-  static async recalculateStatsForProduct(productId: number, familyId: number): Promise<void> {
-    // Получаем все месяцы, где есть покупки этого продукта
-    const history = await this.getProductHistory(productId, familyId)
-    
-    if (history.length === 0) return
-
-    // Получаем уникальные месяцы и годы
-    const months = new Set<string>()
-    history.forEach(item => {
-      const date = new Date(item.date)
-      const year = date.getFullYear()
-      const month = String(date.getMonth() + 1).padStart(2, '0')
-      months.add(`${year}-${month}`)
-    })
-
-    // Пересчитываем статистику для каждого месяца
-    for (const monthYear of months) {
-      const [year, month] = monthYear.split('-')
-      await this.recalculateMonthlyStats(familyId, month, parseInt(year))
-    }
-  }
-
-  // Метод для обработки распарсенного чека
-  static async processReceipt(
-    familyId: number,
-    items: Array<{
-      name: string
-      originalName?: string
-      quantity: number
-      price: number
-      calories: number
-    }>,
-    total: number,
-    date: string
-  ): Promise<Receipt> {
-    // Создаем чек
-    const receipt = await this.createReceipt({
-      family_id: familyId,
-      date: date,
-      items_count: items.length,
-      total_amount: total,
-      status: 'processed'
-    })
-
-    // Обрабатываем каждый товар
-    for (const item of items) {
-      // Ищем существующий продукт или создаем новый
-      const { data: existingProducts } = await supabase
-        .from('products')
-        .select('*')
-        .eq('family_id', familyId)
-        .ilike('name', item.name)
-        .limit(1)
-
-      let product: Product
-
-      if (existingProducts && existingProducts.length > 0) {
-        // Обновляем существующий продукт
-        product = existingProducts[0]
-        
-        // ВАЖНО: price в чеке - это уже правильная цена за купленное количество!
-        // Не нужно делить или умножать - просто сохраняем как есть
-        await this.updateProduct(product.id, {
-          last_purchase: date,
-          price: item.price, // Цена из чека - уже правильная!
-          calories: item.calories, // Калории для полного количества
-          purchase_count: (product.purchase_count || 0) + 1,
-          original_name: item.originalName || product.original_name
-        })
-      } else {
-        // Создаем новый продукт
-        // ВАЖНО: price в чеке - это уже правильная цена за купленное количество!
-        product = await this.createProduct({
-          name: item.name,
-          original_name: item.originalName,
-          family_id: familyId,
-          last_purchase: date,
-          price: item.price, // Цена из чека - уже правильная!
-          calories: item.calories, // Калории для полного количества
-          purchase_count: 1,
-          status: 'calculating',
-          avg_days: null,
-          predicted_end: null
-        })
-      }
-
-      // Добавляем запись в историю покупок с привязкой к чеку
-      await this.addProductHistory({
-        product_id: product.id,
-        family_id: familyId,
-        date: date,
-        quantity: item.quantity,
-        price: item.price,
-        unit_price: item.quantity > 0 ? item.price / item.quantity : item.price,
-        receipt_id: receipt.id
-      })
-
-      // Обновляем статистику продукта
-      await this.updateProductStats(product.id, familyId)
-    }
-
-    // Пересчитываем месячную статистику
-    const receiptDate = new Date(date)
-    const year = receiptDate.getFullYear()
-    const month = String(receiptDate.getMonth() + 1).padStart(2, '0')
-    await this.recalculateMonthlyStats(familyId, month, year)
-
-    return receipt
+    console.log('✅ Статистика пересчитана: total_spent=', totalSpent, 'receipts=', receiptsCount)
   }
 
   // Полный пересчет аналитики для семьи
@@ -733,204 +566,6 @@ export class SupabaseService {
       .from('user_profiles')
       .update(updates)
       .eq('id', userId)
-
-    if (error) throw error
-  }
-
-  // === BACKGROUND RECEIPT PROCESSING ===
-  
-  /**
-   * Upload receipt image to Supabase Storage and create pending receipt
-   * Returns the pending receipt ID for tracking
-   */
-  static async uploadReceiptForProcessing(
-    familyId: number,
-    imageFile: File,
-    userId?: string
-  ): Promise<PendingReceipt> {
-    try {
-      // Generate unique filename
-      const timestamp = Date.now()
-      const fileExt = imageFile.name.split('.').pop()
-      const fileName = `${familyId}/${timestamp}.${fileExt}`
-
-      console.log('📤 Uploading image to storage:', fileName)
-
-      // Upload image to Supabase Storage with timeout (30s)
-      const uploadPromise = supabase.storage
-        .from('receipts')
-        .upload(fileName, imageFile, {
-          cacheControl: '3600',
-          upsert: false
-        })
-
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Upload timed out after 30s')), 30000)
-      )
-
-      const { data: uploadData, error: uploadError } = await Promise.race([
-        uploadPromise,
-        timeoutPromise
-      ]) as any // Type assertion needed for Promise.race result
-
-      if (uploadError) {
-        console.error('❌ Upload error:', uploadError)
-        throw uploadError
-      }
-
-      console.log('✅ Image uploaded successfully:', uploadData.path)
-
-      // Create pending receipt record
-      const { data: pendingReceipt, error: insertError } = await supabase
-        .from('pending_receipts')
-        .insert({
-          family_id: familyId,
-          image_url: uploadData.path,
-          status: 'pending',
-          attempts: 0,
-          uploaded_by: userId
-        })
-        .select()
-        .single()
-
-      if (insertError) {
-        console.error('❌ Insert error:', insertError)
-        throw insertError
-      }
-
-      console.log('✅ Pending receipt created:', pendingReceipt.id)
-
-      return pendingReceipt
-    } catch (error) {
-      console.error('❌ Error uploading receipt:', error)
-      throw error
-    }
-  }
-
-  /**
-   * Trigger background processing of a pending receipt
-   * This is a fire-and-forget call - user doesn't wait for completion
-   */
-  static async triggerReceiptProcessing(pendingReceiptId: number): Promise<void> {
-    try {
-      console.log('🚀 Triggering background processing for receipt:', pendingReceiptId)
-
-      // Call the Vercel serverless function
-      // Don't await - fire and forget
-      fetch('/api/process-receipt', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ pendingReceiptId })
-      }).catch(error => {
-        console.error('❌ Error triggering processing (non-blocking):', error)
-      })
-
-      console.log('✅ Processing triggered (background)')
-    } catch (error) {
-      console.error('❌ Error triggering processing:', error)
-      // Don't throw - this is non-blocking
-    }
-  }
-
-  /**
-   * Get pending receipts for a family
-   */
-  static async getPendingReceipts(familyId: number): Promise<PendingReceipt[]> {
-    const { data, error } = await supabase
-      .from('pending_receipts')
-      .select('*')
-      .eq('family_id', familyId)
-      .order('created_at', { ascending: false })
-
-    if (error) throw error
-    return data || []
-  }
-
-  /**
-   * Subscribe to pending receipt updates using Realtime
-   * Returns unsubscribe function
-   */
-  static subscribeToPendingReceipts(
-    familyId: number,
-    callback: (receipt: PendingReceipt) => void
-  ): () => void {
-    console.log('🔔 [REALTIME] Создаем подписку на pending_receipts для family:', familyId)
-    console.log('🔔 [REALTIME] Время создания:', new Date().toISOString())
-    
-    const channelName = `pending_receipts_${familyId}_${Date.now()}`
-    console.log('🔔 [REALTIME] Имя канала:', channelName)
-    
-    const channel = supabase
-      .channel(channelName, {
-        config: {
-          broadcast: { self: true },
-          presence: { key: '' }
-        }
-      })
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'pending_receipts',
-          filter: `family_id=eq.${familyId}`
-        },
-        (payload) => {
-          console.log('📡 [REALTIME] ===== СОБЫТИЕ ПОЛУЧЕНО =====')
-          console.log('📡 [REALTIME] Время:', new Date().toISOString())
-          console.log('📡 [REALTIME] Тип события:', payload.eventType)
-          console.log('📡 [REALTIME] Старые данные:', payload.old)
-          console.log('📡 [REALTIME] Новые данные:', payload.new)
-          console.log('📡 [REALTIME] =============================')
-          
-          // Обрабатываем все типы событий (INSERT, UPDATE, DELETE)
-          if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
-            console.log('✅ [REALTIME] Вызываем callback с данными:', payload.new)
-            callback(payload.new as PendingReceipt)
-          }
-        }
-      )
-      .subscribe((status, err) => {
-        console.log('📡 [REALTIME] ----- ИЗМЕНЕНИЕ СТАТУСА ПОДПИСКИ -----')
-        console.log('📡 [REALTIME] Новый статус:', status)
-        console.log('📡 [REALTIME] Время:', new Date().toISOString())
-        if (err) {
-          console.error('❌ [REALTIME] ОШИБКА:', err)
-          console.error('❌ [REALTIME] Детали ошибки:', JSON.stringify(err, null, 2))
-        }
-        if (status === 'SUBSCRIBED') {
-          console.log('✅ [REALTIME] УСПЕШНО ПОДПИСАЛИСЬ!')
-          console.log('✅ [REALTIME] Канал:', channelName)
-          console.log('✅ [REALTIME] Family ID:', familyId)
-        }
-        if (status === 'CHANNEL_ERROR') {
-          console.error('❌ [REALTIME] ОШИБКА КАНАЛА!')
-        }
-        if (status === 'TIMED_OUT') {
-          console.error('❌ [REALTIME] ТАЙМАУТ ПОДКЛЮЧЕНИЯ!')
-        }
-        if (status === 'CLOSED') {
-          console.warn('⚠️ [REALTIME] КАНАЛ ЗАКРЫТ')
-        }
-        console.log('📡 [REALTIME] ---------------------------------------')
-      })
-
-    return () => {
-      console.log('🔕 [REALTIME] Отписываемся от канала:', channelName)
-      supabase.removeChannel(channel)
-    }
-  }
-
-  /**
-   * Delete a pending receipt (cleanup)
-   */
-  static async deletePendingReceipt(id: number): Promise<void> {
-    const { error } = await supabase
-      .from('pending_receipts')
-      .delete()
-      .eq('id', id)
 
     if (error) throw error
   }
@@ -1223,62 +858,6 @@ export class SupabaseService {
     }
   }
 
-  // Повторная обработка чеков для определения типов продуктов
-  static async reprocessReceipts(familyId: number, receiptIds?: number[]): Promise<{
-    success: boolean
-    receiptsProcessed: number
-    productsUpdated: number
-    results: any[]
-  }> {
-    try {
-      const response = await fetch('/api/reprocess-receipts', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          familyId,
-          receiptIds
-        }),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to reprocess receipts')
-      }
-
-      const data = await response.json()
-      
-      // После успешной обработки пересчитываем статистику для всех продуктов
-      if (data.success && data.productsUpdated > 0) {
-        console.log('🔄 Пересчитываем статистику для обновленных продуктов...')
-        
-        const { data: products } = await supabase
-          .from('products')
-          .select('id')
-          .eq('family_id', familyId)
-        
-        if (products) {
-          // Пересчитываем по батчам, чтобы не перегружать систему
-          for (const product of products) {
-            try {
-              await this.updateProductStats(product.id, familyId)
-            } catch (err) {
-              console.warn(`⚠️ Не удалось пересчитать статистику для продукта #${product.id}:`, err)
-            }
-          }
-        }
-        
-        console.log('✅ Статистика пересчитана')
-      }
-
-      return data
-    } catch (error) {
-      console.error('❌ Ошибка повторной обработки чеков:', error)
-      throw error
-    }
-  }
-
   // Пересчет статусов всех продуктов семьи (для cron job)
   static async recalculateAllProductStatuses(familyId: number): Promise<{
     success: boolean
@@ -1350,15 +929,11 @@ export class SupabaseService {
       const today = new Date().toISOString().split('T')[0]
       
       // Добавляем запись в историю с quantity=0 (виртуальная покупка)
-      // price=0 и unit_price=0, т.к. это не реальная покупка
       await this.addProductHistory({
         product_id: productId,
         family_id: familyId,
         date: today,
-        quantity: 0, // Виртуальная покупка - не влияет на расход
-        price: 0,
-        unit_price: 0
-        // receipt_id не указываем - будет undefined (нет чека для виртуальной покупки)
+        quantity: 0
       })
 
       console.log('✅ Виртуальная покупка добавлена')
@@ -1518,10 +1093,7 @@ export class SupabaseService {
         product_id: productId,
         family_id: familyId,
         date: today,
-        quantity: -1, // Специальный маркер "досрочное окончание"
-        price: 0,
-        unit_price: 0
-        // receipt_id не указываем - нет чека для досрочного окончания
+        quantity: -1
       })
 
       console.log('✅ Запись о досрочном окончании добавлена в историю')

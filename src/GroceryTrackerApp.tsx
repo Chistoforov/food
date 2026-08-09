@@ -1,27 +1,22 @@
 import { useState, useEffect } from 'react';
-import { ShoppingCart, Home, AlertTriangle, User, Loader2, Camera, RefreshCw } from 'lucide-react';
+import { ShoppingCart, Home, AlertTriangle, User, Loader2, RefreshCw } from 'lucide-react';
 import { useProducts, useReceipts, useMonthlyStats } from './hooks/useSupabaseData';
 import { SupabaseService } from './services/supabaseService';
-import ReceiptLanguageModal from './components/ReceiptLanguageModal';
 import PWAInstallButton from './components/PWAInstallButton';
 import { useAuth } from './contexts/AuthContext';
 import { clearAppCache } from './utils/cacheHelper';
 import LoginPage from './components/LoginPage';
 import AccountPage from './components/AccountPage';
-import UploadPage from './components/UploadPage';
 import HomePage from './components/HomePage';
 import ProductsPage from './components/ProductsPage';
 
-// Проверяем переменные окружения при загрузке
 console.log('🔍 Environment check:', {
   VITE_SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL ? '✅ Настроен' : '❌ Отсутствует',
-  VITE_SUPABASE_ANON_KEY: import.meta.env.VITE_SUPABASE_ANON_KEY ? '✅ Настроен' : '❌ Отсутствует',
-  VITE_PERPLEXITY_API_KEY: import.meta.env.VITE_PERPLEXITY_API_KEY ? '✅ Настроен' : '❌ Отсутствует'
+  VITE_SUPABASE_ANON_KEY: import.meta.env.VITE_SUPABASE_ANON_KEY ? '✅ Настроен' : '❌ Отсутствует'
 });
 
 const GroceryTrackerApp = () => {
   const { user, profile, loading: authLoading } = useAuth();
-  const [showLanguageModal, setShowLanguageModal] = useState(false);
   const [slideDirection, setSlideDirection] = useState<'left' | 'right'>('right');
 
   // Автоматическая очистка кэша при входе (если был установлен флаг)
@@ -48,15 +43,6 @@ const GroceryTrackerApp = () => {
     };
     
     checkAndClearCache();
-  }, [profile]);
-
-  // Check for receipt language setting
-  useEffect(() => {
-    if (profile && (profile.receipt_language === null || profile.receipt_language === undefined)) {
-      setShowLanguageModal(true);
-    } else {
-      setShowLanguageModal(false);
-    }
   }, [profile]);
 
   // Проверяем переменные окружения перед инициализацией
@@ -97,7 +83,7 @@ const GroceryTrackerApp = () => {
       console.log('🔄 [INIT] Восстанавливаем вкладку из localStorage:', savedTab);
       
       // Проверяем, что сохраненная вкладка является допустимой
-      const validTabs = ['home', 'upload', 'products', 'account'];
+      const validTabs = ['home', 'products', 'account'];
       if (savedTab && validTabs.includes(savedTab)) {
         console.log('✅ [INIT] Вкладка валидна, восстанавливаем:', savedTab);
         return savedTab;
@@ -147,8 +133,7 @@ const GroceryTrackerApp = () => {
     deleteReceipt,
     loadMore: loadMoreReceipts,
     loadingMore: loadingMoreReceipts,
-    hasMore: hasMoreReceipts,
-    refetch: refetchReceipts
+    hasMore: hasMoreReceipts
   } = useReceipts(safeFamilyId);
 
   const {
@@ -265,33 +250,6 @@ const GroceryTrackerApp = () => {
     };
   }, [activeTab]);
 
-  // Подписка на обновления pending receipts для автоматического обновления статистики
-  useEffect(() => {
-    // Не подписываемся, если нет валидного ID семьи
-    if (safeFamilyId === 0) return;
-
-    console.log('🔔 Подписываемся на обновления чеков для автообновления статистики');
-    
-    const unsubscribe = SupabaseService.subscribeToPendingReceipts(
-      safeFamilyId, // Используем safeFamilyId
-      (receipt) => {
-        console.log('📡 Получено обновление чека:', receipt.status);
-        
-        // Когда чек успешно обработан, автоматически обновляем статистику
-        if (receipt.status === 'completed') {
-          console.log('✅ Чек обработан, автоматически обновляем статистику и список чеков');
-          refetchStats();
-          refetchReceipts();
-        }
-      }
-    );
-
-    return () => {
-      console.log('🔕 Отписываемся от обновлений чеков');
-      unsubscribe();
-    };
-  }, [safeFamilyId, refetchStats, refetchReceipts]);
-
   // Show loader while auth is initializing
   if (authLoading) {
     return (
@@ -359,8 +317,6 @@ const GroceryTrackerApp = () => {
     avgDays: product.avg_days,
     predictedEnd: product.predicted_end,
     status: product.status,
-    calories: product.calories,
-    price: product.price,
     purchaseCount: product.purchase_count
   }));
 
@@ -403,26 +359,10 @@ const GroceryTrackerApp = () => {
   
   const monthlyStats = selectedStats ? {
     totalSpent: selectedStats.total_spent,
-    totalCalories: selectedStats.total_calories,
-    avgCaloriesPerDay: selectedStats.avg_calories_per_day,
-    receiptsCount: selectedStats.receipts_count,
-    trends: {
-      spending: 12, // % изменение - можно вычислить из данных
-      calories: -8,
-      receipts: 5
-    },
-    highlights: [
-      { text: 'Купили на 45% больше молока', trend: 'up', product: 'Молоко 2L' },
-      { text: 'Хлеба на 22% меньше чем обычно', trend: 'down', product: 'Хлеб белый' },
-      { text: 'Новый продукт: Творог 500г', trend: 'new', product: 'Творог 500г' }
-    ]
+    receiptsCount: selectedStats.receipts_count
   } : {
     totalSpent: 0,
-    totalCalories: 0,
-    avgCaloriesPerDay: 0,
-    receiptsCount: 0,
-    trends: { spending: 0, calories: 0, receipts: 0 },
-    highlights: []
+    receiptsCount: 0
   };
 
   const handleDeleteReceiptAction = async (receiptId: number) => {
@@ -439,12 +379,6 @@ const GroceryTrackerApp = () => {
 
   return (
     <div className="h-full flex flex-col">
-      {/* Language Selection Modal */}
-      <ReceiptLanguageModal 
-        isOpen={showLanguageModal} 
-        onClose={() => setShowLanguageModal(false)} 
-      />
-
       {/* Уведомление о восстановлении вкладки */}
       {showRestoredMessage && (
         <div className="fixed top-0 left-0 right-0 z-50 message-fade-in">
@@ -476,7 +410,7 @@ const GroceryTrackerApp = () => {
       <div className="flex-1 overflow-y-auto no-scrollbar">
         <div className="max-w-md mx-auto px-4 sm:px-6 py-6 pb-32">
           {activeTab === 'home' && (
-            <HomePage 
+            <HomePage
               monthlyStats={monthlyStats}
               currentMonth={currentMonth}
               productTypeStats={productTypeStats}
@@ -491,12 +425,6 @@ const GroceryTrackerApp = () => {
               statsError={statsError}
               statsLoading={statsLoading}
               refetchProducts={refetchProducts}
-            />
-          )}
-          {activeTab === 'upload' && (
-            <UploadPage 
-              familyId={selectedFamilyId}
-              userId={user?.id}
               receipts={receipts}
               receiptsLoading={receiptsLoading}
               hasMoreReceipts={hasMoreReceipts}
@@ -524,29 +452,18 @@ const GroceryTrackerApp = () => {
       {/* Modern Floating Bottom Navigation */}
       <div className="fixed bottom-6 left-0 right-0 z-50 px-4 sm:px-6 safe-area-bottom pointer-events-none">
         <div className="pointer-events-auto max-w-[320px] mx-auto bg-white/80 backdrop-blur-xl border border-white/40 rounded-full shadow-glass p-1.5 flex items-center justify-between">
-          <button 
+          <button
             onClick={() => handleTabChange('home')}
             className={`flex items-center justify-center w-14 h-14 rounded-full transition-all duration-300 ${
-              activeTab === 'home' 
-                ? 'bg-slate-900 text-white shadow-lg scale-105' 
+              activeTab === 'home'
+                ? 'bg-slate-900 text-white shadow-lg scale-105'
                 : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'
             }`}
           >
             <Home size={24} strokeWidth={activeTab === 'home' ? 2.5 : 2} />
           </button>
-          
-          <button 
-            onClick={() => handleTabChange('upload')}
-            className={`flex items-center justify-center w-14 h-14 rounded-full transition-all duration-300 ${
-              activeTab === 'upload' 
-                ? 'bg-slate-900 text-white shadow-lg scale-105' 
-                : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'
-            }`}
-          >
-            <Camera size={24} strokeWidth={activeTab === 'upload' ? 2.5 : 2} />
-          </button>
-          
-          <button 
+
+          <button
             onClick={() => handleTabChange('products')}
             className={`flex items-center justify-center w-14 h-14 rounded-full transition-all duration-300 ${
               activeTab === 'products' 

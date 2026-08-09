@@ -179,12 +179,12 @@ const ReceiptDetailModal = ({
             </div>
           ) : (
             products.map((item, index) => (
-              <div 
-                key={index} 
+              <div
+                key={index}
                 className="bg-gray-50 rounded-lg p-4 border border-gray-200"
               >
-                <div className="flex items-start justify-between mb-2">
-                  <div className="flex-1">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
                     <h4 className="font-semibold text-gray-900">
                       {item.product?.name || 'Неизвестный товар'}
                     </h4>
@@ -194,25 +194,8 @@ const ReceiptDetailModal = ({
                       </div>
                     )}
                   </div>
-                  <div className="text-lg font-bold text-indigo-600">
-                    €{item.price.toFixed(2)}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-3 mt-3 text-sm">
-                  <div>
-                    <div className="text-gray-500">Количество</div>
-                    <div className="font-medium text-gray-900">{item.quantity}</div>
-                  </div>
-                  <div>
-                    <div className="text-gray-500">Цена за ед.</div>
-                    <div className="font-medium text-gray-900">€{item.unit_price.toFixed(2)}</div>
-                  </div>
-                  <div>
-                    <div className="text-gray-500">Калории</div>
-                    <div className="font-medium text-gray-900">
-                      {item.product?.calories || 0} ккал
-                    </div>
+                  <div className="text-sm text-gray-500 whitespace-nowrap">
+                    <span className="font-medium text-gray-900">{item.quantity}</span> шт.
                   </div>
                 </div>
               </div>

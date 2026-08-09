@@ -30,27 +30,26 @@ export interface Product {
   id: number
   name: string
   original_name?: string
-  product_type?: string  // Generic product category (e.g., "молоко", "хлеб", "сыр плавленный")
+  product_type?: string
   last_purchase: string
   avg_days: number | null
   predicted_end: string | null
   status: 'ending-soon' | 'ok' | 'calculating'
-  calories: number
-  price: number
   purchase_count: number
   family_id: number
+  normalized_name?: string
   created_at: string
   updated_at: string
 }
 
 export interface Receipt {
   id: number
+  external_id?: string
   date: string
   items_count: number
   total_amount: number
-  status: 'processed' | 'pending' | 'error'
+  status: string
   family_id: number
-  image_url?: string
   created_at: string
 }
 
@@ -66,10 +65,9 @@ export interface Family {
 export interface ProductHistory {
   id: number
   product_id: number
+  catalog_product_id?: number
   date: string
   quantity: number
-  price: number
-  unit_price: number
   family_id: number
   receipt_id?: number
   created_at: string
@@ -81,24 +79,9 @@ export interface MonthlyStats {
   month: string
   year: number
   total_spent: number
-  total_calories: number
-  avg_calories_per_day: number
   receipts_count: number
   created_at: string
   updated_at: string
-}
-
-export interface PendingReceipt {
-  id: number
-  family_id: number
-  image_url: string
-  status: 'pending' | 'processing' | 'completed' | 'failed'
-  error_message?: string
-  parsed_data?: any
-  created_at: string
-  processed_at?: string
-  attempts: number
-  uploaded_by?: string
 }
 
 export interface UserProfile {
@@ -106,7 +89,7 @@ export interface UserProfile {
   email: string
   family_id: number
   created_at: string
-  receipt_language?: string | null
+  updated_at?: string
 }
 
 export interface FamilyInvitation {
