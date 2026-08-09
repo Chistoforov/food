@@ -20,18 +20,35 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     // Check active session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       console.log('🔍 [Auth] Initial session check:', session ? 'Found session' : 'No session')
-      
+
       // If no session but we have a code/hash in URL, don't stop loading yet
       // Let onAuthStateChange handle the session establishment
       const isAuthCallback = window.location.hash || window.location.search.includes('code=')
-      
+
       if (session) {
         setUser(session.user)
         fetchProfile(session.user.id)
-      } else if (!isAuthCallback) {
-        // Only set loading false if we're not expecting a callback
+        return
+      }
+
+      // Dev-only autologin: skip login screen on localhost.
+      // Vite tree-shakes import.meta.env.DEV=false in prod build, so this whole branch is stripped.
+      const devEmail = import.meta.env.VITE_DEV_AUTOLOGIN_EMAIL
+      const devPassword = import.meta.env.VITE_DEV_AUTOLOGIN_PASSWORD
+      if (import.meta.env.DEV && devEmail && devPassword) {
+        console.log('🔓 [Auth] Dev autologin as', devEmail)
+        const { error } = await supabase.auth.signInWithPassword({ email: devEmail, password: devPassword })
+        if (error) {
+          console.error('❌ [Auth] Dev autologin failed:', error.message)
+          setLoading(false)
+        }
+        // onAuthStateChange will fire on success and set user/profile
+        return
+      }
+
+      if (!isAuthCallback) {
         console.log('🔍 [Auth] No session and no callback params - stopping load')
         setLoading(false)
       } else {
