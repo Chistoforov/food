@@ -78,43 +78,126 @@ function mergeSetCookie(existing, headers) {
   return [...map.values()];
 }
 
-// ---------- PD probe ----------
+// Cookies we care about for auth-state tracking.
+// dwsid = SFCC live session, dwac_* = customer token, sid = anonymous session,
+// dwanonymous_* = long-lived anon id, cqcid/cquid = Coveo/Commerce Cloud IDs,
+// RT / AWSALB* = Akamai + AWS ALB routing.
+const AUTH_COOKIE_NAMES = ['dwsid', 'sid', 'cqcid', 'cquid', 'RT', 'AWSALB', 'AWSALBCORS'];
+const AUTH_COOKIE_PREFIXES = ['dwac_', 'dwanonymous_'];
+
+function isAuthCookie(name) {
+  if (AUTH_COOKIE_NAMES.includes(name)) return true;
+  return AUTH_COOKIE_PREFIXES.some((p) => name.startsWith(p));
+}
+
+function cookieMap(cookies) {
+  const m = {};
+  for (const c of cookies) {
+    if (!isAuthCookie(c.name)) continue;
+    m[c.name] = { value: c.value, expires: c.expires ?? null };
+  }
+  return m;
+}
+
+function diffAuthCookies(before, after) {
+  const b = cookieMap(before);
+  const a = cookieMap(after);
+  const added = [];
+  const removed = [];
+  const changed = [];
+  for (const name of Object.keys(a)) {
+    if (!(name in b)) added.push(name);
+    else if (b[name].value !== a[name].value) changed.push(name);
+  }
+  for (const name of Object.keys(b)) {
+    if (!(name in a)) removed.push(name);
+  }
+  return {
+    present_before: Object.keys(b).sort(),
+    present_after: Object.keys(a).sort(),
+    added,
+    removed,
+    changed,
+    dwsid_expires_after: a.dwsid?.expires ?? null,
+    dwac_expires_after: Object.entries(a).find(([n]) => n.startsWith('dwac_'))?.[1]?.expires ?? null,
+  };
+}
+
+// ---------- PD deep probe ----------
 const UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36';
+const BASE_HEADERS = {
+  'User-Agent': UA,
+  Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+  'Accept-Language': 'pt-PT,pt;q=0.9,en;q=0.8',
+};
 
-async function probeOrders(cookies) {
-  const started = Date.now();
-  const res = await fetch('https://www.pingodoce.pt/home/area-pessoal?menu=orders', {
+async function get(url, cookies, extraHeaders = {}) {
+  const res = await fetch(url, {
     method: 'GET',
     redirect: 'follow',
     headers: {
-      'User-Agent': UA,
-      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      'Accept-Language': 'pt-PT,pt;q=0.9,en;q=0.8',
+      ...BASE_HEADERS,
+      ...extraHeaders,
       Cookie: serializeCookieHeader(cookies),
     },
   });
   const setCookieHeaders = res.headers.getSetCookie ? res.headers.getSetCookie() : [];
-  const html = await res.text();
-  const elapsed = Date.now() - started;
+  const body = await res.text();
+  const merged = setCookieHeaders.length > 0 ? mergeSetCookie(cookies, setCookieHeaders) : cookies;
+  return { status: res.status, url: res.url, body, cookies: merged };
+}
 
-  const isLogin = /\/home\/login/.test(res.url);
-  const loggedIn = res.status === 200 && !isLogin;
+async function deepProbe(startCookies) {
+  const started = Date.now();
+  let cookies = startCookies;
+
+  // Step 1: touch home root — imitates real navigation.
+  const rootRes = await get('https://www.pingodoce.pt/', cookies);
+  cookies = rootRes.cookies;
+
+  // Step 2: orders listing (primary signal).
+  const ordersRes = await get('https://www.pingodoce.pt/home/area-pessoal?menu=orders', cookies);
+  cookies = ordersRes.cookies;
+
+  const isLogin = /\/home\/login/.test(ordersRes.url);
+  const loggedIn = ordersRes.status === 200 && !isLogin;
 
   const trSet = new Set();
   if (loggedIn) {
     const re = /trNumber=(\d{20,30})/g;
     let m;
-    while ((m = re.exec(html))) trSet.add(m[1]);
+    while ((m = re.exec(ordersRes.body))) trSet.add(m[1]);
+  }
+
+  // Step 3: if logged in, fetch first order detail — deeper "user activity" signal.
+  let deepOk = null;
+  if (loggedIn && trSet.size > 0) {
+    const firstTr = [...trSet][0];
+    try {
+      const detailRes = await get(
+        `https://www.pingodoce.pt/on/demandware.store/Sites-pingo-doce-Site/pt_PT/Order-Detail?trNumber=${encodeURIComponent(firstTr)}`,
+        cookies,
+        {
+          'X-Requested-With': 'XMLHttpRequest',
+          Referer: 'https://www.pingodoce.pt/home/area-pessoal?menu=orders',
+        },
+      );
+      cookies = detailRes.cookies;
+      deepOk = detailRes.status === 200 && !/\/home\/login/.test(detailRes.url);
+    } catch {
+      deepOk = false;
+    }
   }
 
   return {
-    http_status: res.status,
-    finalUrl: res.url,
+    http_status: ordersRes.status,
+    finalUrl: ordersRes.url,
     is_logged_in: loggedIn,
     orders_count: loggedIn ? trSet.size : null,
-    response_time_ms: elapsed,
-    newCookies: setCookieHeaders.length > 0 ? mergeSetCookie(cookies, setCookieHeaders) : cookies,
+    deep_ok: deepOk,
+    response_time_ms: Date.now() - started,
+    newCookies: cookies,
   };
 }
 
@@ -151,8 +234,9 @@ export default async function handler(req, res) {
     }
 
     const blob = decodeBytea(session.cookies_encrypted);
-    const cookies = JSON.parse(decrypt(blob));
-    const result = await probeOrders(cookies);
+    const before = JSON.parse(decrypt(blob));
+    const result = await deepProbe(before);
+    const cookieDelta = diffAuthCookies(before, result.newCookies);
 
     await supabase.from('pd_session_probe').insert({
       family_id: PD_FAMILY_ID,
@@ -161,6 +245,8 @@ export default async function handler(req, res) {
       orders_count: result.orders_count,
       response_time_ms: result.response_time_ms,
       error: null,
+      cookie_delta: cookieDelta,
+      deep_ok: result.deep_ok,
     });
 
     if (result.is_logged_in) {
@@ -182,8 +268,10 @@ export default async function handler(req, res) {
       http_status: result.http_status,
       is_logged_in: result.is_logged_in,
       orders_count: result.orders_count,
+      deep_ok: result.deep_ok,
       final_url: result.finalUrl,
       response_time_ms: result.response_time_ms,
+      cookie_delta: cookieDelta,
     });
   } catch (err) {
     await supabase.from('pd_session_probe').insert({
