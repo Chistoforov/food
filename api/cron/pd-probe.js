@@ -148,17 +148,10 @@ async function get(url, cookies, extraHeaders = {}) {
   return { status: res.status, url: res.url, body, cookies: merged };
 }
 
-async function deepProbe(startCookies) {
+async function probe(startCookies) {
   const started = Date.now();
-  let cookies = startCookies;
 
-  // Step 1: touch home root — imitates real navigation.
-  const rootRes = await get('https://www.pingodoce.pt/', cookies);
-  cookies = rootRes.cookies;
-
-  // Step 2: orders listing (primary signal).
-  const ordersRes = await get('https://www.pingodoce.pt/home/area-pessoal?menu=orders', cookies);
-  cookies = ordersRes.cookies;
+  const ordersRes = await get('https://www.pingodoce.pt/home/area-pessoal?menu=orders', startCookies);
 
   const isLogin = /\/home\/login/.test(ordersRes.url);
   const loggedIn = ordersRes.status === 200 && !isLogin;
@@ -170,34 +163,14 @@ async function deepProbe(startCookies) {
     while ((m = re.exec(ordersRes.body))) trSet.add(m[1]);
   }
 
-  // Step 3: if logged in, fetch first order detail — deeper "user activity" signal.
-  let deepOk = null;
-  if (loggedIn && trSet.size > 0) {
-    const firstTr = [...trSet][0];
-    try {
-      const detailRes = await get(
-        `https://www.pingodoce.pt/on/demandware.store/Sites-pingo-doce-Site/pt_PT/Order-Detail?trNumber=${encodeURIComponent(firstTr)}`,
-        cookies,
-        {
-          'X-Requested-With': 'XMLHttpRequest',
-          Referer: 'https://www.pingodoce.pt/home/area-pessoal?menu=orders',
-        },
-      );
-      cookies = detailRes.cookies;
-      deepOk = detailRes.status === 200 && !/\/home\/login/.test(detailRes.url);
-    } catch {
-      deepOk = false;
-    }
-  }
-
   return {
     http_status: ordersRes.status,
     finalUrl: ordersRes.url,
     is_logged_in: loggedIn,
     orders_count: loggedIn ? trSet.size : null,
-    deep_ok: deepOk,
+    deep_ok: null,
     response_time_ms: Date.now() - started,
-    newCookies: cookies,
+    newCookies: ordersRes.cookies,
   };
 }
 
@@ -235,7 +208,7 @@ export default async function handler(req, res) {
 
     const blob = decodeBytea(session.cookies_encrypted);
     const before = JSON.parse(decrypt(blob));
-    const result = await deepProbe(before);
+    const result = await probe(before);
     const cookieDelta = diffAuthCookies(before, result.newCookies);
 
     await supabase.from('pd_session_probe').insert({
