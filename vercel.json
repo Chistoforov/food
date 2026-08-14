@@ -26,10 +26,6 @@
     {
       "path": "/api/cron/pd-catalog-sync",
       "schedule": "0 3 * * 0"
-    },
-    {
-      "path": "/api/cron/pd-probe",
-      "schedule": "0 * * * *"
     }
   ],
   "headers": [

@@ -7,9 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "proxy": "node proxy-server-local.js",
-    "scraper:upload-cookies": "tsx scraper/scripts/upload-cookies.ts",
-    "scraper:probe": "tsx -e \"import('./scraper/src/probe.js').then(m => m.runProbe(Number(process.env.PD_FAMILY_ID ?? 1)))\""
+    "proxy": "node proxy-server-local.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.76.1",
