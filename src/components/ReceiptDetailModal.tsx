@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { X, Calendar, Edit2, Info, Loader2, ShoppingCart } from 'lucide-react';
 import { SupabaseService } from '../services/supabaseService';
 import { ProductHistory, Product, Receipt } from '../lib/supabase';
+import { useLanguage, formatProductName } from '../contexts/LanguageContext';
 
 interface ReceiptDetailModalProps {
   receiptId: number;
@@ -18,6 +19,7 @@ const ReceiptDetailModal = ({
   onClose, 
   onDateUpdated 
 }: ReceiptDetailModalProps) => {
+  const { language } = useLanguage();
   const [products, setProducts] = useState<Array<ProductHistory & { product?: Product }>>([]);
   const [loading, setLoading] = useState(true);
   const [editingDate, setEditingDate] = useState(false);
@@ -185,14 +187,19 @@ const ReceiptDetailModal = ({
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
-                    <h4 className="font-semibold text-gray-900">
-                      {item.product?.name || 'Неизвестный товар'}
-                    </h4>
-                    {item.product?.original_name && (
-                      <div className="text-xs text-gray-400 mt-0.5">
-                        {item.product.original_name}
-                      </div>
-                    )}
+                    {(() => {
+                      const fmt = item.product
+                        ? formatProductName(item.product.name, item.product.name_ru, language)
+                        : { primary: 'Неизвестный товар', secondary: null };
+                      return (
+                        <>
+                          <h4 className="font-semibold text-gray-900">{fmt.primary}</h4>
+                          {fmt.secondary && (
+                            <div className="text-xs text-gray-400 mt-0.5">{fmt.secondary}</div>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                   <div className="text-sm text-gray-500 whitespace-nowrap">
                     <span className="font-medium text-gray-900">{item.quantity}</span> шт.

@@ -2,10 +2,12 @@ import React, { useState } from 'react';
 import { Loader2, RefreshCw, CheckCircle, Save, X, Edit2 } from 'lucide-react';
 import { clearAppCache } from '../utils/cacheHelper';
 import { SupabaseService } from '../services/supabaseService';
+import { useLanguage, formatProductName } from '../contexts/LanguageContext';
 
 interface ProcessedProduct {
   id: number;
   name: string;
+  nameRu?: string | null;
   originalName?: string;
   product_type?: string;
   lastPurchase: string;
@@ -34,6 +36,7 @@ const ProductsPage: React.FC<ProductsPageProps> = ({
   updateProduct,
   familyId
 }) => {
+  const { language } = useLanguage();
   const [editingTypeId, setEditingTypeId] = useState<number | null>(null);
   const [editedProductType, setEditedProductType] = useState<string>('');
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
@@ -144,10 +147,17 @@ const ProductsPage: React.FC<ProductsPageProps> = ({
             >
               <div className="flex items-start justify-between mb-4">
                 <div className="flex-1 min-w-0 pr-4">
-                  <h3 className="font-bold text-surface-900 text-lg leading-tight truncate">{product.name}</h3>
-                  {product.originalName && (
-                    <div className="text-xs text-surface-400 mt-1 truncate">{product.originalName}</div>
-                  )}
+                  {(() => {
+                    const fmt = formatProductName(product.name, product.nameRu, language);
+                    return (
+                      <>
+                        <h3 className="font-bold text-surface-900 text-lg leading-tight truncate">{fmt.primary}</h3>
+                        {fmt.secondary && (
+                          <div className="text-xs text-surface-400 mt-1 truncate">{fmt.secondary}</div>
+                        )}
+                      </>
+                    );
+                  })()}
                   <div className="flex items-center gap-2 mt-2">
                     <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-surface-50 text-surface-600 text-xs font-medium">
                       {product.purchaseCount} покупок

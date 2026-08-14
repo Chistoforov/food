@@ -179,6 +179,39 @@ function normalizeName(s) {
 }
 
 // ---------- DB ----------
+// Best-effort PT→RU translation for a single fresh product name.
+// Never throws — if OpenAI is down or key missing, we insert without name_ru
+// (backfill via /api/admin/translate-products later).
+async function translateSingle(name) {
+  const key = process.env.OPENAI_API_KEY;
+  if (!key) return null;
+  try {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        response_format: { type: 'json_object' },
+        temperature: 0.2,
+        messages: [
+          {
+            role: 'system',
+            content:
+              'Translate a Portuguese grocery product name (from Pingo Doce receipt) to Russian. Keep brand names in Latin, keep units (g, kg, ml, L, cl). Common abbreviations: V.ALENT=Vinho Alentejano, PD=Pingo Doce, QJ=Queijo, FLC=Flocos, INT=Integral, SDR=Sem Doses de Redução. Return JSON {"ru": "..."}.',
+          },
+          { role: 'user', content: name },
+        ],
+      }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const parsed = JSON.parse(data.choices?.[0]?.message?.content ?? '{}');
+    return typeof parsed.ru === 'string' ? parsed.ru : null;
+  } catch {
+    return null;
+  }
+}
+
 async function findOrCreateProduct(supabase, familyId, name) {
   const { data: existing } = await supabase
     .from('products')
@@ -187,9 +220,10 @@ async function findOrCreateProduct(supabase, familyId, name) {
     .ilike('name', name)
     .limit(1);
   if (existing && existing.length > 0) return existing[0].id;
+  const nameRu = await translateSingle(name);
   const { data: created, error } = await supabase
     .from('products')
-    .insert({ name, original_name: name, family_id: familyId })
+    .insert({ name, original_name: name, name_ru: nameRu, family_id: familyId })
     .select('id')
     .single();
   if (error) throw error;

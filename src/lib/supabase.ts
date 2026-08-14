@@ -30,6 +30,7 @@ export interface Product {
   id: number
   name: string
   original_name?: string
+  name_ru?: string | null
   product_type?: string
   last_purchase: string
   avg_days: number | null

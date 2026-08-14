@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { SupabaseService } from '../services/supabaseService'
 import { UserProfile, FamilyInvitation } from '../lib/supabase'
-import { LogOut, Plus, Mail, X, Check, Loader2, Users, RefreshCw } from 'lucide-react'
+import { LogOut, Plus, Mail, X, Check, Loader2, Users, RefreshCw, Languages } from 'lucide-react'
 import { clearAppCache } from '../utils/cacheHelper'
+import { useLanguage } from '../contexts/LanguageContext'
 
 const AccountPage = () => {
   const { user, profile, signOut } = useAuth()
+  const { language, setLanguage } = useLanguage()
   const [members, setMembers] = useState<UserProfile[]>([])
   const [invitations, setInvitations] = useState<FamilyInvitation[]>([])
   const [loading, setLoading] = useState(true)
@@ -124,6 +126,39 @@ const AccountPage = () => {
       {/* Settings Section */}
       <div className="space-y-4">
         <h3 className="font-bold text-slate-900 px-1">Настройки</h3>
+
+        {/* Language toggle */}
+        <div className="w-full bg-white rounded-[24px] p-4 shadow-sm border border-slate-100 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-slate-100 text-slate-500 rounded-2xl">
+              <Languages size={24} />
+            </div>
+            <div className="text-left">
+              <div className="font-bold text-slate-900">Язык названий</div>
+              <div className="text-sm text-slate-500">
+                {language === 'ru' ? 'Русский, оригинал мелким' : 'Только португальский'}
+              </div>
+            </div>
+          </div>
+          <div className="flex bg-slate-100 rounded-xl p-1">
+            <button
+              onClick={() => setLanguage('ru')}
+              className={`px-3 py-1.5 text-sm font-bold rounded-lg transition-all ${
+                language === 'ru' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'
+              }`}
+            >
+              RU
+            </button>
+            <button
+              onClick={() => setLanguage('pt')}
+              className={`px-3 py-1.5 text-sm font-bold rounded-lg transition-all ${
+                language === 'pt' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'
+              }`}
+            >
+              PT
+            </button>
+          </div>
+        </div>
 
         {/* Clear Cache Button */}
         <button

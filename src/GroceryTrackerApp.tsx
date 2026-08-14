@@ -311,6 +311,7 @@ const GroceryTrackerApp = () => {
   const processedProducts = products.map(product => ({
     id: product.id,
     name: product.name,
+    nameRu: product.name_ru ?? null,
     originalName: product.original_name,
     product_type: product.product_type,
     lastPurchase: product.last_purchase,
