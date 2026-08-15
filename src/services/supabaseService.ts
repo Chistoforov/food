@@ -837,6 +837,17 @@ export class SupabaseService {
     }
   }
 
+  static async getProductTypeTranslations(): Promise<Record<string, string>> {
+    const { data, error } = await supabase.from('product_type_translations').select('pt, ru')
+    if (error) {
+      console.warn('product_type_translations fetch failed:', error.message)
+      return {}
+    }
+    const map: Record<string, string> = {}
+    for (const row of data || []) map[row.pt] = row.ru
+    return map
+  }
+
   // Пересчитать статистику типов продуктов (обновить кэш)
   static async recalculateProductTypeStats(familyId: number): Promise<void> {
     try {

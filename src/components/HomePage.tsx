@@ -5,6 +5,7 @@ import ConfirmationModal from './ConfirmationModal';
 import ReceiptDetailModal from './ReceiptDetailModal';
 import { Loader2 } from 'lucide-react';
 import { Receipt } from '../lib/supabase';
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface HomePageProps {
   monthlyStats: {
@@ -59,6 +60,14 @@ const HomePage: React.FC<HomePageProps> = ({
   const [selectedReceiptId, setSelectedReceiptId] = useState<number | null>(null);
   const [deleteConfirmReceiptId, setDeleteConfirmReceiptId] = useState<number | null>(null);
   const [deletingReceiptId, setDeletingReceiptId] = useState<number | null>(null);
+  const [typeTranslations, setTypeTranslations] = useState<Record<string, string>>({});
+  const { language } = useLanguage();
+
+  useEffect(() => {
+    SupabaseService.getProductTypeTranslations().then(setTypeTranslations).catch(() => {});
+  }, []);
+
+  const displayType = (pt: string) => (language === 'ru' && typeTranslations[pt]) || pt;
 
   const handleDeleteReceipt = async (receiptId: number) => {
     try {
@@ -229,7 +238,7 @@ const HomePage: React.FC<HomePageProps> = ({
         onClose={() => setDeleteTypeConfirm(null)}
         onConfirm={handleDeleteProductType}
         title="Удалить тип продукта?"
-        message={`Вы уверены, что хотите удалить тип продукта "${deleteTypeConfirm}"?\n\nУ всех продуктов этого типа будет очищен тип, и они перестанут отслеживаться как группа.\n\nЭто действие нельзя отменить.`}
+        message={`Вы уверены, что хотите удалить тип продукта "${deleteTypeConfirm ? displayType(deleteTypeConfirm) : ''}"?\n\nУ всех продуктов этого типа будет очищен тип, и они перестанут отслеживаться как группа.\n\nЭто действие нельзя отменить.`}
         confirmText="Да, удалить"
         cancelText="Отмена"
         isLoading={deletingType}
@@ -423,7 +432,7 @@ const HomePage: React.FC<HomePageProps> = ({
                       </div>
 
                       <div className="flex-1 min-w-0 py-0.5 sm:py-1">
-                        <h4 className="font-bold text-surface-900 capitalize text-base sm:text-lg leading-tight truncate pr-1 sm:pr-2">{type}</h4>
+                        <h4 className="font-bold text-surface-900 capitalize text-base sm:text-lg leading-tight truncate pr-1 sm:pr-2">{displayType(type)}</h4>
                         <div className={`text-[10px] sm:text-xs font-bold uppercase tracking-wider ${statusColor} mt-0.5`}>
                           {typeStatus === 'ending-soon' && 'Заканчивается'}
                           {typeStatus === 'ok' && 'В наличии'}
