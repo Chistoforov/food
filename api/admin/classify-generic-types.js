@@ -112,9 +112,26 @@ export default async function handler(req, res) {
   const classifications = [];
   const batches = [];
 
+  async function classifyRobust(chunk, vocab, depth = 0) {
+    try {
+      return await classifyBatch(chunk, vocab);
+    } catch (err) {
+      if (depth === 0) {
+        try { return await classifyBatch(chunk, vocab); } catch { /* fall to split */ }
+      }
+      if (chunk.length <= 2 || depth >= 4) throw err;
+      const mid = Math.ceil(chunk.length / 2);
+      const left = await classifyRobust(chunk.slice(0, mid), vocab, depth + 1);
+      const newVocab = [...vocab];
+      for (const t of left) if (t && !newVocab.includes(t)) newVocab.push(t);
+      const right = await classifyRobust(chunk.slice(mid), newVocab, depth + 1);
+      return [...left, ...right];
+    }
+  }
+
   for (let i = 0; i < inputs.length; i += batchSize) {
     const chunk = inputs.slice(i, i + batchSize);
-    const ru = await classifyBatch(chunk, vocabulary);
+    const ru = await classifyRobust(chunk, vocabulary);
     classifications.push(...ru);
     for (const term of ru) {
       if (term && !vocabSet.has(term)) { vocabSet.add(term); vocabulary.push(term); }
