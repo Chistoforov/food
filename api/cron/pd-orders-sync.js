@@ -213,7 +213,58 @@ async function translateSingle(name) {
   }
 }
 
-async function findOrCreateProduct(supabase, familyId, name) {
+// Best-effort classification into a generic Russian kind ("молоко", "помидоры", "курица")
+// consistent with existing product_type values in the DB. Never throws — if key missing
+// or Claude fails, we leave product_type NULL (reclassify via /api/admin/classify-generic-types).
+const CLASSIFY_SYSTEM = [
+  'You classify grocery products into a generic Russian kind.',
+  'Return ONE short Russian noun (plural nominative when naturally plural, else natural singular) describing WHAT the product IS, ignoring brand, variety, size, packaging.',
+  'Examples: "Молоко UHT PD 1L"→"молоко", "Помидоры на ветке 500g"→"помидоры", "Куриное филе PD"→"курица", "Йогурт греческий Oikos"→"йогурт", "Хлеб пшеничный 500g"→"хлеб".',
+  'REUSE terms from the provided vocabulary when semantically equivalent. Only add a new term if none fits.',
+  'Lowercase, 1–3 words max, no adjectives unless disambiguation truly requires it.',
+].join('\n');
+
+async function classifySingle(name, vocabulary) {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key || !name) return null;
+  try {
+    const vocab = vocabulary.length ? `[${vocabulary.join(', ')}]` : 'empty';
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 100,
+        temperature: 0,
+        system: CLASSIFY_SYSTEM,
+        tools: [{
+          name: 'store_classification',
+          description: 'Store the generic Russian kind for the item.',
+          input_schema: {
+            type: 'object',
+            properties: { type: { type: 'string' } },
+            required: ['type'],
+          },
+        }],
+        tool_choice: { type: 'tool', name: 'store_classification' },
+        messages: [{ role: 'user', content: `Vocabulary already used (reuse when possible): ${vocab}\n\nClassify:\n${name}` }],
+      }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const toolUse = (data.content || []).find((c) => c.type === 'tool_use');
+    const t = toolUse?.input?.type;
+    return typeof t === 'string' && t.trim() ? t.trim().toLowerCase() : null;
+  } catch {
+    return null;
+  }
+}
+
+async function findOrCreateProduct(supabase, familyId, name, vocabularySet) {
   const { data: existing } = await supabase
     .from('products')
     .select('id')
@@ -222,9 +273,11 @@ async function findOrCreateProduct(supabase, familyId, name) {
     .limit(1);
   if (existing && existing.length > 0) return existing[0].id;
   const nameRu = await translateSingle(name);
+  const productType = await classifySingle(nameRu || name, [...vocabularySet]);
+  if (productType) vocabularySet.add(productType);
   const { data: created, error } = await supabase
     .from('products')
-    .insert({ name, original_name: name, name_ru: nameRu, family_id: familyId })
+    .insert({ name, original_name: name, name_ru: nameRu, product_type: productType, family_id: familyId })
     .select('id')
     .single();
   if (error) throw error;
@@ -248,7 +301,7 @@ async function catalogIdFor(supabase, cache, internalCode) {
   return id;
 }
 
-async function processReceipt(supabase, familyId, summary, detail, catalogCache) {
+async function processReceipt(supabase, familyId, summary, detail, catalogCache, vocabularySet) {
   const { data: existing } = await supabase
     .from('receipts')
     .select('id')
@@ -273,7 +326,7 @@ async function processReceipt(supabase, familyId, summary, detail, catalogCache)
 
   const items = detail.products?.list ?? [];
   for (const it of items) {
-    const productId = await findOrCreateProduct(supabase, familyId, it.name);
+    const productId = await findOrCreateProduct(supabase, familyId, it.name, vocabularySet);
     if (dateOnly) {
       const { data: prod } = await supabase
         .from('products')
@@ -348,11 +401,20 @@ export default async function handler(req, res) {
   let errors = 0;
   const catalogCache = new Map();
 
+  // Existing product_type values seed the classifier vocabulary so new items reuse
+  // canonical terms ("молоко" not "молочный продукт"). Set grows as new terms appear.
+  const { data: typeRows } = await supabase
+    .from('products')
+    .select('product_type')
+    .eq('family_id', PD_FAMILY_ID)
+    .not('product_type', 'is', null);
+  const vocabularySet = new Set((typeRows || []).map((r) => r.product_type));
+
   for (const summary of toProcess) {
     await new Promise((r) => setTimeout(r, 250));
     try {
       const detail = await getTransactionDetail(tokens.accessToken, summary.transactionId, summary.transactionStoreId);
-      const r = await processReceipt(supabase, PD_FAMILY_ID, summary, detail, catalogCache);
+      const r = await processReceipt(supabase, PD_FAMILY_ID, summary, detail, catalogCache, vocabularySet);
       results.push({ tx: summary.transactionNumber, ...r });
     } catch (err) {
       errors++;
