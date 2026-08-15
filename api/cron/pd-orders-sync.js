@@ -220,6 +220,7 @@ const CLASSIFY_SYSTEM = [
   'You classify grocery products into a generic Russian kind.',
   'Return ONE short Russian noun (plural nominative when naturally plural, else natural singular) describing WHAT the product IS, ignoring brand, variety, size, packaging.',
   'Examples: "Молоко UHT PD 1L"→"молоко", "Помидоры на ветке 500g"→"помидоры", "Куриное филе PD"→"курица", "Йогурт греческий Oikos"→"йогурт", "Хлеб пшеничный 500g"→"хлеб".',
+  'Distinguish alcoholic vs non-alcoholic beverages. "SEM ÁLCOOL" / "0.0%" / "безалкогольное" → suffix "безалкогольное" (e.g. "пиво безалкогольное", "вино безалкогольное"). Cider ("sidra") = "сидр" separately from пиво. Decaf coffee = "кофе без кофеина".',
   'REUSE terms from the provided vocabulary when semantically equivalent. Only add a new term if none fits.',
   'Lowercase, 1–3 words max, no adjectives unless disambiguation truly requires it.',
 ].join('\n');
