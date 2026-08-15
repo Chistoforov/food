@@ -34,7 +34,8 @@ const SYSTEM_PROMPT = [
 ].join('\n');
 
 async function classifyBatch(names, vocabulary) {
-  const userContent = JSON.stringify({ vocabulary, items: names });
+  const numbered = names.map((n, i) => `${i + 1}. ${n}`).join('\n');
+  const userContent = `Vocabulary already used (reuse when possible): [${vocabulary.join(', ') || 'empty'}]\n\nClassify each of these ${names.length} items:\n${numbered}`;
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -47,20 +48,34 @@ async function classifyBatch(names, vocabulary) {
       max_tokens: 4096,
       temperature: 0,
       system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
-      messages: [
-        { role: 'user', content: userContent },
-        { role: 'assistant', content: '[' },
-      ],
+      tools: [{
+        name: 'store_classifications',
+        description: 'Store the generic Russian kind for each item in order.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            types: {
+              type: 'array',
+              minItems: names.length,
+              maxItems: names.length,
+              items: { type: 'string' },
+              description: `Exactly ${names.length} entries, one per input item in the same order.`,
+            },
+          },
+          required: ['types'],
+        },
+      }],
+      tool_choice: { type: 'tool', name: 'store_classifications' },
+      messages: [{ role: 'user', content: userContent }],
     }),
   });
   const text = await res.text();
   if (!res.ok) throw new Error(`Anthropic ${res.status}: ${text.slice(0, 300)}`);
   const data = JSON.parse(text);
-  const content = data.content?.[0]?.text;
-  if (typeof content !== 'string') throw new Error(`Unexpected Anthropic response: ${text.slice(0, 300)}`);
-  const arr = JSON.parse('[' + content);
+  const toolUse = (data.content || []).find((c) => c.type === 'tool_use');
+  const arr = toolUse?.input?.types;
   if (!Array.isArray(arr) || arr.length !== names.length) {
-    throw new Error(`Expected ${names.length} classifications, got ${arr.length}`);
+    throw new Error(`Expected ${names.length} classifications, got ${Array.isArray(arr) ? arr.length : 'nothing'}`);
   }
   return arr.map((s) => (typeof s === 'string' ? s.trim().toLowerCase() : ''));
 }
