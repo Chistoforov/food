@@ -146,7 +146,7 @@ const GroceryTrackerApp = () => {
 
   // Загружаем статистику по типам продуктов из КЭША (быстро!)
   const [productTypeStats, setProductTypeStats] = useState<Record<string, {
-      status: 'ending-soon' | 'ok' | 'calculating'
+      status: 'ending-soon' | 'ok' | 'calculating' | 'irregular'
       productCount: number
   }>>({})
 

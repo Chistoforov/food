@@ -259,7 +259,7 @@ export class SupabaseService {
   static async calculateProductStats(productId: number, familyId: number): Promise<{
     avgDays: number | null
     predictedEnd: string | null
-    status: 'ending-soon' | 'ok' | 'calculating'
+    status: 'ending-soon' | 'ok' | 'calculating' | 'irregular'
   }> {
     // Получаем информацию о продукте для определения его типа
     const { data: product, error: productError } = await supabase
@@ -333,7 +333,7 @@ export class SupabaseService {
     const daysSincePurchase = Math.floor((today.getTime() - lastPurchaseDate.getTime()) / (1000 * 60 * 60 * 24))
     const daysUntilEnd = Math.floor((predictedEnd.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
     
-    let status: 'ending-soon' | 'ok' | 'calculating' = 'ok'
+    let status: 'ending-soon' | 'ok' | 'calculating' | 'irregular' = 'ok'
     
     // ВАЖНО: Проверяем последнюю запись КОНКРЕТНОГО продукта (а не всей группы)!
     // Это критично для корректной работы досрочного окончания в группах
@@ -711,7 +711,7 @@ export class SupabaseService {
   static async calculateProductTypeStatus(
     productType: string, 
     familyId: number
-  ): Promise<'ending-soon' | 'ok' | 'calculating'> {
+  ): Promise<'ending-soon' | 'ok' | 'calculating' | 'irregular'> {
     try {
       // Получаем все продукты этого типа
       const { data: products, error: productsError } = await supabase
@@ -795,7 +795,7 @@ export class SupabaseService {
   // Получить агрегированную статистику по типам продуктов (для главной страницы)
   // ОПТИМИЗИРОВАНО: Использует кэш из таблицы product_type_stats вместо расчета на лету
   static async getProductTypeStats(familyId: number): Promise<Record<string, {
-    status: 'ending-soon' | 'ok' | 'calculating'
+    status: 'ending-soon' | 'ok' | 'calculating' | 'irregular'
     productCount: number
   }>> {
     try {
@@ -814,13 +814,13 @@ export class SupabaseService {
 
       // Преобразуем в нужный формат
       const stats: Record<string, {
-        status: 'ending-soon' | 'ok' | 'calculating'
+        status: 'ending-soon' | 'ok' | 'calculating' | 'irregular'
         productCount: number
       }> = {}
 
       cachedStats?.forEach(item => {
         stats[item.product_type] = {
-          status: item.status as 'ending-soon' | 'ok' | 'calculating',
+          status: item.status as 'ending-soon' | 'ok' | 'calculating' | 'irregular',
           productCount: item.product_count
         }
       })

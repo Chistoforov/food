@@ -35,7 +35,7 @@ export interface Product {
   last_purchase: string
   avg_days: number | null
   predicted_end: string | null
-  status: 'ending-soon' | 'ok' | 'calculating'
+  status: 'ending-soon' | 'ok' | 'calculating' | 'irregular'
   purchase_count: number
   family_id: number
   normalized_name?: string

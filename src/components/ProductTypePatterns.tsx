@@ -424,7 +424,7 @@ export const getPatternForProductType = (productType: string): string => {
 };
 
 // Функция для получения цветовой схемы в зависимости от статуса
-export const getColorScheme = (status: 'ending-soon' | 'ok' | 'calculating') => {
+export const getColorScheme = (status: 'ending-soon' | 'ok' | 'calculating' | 'irregular') => {
   switch (status) {
     case 'ending-soon':
       return {
@@ -443,6 +443,12 @@ export const getColorScheme = (status: 'ending-soon' | 'ok' | 'calculating') => 
         border: 'border-blue-300',
         gradientStart: 'rgba(227, 242, 253, 1)',
         gradientEnd: 'rgba(187, 222, 251, 1)'
+      };
+    case 'irregular':
+      return {
+        border: 'border-slate-300',
+        gradientStart: 'rgba(241, 245, 249, 1)',
+        gradientEnd: 'rgba(226, 232, 240, 1)'
       };
   }
 };

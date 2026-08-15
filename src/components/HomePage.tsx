@@ -13,8 +13,8 @@ interface HomePageProps {
     receiptsCount: number;
   };
   currentMonth: { month: string, year: number };
-  productTypeStats: Record<string, { status: 'ending-soon' | 'ok' | 'calculating', productCount: number }>;
-  setProductTypeStats: React.Dispatch<React.SetStateAction<Record<string, { status: 'ending-soon' | 'ok' | 'calculating', productCount: number }>>>;
+  productTypeStats: Record<string, { status: 'ending-soon' | 'ok' | 'calculating' | 'irregular', productCount: number }>;
+  setProductTypeStats: React.Dispatch<React.SetStateAction<Record<string, { status: 'ending-soon' | 'ok' | 'calculating' | 'irregular', productCount: number }>>>;
   familyId: number;
   onNavigateMonth: {
     prev: () => void;
@@ -384,13 +384,15 @@ const HomePage: React.FC<HomePageProps> = ({
       )}
 
       {Object.keys(productTypeStats).length > 0 && (() => {
-        const sortedTypes = Object.entries(productTypeStats).sort(([, a], [, b]) => {
-          const statusPriority = { 'ending-soon': 0, 'ok': 1, 'calculating': 2 };
-          if (a.status !== b.status) {
-            return statusPriority[a.status] - statusPriority[b.status];
-          }
-          return b.productCount - a.productCount;
-        });
+        const statusPriority: Record<string, number> = { 'ending-soon': 0, 'ok': 1, 'calculating': 2 };
+        const sortedTypes = Object.entries(productTypeStats)
+          .filter(([, s]) => s.status !== 'irregular')
+          .sort(([, a], [, b]) => {
+            if (a.status !== b.status) {
+              return (statusPriority[a.status] ?? 99) - (statusPriority[b.status] ?? 99);
+            }
+            return b.productCount - a.productCount;
+          });
 
         return sortedTypes.length > 0 && (
           <div className="animate-fadeIn" style={{animationDelay: '0.1s'}}>

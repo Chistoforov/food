@@ -13,7 +13,7 @@ interface ProcessedProduct {
   lastPurchase: string;
   avgDays: number | null;
   predictedEnd: string | null;
-  status: 'ending-soon' | 'ok' | 'calculating';
+  status: 'ending-soon' | 'ok' | 'calculating' | 'irregular';
   purchaseCount: number;
 }
 
