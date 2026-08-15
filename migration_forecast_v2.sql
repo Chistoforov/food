@@ -20,7 +20,9 @@ ALTER TABLE product_type_stats
 --
 -- Thresholds are hardcoded (per user decision — retune via migration):
 --   MIN_PURCHASES        = 6      покупок за LOOKBACK, иначе irregular
---   MAX_MEAN_INTERVAL    = 30     дней между покупками, иначе irregular
+--   MAX_MEAN_INTERVAL    = 18     дней между покупками (~2.5 недели), иначе irregular
+--                                 (ужесточено с 30 → 18 после первого прогона: 20-27д типы
+--                                 типа "яблоки/черника/вода/хлопья" ощущались как импульсные)
 --   STALENESS_MULT       = 2.0    days_since_last <= mult*mean + grace, иначе irregular
 --   STALENESS_GRACE      = 3      дни-запас для staleness gate
 --   MIN_FIRST_SEEN       = 30     дней с первой покупки (защита от кластера пробных)
@@ -49,7 +51,7 @@ AS $$
 DECLARE
   -- Hardcoded config
   c_min_purchases     CONSTANT INTEGER := 6;
-  c_max_mean_interval CONSTANT NUMERIC := 30;
+  c_max_mean_interval CONSTANT NUMERIC := 18;
   c_staleness_mult    CONSTANT NUMERIC := 2.0;
   c_staleness_grace   CONSTANT INTEGER := 3;
   c_min_first_seen    CONSTANT INTEGER := 30;
