@@ -1,4 +1,4 @@
-// Batch-translate products.name (PT) → products.name_ru via OpenAI gpt-4o-mini.
+// Batch-translate products.name (PT) → products.name_ru via Anthropic Claude Haiku 4.5.
 // Idempotent: only fills rows where name_ru IS NULL. Safe to rerun.
 // POST with {batchSize?, maxBatches?} for chunked progress; defaults 40/5 (~200 products/call).
 
@@ -6,7 +6,7 @@ import { createClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const OPENAI_KEY = process.env.OPENAI_API_KEY;
+const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
 const PD_FAMILY_ID = Number(process.env.PD_FAMILY_ID || '1');
 
 const SYSTEM_PROMPT = [
@@ -22,31 +22,36 @@ const SYSTEM_PROMPT = [
 ].join(' ');
 
 async function translateBatch(names) {
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${OPENAI_KEY}`,
-      'Content-Type': 'application/json',
+      'x-api-key': ANTHROPIC_KEY,
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'gpt-4o-mini',
-      response_format: { type: 'json_object' },
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT + ' Wrap the array in {"translations": [...]}.' },
-        { role: 'user', content: JSON.stringify(names) },
-      ],
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 4096,
       temperature: 0.2,
+      system: [
+        { type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } },
+      ],
+      messages: [
+        { role: 'user', content: JSON.stringify(names) },
+        // Prefill forces Claude to emit a bare JSON array; we prepend '[' when parsing.
+        { role: 'assistant', content: '[' },
+      ],
     }),
   });
   const text = await res.text();
-  if (!res.ok) throw new Error(`OpenAI ${res.status}: ${text.slice(0, 300)}`);
+  if (!res.ok) throw new Error(`Anthropic ${res.status}: ${text.slice(0, 300)}`);
   const data = JSON.parse(text);
-  const content = data.choices?.[0]?.message?.content;
-  if (!content) throw new Error(`Unexpected OpenAI response: ${text.slice(0, 300)}`);
-  const parsed = JSON.parse(content);
-  const arr = parsed.translations || parsed.result || parsed.data;
+  const content = data.content?.[0]?.text;
+  if (typeof content !== 'string') throw new Error(`Unexpected Anthropic response: ${text.slice(0, 300)}`);
+  const full = '[' + content;
+  const arr = JSON.parse(full);
   if (!Array.isArray(arr) || arr.length !== names.length) {
-    throw new Error(`Expected array of ${names.length} translations, got ${JSON.stringify(parsed).slice(0, 300)}`);
+    throw new Error(`Expected array of ${names.length} translations, got ${JSON.stringify(arr).slice(0, 300)}`);
   }
   return arr.map((s) => (typeof s === 'string' ? s : String(s)));
 }
@@ -58,7 +63,7 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
   if (!SUPABASE_URL || !SERVICE_KEY) return res.status(500).json({ error: 'Missing SUPABASE env' });
-  if (!OPENAI_KEY) return res.status(500).json({ error: 'Missing OPENAI_API_KEY' });
+  if (!ANTHROPIC_KEY) return res.status(500).json({ error: 'Missing ANTHROPIC_API_KEY' });
 
   let body = req.body;
   if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = {}; } }

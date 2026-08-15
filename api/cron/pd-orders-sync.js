@@ -180,33 +180,34 @@ function normalizeName(s) {
 
 // ---------- DB ----------
 // Best-effort PT→RU translation for a single fresh product name.
-// Never throws — if OpenAI is down or key missing, we insert without name_ru
+// Never throws — if Anthropic is down or key missing, we insert without name_ru
 // (backfill via /api/admin/translate-products later).
 async function translateSingle(name) {
-  const key = process.env.OPENAI_API_KEY;
+  const key = process.env.ANTHROPIC_API_KEY;
   if (!key) return null;
   try {
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      headers: {
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+      },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        response_format: { type: 'json_object' },
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 200,
         temperature: 0.2,
-        messages: [
-          {
-            role: 'system',
-            content:
-              'Translate a Portuguese grocery product name (from Pingo Doce receipt) to Russian. Keep brand names in Latin, keep units (g, kg, ml, L, cl). Common abbreviations: V.ALENT=Vinho Alentejano, PD=Pingo Doce, QJ=Queijo, FLC=Flocos, INT=Integral, SDR=Sem Doses de Redução. Return JSON {"ru": "..."}.',
-          },
-          { role: 'user', content: name },
-        ],
+        system:
+          'Translate a Portuguese grocery product name (from Pingo Doce receipt) to Russian. Keep brand names in Latin, keep units (g, kg, ml, L, cl). Common abbreviations: V.ALENT=Vinho Alentejano, PD=Pingo Doce, QJ=Queijo, FLC=Flocos, INT=Integral, SDR=Sem Doses de Redução. Reply with only the Russian name, no quotes, no extra text.',
+        messages: [{ role: 'user', content: name }],
       }),
     });
     if (!res.ok) return null;
     const data = await res.json();
-    const parsed = JSON.parse(data.choices?.[0]?.message?.content ?? '{}');
-    return typeof parsed.ru === 'string' ? parsed.ru : null;
+    const text = data.content?.[0]?.text;
+    if (typeof text !== 'string') return null;
+    const trimmed = text.trim().replace(/^["']|["']$/g, '');
+    return trimmed.length > 0 ? trimmed : null;
   } catch {
     return null;
   }
