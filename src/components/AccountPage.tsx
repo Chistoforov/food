@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { SupabaseService } from '../services/supabaseService'
 import { UserProfile, FamilyInvitation } from '../lib/supabase'
@@ -259,15 +260,15 @@ const AccountPage = () => {
       )}
 
       {/* Invite Modal */}
-      {showInviteModal && (
+      {showInviteModal && createPortal(
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fadeIn">
               <div className="bg-white rounded-[32px] p-4 sm:p-6 w-full max-w-sm shadow-2xl animate-scaleIn">
                   <h3 className="text-xl font-bold text-slate-900 mb-4">Пригласить в семью</h3>
                   <form onSubmit={handleInvite}>
                       <div className="mb-4">
                           <label className="block text-sm font-medium text-slate-500 mb-1.5 ml-1">Email пользователя</label>
-                          <input 
-                            type="email" 
+                          <input
+                            type="email"
                             required
                             value={inviteEmail}
                             onChange={e => setInviteEmail(e.target.value)}
@@ -276,14 +277,14 @@ const AccountPage = () => {
                           />
                       </div>
                       <div className="flex gap-3">
-                          <button 
+                          <button
                             type="button"
                             onClick={() => setShowInviteModal(false)}
                             className="flex-1 py-3 text-slate-600 font-bold bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors"
                           >
                               Отмена
                           </button>
-                          <button 
+                          <button
                             type="submit"
                             disabled={inviting}
                             className="flex-1 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200 disabled:opacity-70 disabled:cursor-not-allowed"
@@ -293,7 +294,8 @@ const AccountPage = () => {
                       </div>
                   </form>
               </div>
-          </div>
+          </div>,
+          document.body
       )}
     </div>
   )

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Calendar, Edit2, Info, Loader2, ShoppingCart } from 'lucide-react';
 import { SupabaseService } from '../services/supabaseService';
 import { ProductHistory, Product, Receipt } from '../lib/supabase';
@@ -67,7 +68,7 @@ const ReceiptDetailModal = ({
   };
 
   if (loading) {
-    return (
+    return createPortal(
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
         <div className="bg-white rounded-2xl p-6 max-w-lg w-full">
           <div className="text-center py-8">
@@ -75,11 +76,12 @@ const ReceiptDetailModal = ({
             <p className="text-gray-600">Загрузка чека...</p>
           </div>
         </div>
-      </div>
+      </div>,
+      document.body
     );
   }
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
@@ -210,7 +212,8 @@ const ReceiptDetailModal = ({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

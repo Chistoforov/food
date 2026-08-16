@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Download, X, Share, Plus, Smartphone, Info } from 'lucide-react';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 
@@ -108,7 +109,7 @@ const PWAInstallButton = () => {
       </button>
 
       {/* Модалка с инструкциями для iOS */}
-      {showIOSInstructions && (
+      {showIOSInstructions && createPortal(
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 animate-fadeIn">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl transform animate-scaleIn">
             {/* Header */}
@@ -186,7 +187,8 @@ const PWAInstallButton = () => {
               Понятно
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );
