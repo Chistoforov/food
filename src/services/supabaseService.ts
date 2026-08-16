@@ -837,6 +837,27 @@ export class SupabaseService {
     }
   }
 
+  // Сколько SKU со статусом ending-soon в каждом типе — для точной подписи на Home.
+  static async getEndingSoonCountsByType(familyId: number): Promise<Record<string, number>> {
+    const { data, error } = await supabase
+      .from('products')
+      .select('product_type')
+      .eq('family_id', familyId)
+      .eq('status', 'ending-soon')
+      .not('product_type', 'is', null)
+    if (error) {
+      console.warn('ending-soon counts fetch failed:', error.message)
+      return {}
+    }
+    const map: Record<string, number> = {}
+    for (const row of data || []) {
+      const pt = (row as { product_type: string | null }).product_type
+      if (!pt) continue
+      map[pt] = (map[pt] || 0) + 1
+    }
+    return map
+  }
+
   static async getProductTypeTranslations(): Promise<Record<string, string>> {
     const { data, error } = await supabase.from('product_type_translations').select('pt, ru')
     if (error) {

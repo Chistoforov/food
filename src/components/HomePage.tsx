@@ -8,6 +8,7 @@ const toForecast = (s: DbStatus): ForecastStatus => (s === 'ending-soon' ? 'endi
 
 interface HomePageProps {
   productTypeStats: Record<string, { status: DbStatus; productCount: number }>
+  endingCountsByType: Record<string, number>
   typeTranslations: Record<string, string>
   receipts: Receipt[]
   offline: boolean
@@ -38,6 +39,7 @@ const formatMoney = (amount: number, lang: 'ru' | 'pt') => {
 
 const HomePage: React.FC<HomePageProps> = ({
   productTypeStats,
+  endingCountsByType,
   typeTranslations,
   receipts,
   offline,
@@ -91,6 +93,7 @@ const HomePage: React.FC<HomePageProps> = ({
                       first={i === 0}
                       name={displayType(g.type)}
                       skuCount={g.count}
+                      endingCount={endingCountsByType[g.type]}
                       status={g.status}
                       lang={lang}
                       onClick={() => onOpenType(g.type)}

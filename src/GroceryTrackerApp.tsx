@@ -80,6 +80,7 @@ const GroceryTrackerApp = () => {
   const { receipts } = useReceipts(familyId)
 
   const [typeStats, setTypeStats] = useState<TypeStats>({})
+  const [endingCountsByType, setEndingCountsByType] = useState<Record<string, number>>({})
   const [typeTranslations, setTypeTranslations] = useState<Record<string, string>>({})
 
   useEffect(() => {
@@ -87,6 +88,9 @@ const GroceryTrackerApp = () => {
     SupabaseService.getProductTypeStats(familyId)
       .then((s) => setTypeStats(s))
       .catch((err) => console.error('type stats failed:', err))
+    SupabaseService.getEndingSoonCountsByType(familyId)
+      .then((m) => setEndingCountsByType(m))
+      .catch((err) => console.error('ending counts failed:', err))
     SupabaseService.getProductTypeTranslations()
       .then((t) => setTypeTranslations(t))
       .catch((err) => console.error('translations failed:', err))
@@ -141,6 +145,31 @@ const GroceryTrackerApp = () => {
     await refetchProducts()
     if (familyId) {
       SupabaseService.getProductTypeStats(familyId).then(setTypeStats).catch(() => {})
+      SupabaseService.getEndingSoonCountsByType(familyId).then(setEndingCountsByType).catch(() => {})
+    }
+  }
+
+  const handleMarkTypeBought = async (type: string) => {
+    if (!familyId) return
+    try {
+      const n = await SupabaseService.addVirtualPurchaseForType(type, familyId)
+      if (n === 0) {
+        alert(lang === 'pt' ? 'Sem produtos deste tipo.' : 'Нет продуктов этого типа.')
+        return
+      }
+      await new Promise((r) => setTimeout(r, 400))
+      await SupabaseService.recalculateProductTypeStats(familyId)
+      const [fresh, freshEnding] = await Promise.all([
+        SupabaseService.getProductTypeStats(familyId),
+        SupabaseService.getEndingSoonCountsByType(familyId),
+        refetchProducts(),
+      ])
+      setTypeStats(fresh)
+      setEndingCountsByType(freshEnding)
+      setTypeFilter(null)
+    } catch (err) {
+      console.error('mark bought failed:', err)
+      alert(lang === 'pt' ? 'Não foi possível guardar.' : 'Не удалось сохранить.')
     }
   }
 
@@ -176,6 +205,7 @@ const GroceryTrackerApp = () => {
             <AppHeader title={titles.home} subtitle={formatUpdated(lastSyncHours, lang)} />
             <HomePage
               productTypeStats={typeStats}
+              endingCountsByType={endingCountsByType}
               typeTranslations={typeTranslations}
               receipts={receipts}
               offline={!online}
@@ -196,7 +226,7 @@ const GroceryTrackerApp = () => {
               loadingMore={loadingMore}
               typeTranslations={typeTranslations}
               filterType={typeFilter}
-              onClearTypeFilter={() => setTypeFilter(null)}
+              onMarkTypeBought={handleMarkTypeBought}
               onOpenProduct={openProduct}
             />
           </>

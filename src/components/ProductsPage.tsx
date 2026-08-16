@@ -27,7 +27,7 @@ interface ProductsPageProps {
   loadingMore: boolean
   typeTranslations: Record<string, string>
   filterType?: string | null
-  onClearTypeFilter?: () => void
+  onMarkTypeBought?: (type: string) => Promise<void>
   onOpenProduct: (product: ProcessedProduct) => void
 }
 
@@ -41,19 +41,20 @@ const ProductsPage: React.FC<ProductsPageProps> = ({
   loadingMore,
   typeTranslations,
   filterType,
-  onClearTypeFilter,
+  onMarkTypeBought,
   onOpenProduct,
 }) => {
   const { language } = useLanguage()
   const lang: 'ru' | 'pt' = language
   const [q, setQ] = useState('')
   const [filter, setFilter] = useState<'all' | ForecastStatus>('all')
+  const [marking, setMarking] = useState(false)
 
   const displayType = (pt?: string) => (pt ? (lang === 'ru' && typeTranslations[pt]) || pt : '')
 
   const t = lang === 'pt'
-    ? { search: 'Encontrar produto', clear: 'Limpar', all: 'Todos', emptyTitle: 'Ainda vazio', emptyDesc: 'Pede para te adicionarem à família — os dados aparecem sozinhos.', noMatchTitle: 'Nada encontrado', noMatchDesc: 'Tenta outro nome ou remove o filtro.', loadMore: 'Mostrar mais', loading: 'A carregar…', products: (n: number) => (n === 1 ? '1 produto' : `${n} produtos`) }
-    : { search: 'Найти продукт', clear: 'Сброс', all: 'Все', emptyTitle: 'Пока пусто', emptyDesc: 'Попроси добавить тебя в семью — данные появятся сами.', noMatchTitle: 'Ничего не найдено', noMatchDesc: 'Попробуй другое название или сними фильтр.', loadMore: 'Показать ещё', loading: 'Загрузка…', products: (n: number) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'продукт' : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? 'продукта' : 'продуктов'}` }
+    ? { search: 'Encontrar produto', clear: 'Limpar', bought: 'Comprado', boughtDoing: 'A guardar…', all: 'Todos', emptyTitle: 'Ainda vazio', emptyDesc: 'Pede para te adicionarem à família — os dados aparecem sozinhos.', noMatchTitle: 'Nada encontrado', noMatchDesc: 'Tenta outro nome ou remove o filtro.', loadMore: 'Mostrar mais', loading: 'A carregar…', products: (n: number) => (n === 1 ? '1 produto' : `${n} produtos`) }
+    : { search: 'Найти продукт', clear: 'Сброс', bought: 'Куплено', boughtDoing: 'Сохраняю…', all: 'Все', emptyTitle: 'Пока пусто', emptyDesc: 'Попроси добавить тебя в семью — данные появятся сами.', noMatchTitle: 'Ничего не найдено', noMatchDesc: 'Попробуй другое название или сними фильтр.', loadMore: 'Показать ещё', loading: 'Загрузка…', products: (n: number) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'продукт' : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? 'продукта' : 'продуктов'}` }
 
   const filterLabels: Record<'all' | ForecastStatus, string> = lang === 'pt'
     ? { all: 'Todos', ending_soon: 'A acabar', ok: 'Suficiente', irregular: 'Irregular', calculating: 'A calcular' }
@@ -89,7 +90,7 @@ const ProductsPage: React.FC<ProductsPageProps> = ({
             alignItems: 'center',
             justifyContent: 'space-between',
             gap: 'var(--space-4)',
-            padding: 'var(--space-5) var(--space-6)',
+            padding: 'var(--space-3) var(--space-3) var(--space-3) var(--space-6)',
             marginTop: 'var(--space-6)',
             background: 'var(--surface-sunken)',
             border: '1px solid var(--line-hairline)',
@@ -99,13 +100,32 @@ const ProductsPage: React.FC<ProductsPageProps> = ({
           }}
         >
           <span>{displayType(filterType)}</span>
-          {onClearTypeFilter && (
+          {onMarkTypeBought && (
             <button
               type="button"
-              onClick={onClearTypeFilter}
-              style={{ border: 'none', background: 'transparent', color: 'var(--text-tertiary)', cursor: 'pointer', font: 'var(--type-meta)' }}
+              disabled={marking}
+              onClick={async () => {
+                try {
+                  setMarking(true)
+                  await onMarkTypeBought(filterType)
+                } finally {
+                  setMarking(false)
+                }
+              }}
+              style={{
+                minHeight: 32,
+                padding: '0 var(--space-6)',
+                border: '1px solid var(--stone-900)',
+                background: 'var(--stone-900)',
+                color: 'var(--text-inverse)',
+                font: 'var(--type-label)',
+                borderRadius: 'var(--radius-sm)',
+                cursor: marking ? 'default' : 'pointer',
+                opacity: marking ? 0.6 : 1,
+                whiteSpace: 'nowrap',
+              }}
             >
-              {t.clear}
+              {marking ? t.boughtDoing : t.bought}
             </button>
           )}
         </div>
