@@ -4,12 +4,14 @@ import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { SupabaseService } from '../services/supabaseService'
 import { UserProfile } from '../lib/supabase'
+import { clearAppCache } from '../utils/cacheHelper'
 
 const AccountPage = () => {
   const { user, profile, signOut } = useAuth()
   const { language, setLanguage } = useLanguage()
   const lang: 'ru' | 'pt' = language
   const [members, setMembers] = useState<UserProfile[]>([])
+  const [clearing, setClearing] = useState(false)
 
   useEffect(() => {
     if (!profile?.family_id) return
@@ -28,6 +30,9 @@ const AccountPage = () => {
         members: 'Membros',
         you: 'tu',
         data: 'Os dados são partilhados por toda a família.',
+        clearCache: 'Limpar cache',
+        clearCacheHint: 'Recalcula os dados locais e recarrega.',
+        clearCacheDoing: 'A limpar…',
         logout: 'Sair',
       }
     : {
@@ -39,8 +44,23 @@ const AccountPage = () => {
         members: 'Участники',
         you: 'это ты',
         data: 'Данные общие для всех участников семьи.',
+        clearCache: 'Сбросить кэш',
+        clearCacheHint: 'Пересчитает данные и перезагрузит приложение.',
+        clearCacheDoing: 'Сбрасываю…',
         logout: 'Выйти',
       }
+
+  const handleClearCache = async () => {
+    try {
+      setClearing(true)
+      await clearAppCache(profile?.family_id, true)
+      window.location.reload()
+    } catch (err) {
+      console.error('clear cache failed:', err)
+      alert(lang === 'pt' ? 'Não foi possível limpar.' : 'Не удалось сбросить кэш.')
+      setClearing(false)
+    }
+  }
 
   return (
     <>
@@ -101,8 +121,15 @@ const AccountPage = () => {
 
         <div style={{ font: 'var(--type-meta)', color: 'var(--text-tertiary)', padding: 'var(--space-5) var(--space-1)' }}>{t.data}</div>
 
+        <div style={{ paddingTop: 'var(--space-8)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+          <Button block onClick={handleClearCache} disabled={clearing}>
+            {clearing ? t.clearCacheDoing : t.clearCache}
+          </Button>
+          <div style={{ font: 'var(--type-meta)', color: 'var(--text-tertiary)', padding: '0 var(--space-1)' }}>{t.clearCacheHint}</div>
+        </div>
+
         <div style={{ paddingTop: 'var(--space-8)' }}>
-          <Button variant="danger" block onClick={() => signOut()}>
+          <Button variant="danger" block onClick={() => signOut()} disabled={clearing}>
             {t.logout}
           </Button>
         </div>
