@@ -2,82 +2,125 @@
 @tailwind components;
 @tailwind utilities;
 
+/* --- Design tokens: warm-stone neutrals + amber/green status. Light theme only. --- */
+:root {
+  --font-sans: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --stone-0: #ffffff; --stone-25: #faf9f7; --stone-50: #f5f4f1;
+  --stone-100: #edebe7; --stone-200: #e0ddd7; --stone-300: #c9c5bc;
+  --stone-400: #a39e93; --stone-500: #7d786d; --stone-600: #5c584f;
+  --stone-700: #423f38; --stone-800: #2b2924; --stone-900: #1a1815;
+
+  --amber-50: #fdf7ea; --amber-100: #f7ebd0; --amber-200: #efd79e;
+  --amber-500: #c98a15; --amber-700: #8a5a05;
+
+  --green-50: #f1f6ee; --green-100: #dfebd9; --green-200: #c2dab7;
+  --green-500: #4e7a38; --green-700: #3a5c29;
+
+  --red-50: #fdf2f0; --red-100: #f6ded9; --red-500: #b4402c; --red-700: #8e2f1f;
+  --blue-500: #2f5fa8;
+
+  --text-primary: var(--stone-900);
+  --text-secondary: var(--stone-600);
+  --text-tertiary: var(--stone-500);
+  --text-disabled: var(--stone-400);
+  --text-inverse: var(--stone-0);
+  --text-link: var(--blue-500);
+  --text-danger: var(--red-700);
+
+  --surface-page: var(--stone-25);
+  --surface-card: var(--stone-0);
+  --surface-raised: var(--stone-0);
+  --surface-sunken: var(--stone-50);
+  --surface-hover: var(--stone-50);
+  --surface-active: var(--stone-100);
+  --surface-inverse: var(--stone-900);
+  --surface-scrim: rgba(26, 24, 21, 0.44);
+
+  --line-hairline: var(--stone-100);
+  --line-strong: var(--stone-200);
+  --line-focus: var(--stone-900);
+
+  --status-ending-fg: var(--amber-700);
+  --status-ending-bg: var(--amber-50);
+  --status-ending-line: var(--amber-200);
+  --status-ending-dot: var(--amber-500);
+  --status-ok-fg: var(--green-700);
+  --status-ok-bg: var(--green-50);
+  --status-ok-line: var(--green-200);
+  --status-ok-dot: var(--green-500);
+  --status-irregular-fg: var(--stone-500);
+  --status-irregular-bg: var(--stone-50);
+  --status-irregular-dot: var(--stone-300);
+  --status-calculating-fg: var(--stone-400);
+  --status-calculating-bg: var(--stone-50);
+
+  --error-fg: var(--red-700);
+  --error-bg: var(--red-50);
+  --error-line: var(--red-100);
+
+  --fs-11: 11px; --fs-12: 12px; --fs-13: 13px; --fs-14: 14px;
+  --fs-15: 15px; --fs-17: 17px; --fs-20: 20px; --fs-24: 24px; --fs-32: 32px;
+  --lh-tight: 1.2; --lh-snug: 1.35; --lh-normal: 1.5;
+  --fw-regular: 400; --fw-medium: 500; --fw-semibold: 600; --fw-bold: 700;
+  --ls-tight: -0.01em; --ls-normal: 0; --ls-caps: 0.06em;
+
+  --type-screen-title: var(--fw-semibold) var(--fs-24) / var(--lh-tight) var(--font-sans);
+  --type-section: var(--fw-semibold) var(--fs-13) / var(--lh-snug) var(--font-sans);
+  --type-row-title: var(--fw-medium) var(--fs-15) / var(--lh-snug) var(--font-sans);
+  --type-body: var(--fw-regular) var(--fs-15) / var(--lh-normal) var(--font-sans);
+  --type-body-sm: var(--fw-regular) var(--fs-13) / var(--lh-normal) var(--font-sans);
+  --type-meta: var(--fw-regular) var(--fs-12) / var(--lh-snug) var(--font-sans);
+  --type-label: var(--fw-medium) var(--fs-13) / var(--lh-snug) var(--font-sans);
+  --type-num: var(--fw-medium) var(--fs-15) / var(--lh-snug) var(--font-sans);
+  --type-original: var(--fw-regular) var(--fs-12) / var(--lh-snug) var(--font-mono);
+
+  --space-0: 0; --space-1: 2px; --space-2: 4px; --space-3: 6px;
+  --space-4: 8px; --space-5: 10px; --space-6: 12px; --space-7: 16px;
+  --space-8: 20px; --space-9: 24px; --space-10: 32px; --space-11: 40px; --space-12: 48px;
+  --gutter-mobile: 16px; --gutter-desktop: 24px;
+  --row-min-height: 52px; --tap-min: 44px;
+  --content-max: 640px; --content-max-wide: 960px;
+  --tabbar-height: 56px;
+
+  --radius-xs: 3px; --radius-sm: 5px; --radius-md: 8px;
+  --radius-lg: 12px; --radius-sheet: 16px; --radius-pill: 999px;
+
+  --shadow-none: none;
+  --shadow-sheet: 0 -2px 24px rgba(26, 24, 21, 0.14);
+  --shadow-dialog: 0 8px 32px rgba(26, 24, 21, 0.16), 0 1px 2px rgba(26, 24, 21, 0.08);
+  --shadow-sticky: 0 1px 0 var(--line-hairline);
+
+  --ease-standard: cubic-bezier(0.2, 0, 0.2, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --dur-instant: 80ms; --dur-fast: 140ms; --dur-sheet: 220ms;
+}
+
 @layer base {
-  html {
-    -webkit-tap-highlight-color: transparent;
-  }
-  
+  *, *::before, *::after { box-sizing: border-box; }
+  html { -webkit-tap-highlight-color: transparent; }
   body {
-    background-color: #f8fafc; /* surface-50 */
-    color: #0f172a; /* surface-900 */
-    font-feature-settings: "cv11", "ss01";
+    margin: 0;
+    font: var(--type-body);
+    color: var(--text-primary);
+    background: var(--surface-page);
+    -webkit-font-smoothing: antialiased;
+    text-wrap: pretty;
+  }
+  a { color: var(--text-link); text-decoration: none; }
+  a:hover { color: var(--stone-900); text-decoration: underline; }
+  button { font: inherit; color: inherit; }
+  :where(input, button, select, textarea):focus-visible {
+    outline: 2px solid var(--line-focus);
+    outline-offset: 2px;
   }
 }
 
-/* Custom Utilities */
-.glass-panel {
-  @apply bg-white/70 backdrop-blur-lg border border-white/20;
-  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07); /* shadow-glass */
-}
+.tnum, [data-tnum] { font-variant-numeric: tabular-nums lining-nums; }
 
-.glass-card {
-  @apply bg-white/80 backdrop-blur-md border border-white/40;
-  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05); /* shadow-soft */
-}
+.safe-area-bottom { padding-bottom: env(safe-area-inset-bottom); }
+.safe-area-top { padding-top: env(safe-area-inset-top); }
 
-/* Hide scrollbar for clean look */
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-.no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-
-/* PWA Safe Area Support */
-.safe-area-bottom {
-  padding-bottom: env(safe-area-inset-bottom);
-}
-
-.safe-area-top {
-  padding-top: env(safe-area-inset-top);
-}
-
-/* Animations */
-@keyframes fadeOut {
-  from { opacity: 1; transform: translateY(0); }
-  to { opacity: 0; transform: translateY(-10px); }
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(-10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes scaleIn {
-  from { opacity: 0; transform: scale(0.95); }
-  to { opacity: 1; transform: scale(1); }
-}
-
-.animate-fadeIn {
-  animation: fadeIn 0.4s ease-out forwards;
-}
-
-.animate-scaleIn {
-  animation: scaleIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-/* Modern reset adjustments */
-input, button, select, textarea {
-  outline: none;
-}
-
-/* Product Type Icons */
-@keyframes iconFloat {
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-3px); }
-}
-
-.product-type-icon {
-  animation: iconFloat 3s ease-in-out infinite;
-}
+@keyframes pantry-skeleton { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+@keyframes pantry-sheet-in { from { transform: translateY(12px); opacity: 0.6; } to { transform: none; opacity: 1; } }
