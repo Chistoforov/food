@@ -6,10 +6,19 @@ interface MonthSpendCardProps {
   lang: 'ru' | 'pt'
 }
 
+const parseMonthKey = (year: number, month: string): { y: number; m: number } | null => {
+  // month может быть 'YYYY-MM' или 'MM'
+  const parts = month.split('-')
+  const mm = parts.length > 1 ? parseInt(parts[1], 10) : parseInt(month, 10)
+  const yy = parts.length > 1 ? parseInt(parts[0], 10) : year
+  if (!yy || !mm || mm < 1 || mm > 12) return null
+  return { y: yy, m: mm }
+}
+
 const formatMonth = (year: number, month: string, lang: 'ru' | 'pt') => {
-  const m = parseInt(month, 10)
-  if (!year || !m) return ''
-  const d = new Date(year, m - 1, 1)
+  const parsed = parseMonthKey(year, month)
+  if (!parsed) return ''
+  const d = new Date(parsed.y, parsed.m - 1, 1)
   const raw = d.toLocaleDateString(lang === 'pt' ? 'pt-PT' : 'ru-RU', { month: 'long', year: 'numeric' })
   return raw.charAt(0).toUpperCase() + raw.slice(1)
 }
@@ -31,13 +40,20 @@ export function MonthSpendCard({ stats, lang }: MonthSpendCardProps) {
   const scrollerRef = useRef<HTMLDivElement | null>(null)
 
   const items = useMemo(() => {
-    return [...stats]
-      .filter((s) => s.year && s.month)
-      .sort((a, b) => {
-        const ka = `${a.year}-${a.month.padStart(2, '0')}`
-        const kb = `${b.year}-${b.month.padStart(2, '0')}`
-        return kb.localeCompare(ka)
-      })
+    const dedup = new Map<string, MonthlyStats>()
+    for (const s of stats) {
+      const p = parseMonthKey(s.year, s.month)
+      if (!p) continue
+      const key = `${p.y}-${String(p.m).padStart(2, '0')}`
+      const prev = dedup.get(key)
+      // при коллизии оставляем запись с большим total_spent
+      if (!prev || Number(s.total_spent || 0) > Number(prev.total_spent || 0)) {
+        dedup.set(key, s)
+      }
+    }
+    return [...dedup.entries()]
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .map(([, s]) => s)
   }, [stats])
 
   useEffect(() => {

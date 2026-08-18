@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Card, SearchField, FilterChip, ProductRow, EmptyState, Button, type ForecastStatus } from './ds'
 import { useLanguage } from '../contexts/LanguageContext'
 import { displayType as displayTypeUtil, type TypeTranslationMaps } from '../lib/typeI18n'
@@ -24,9 +24,6 @@ export interface ProcessedProduct {
 interface ProductsPageProps {
   products: ProcessedProduct[]
   loading: boolean
-  hasMore: boolean
-  loadMore?: (limit: number) => Promise<void>
-  loadingMore: boolean
   typeTranslations: TypeTranslationMaps
   filterType?: string | null
   onMarkTypeBought?: (type: string) => Promise<void>
@@ -48,9 +45,6 @@ const STATUS_PRIORITY: Record<ForecastStatus, number> = {
 const ProductsPage: React.FC<ProductsPageProps> = ({
   products,
   loading,
-  hasMore,
-  loadMore,
-  loadingMore,
   typeTranslations,
   filterType,
   onMarkTypeBought,
@@ -63,6 +57,12 @@ const ProductsPage: React.FC<ProductsPageProps> = ({
   const [q, setQ] = useState('')
   const [filter, setFilter] = useState<'all' | ForecastStatus>('all')
   const [marking, setMarking] = useState(false)
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+
+  // Сбрасываем клиентскую пагинацию при смене фильтров/поиска
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE)
+  }, [q, filter, filterType])
 
   const displayType = (type?: string) => (type ? displayTypeUtil(type, lang, typeTranslations) : '')
 
@@ -205,7 +205,7 @@ const ProductsPage: React.FC<ProductsPageProps> = ({
         </Card>
       ) : (
         <Card padded={false}>
-          {rows.map((p, i) => (
+          {rows.slice(0, visibleCount).map((p, i) => (
             <ProductRow
               key={p.id}
               first={i === 0}
@@ -222,10 +222,10 @@ const ProductsPage: React.FC<ProductsPageProps> = ({
         </Card>
       )}
 
-      {!loading && hasMore && rows.length > 0 && loadMore && (
+      {!loading && rows.length > visibleCount && (
         <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 'var(--space-8)' }}>
-          <Button onClick={() => loadMore(PAGE_SIZE)} disabled={loadingMore}>
-            {loadingMore ? t.loading : t.loadMore}
+          <Button onClick={() => setVisibleCount((v) => v + PAGE_SIZE)}>
+            {t.loadMore}
           </Button>
         </div>
       )}

@@ -1,63 +1,28 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { SupabaseService } from '../services/supabaseService'
 import { Product, Receipt, ProductHistory, MonthlyStats } from '../lib/supabase'
 
-// Хук для работы с продуктами
+// Хук для работы с продуктами.
+// Грузим сразу всех — их обычно 200-500 штук, а серверная пагинация ломает
+// клиентские фильтры по типу (SKU нужного типа могли не попасть в первую страницу).
+// Клиентская пагинация "Показать ещё" живёт в ProductsPage.
 export const useProducts = (familyId: number) => {
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [hasMore, setHasMore] = useState(true)
-  const [loadingMore, setLoadingMore] = useState(false)
-  const inFlightRef = useRef(false)
-  const productsRef = useRef<Product[]>([])
 
-  const fetchProducts = useCallback(async (limit?: number, offset?: number, append: boolean = false) => {
+  const fetchProducts = useCallback(async () => {
     try {
-      if (append) {
-        setLoadingMore(true)
-      } else {
-        setLoading(true)
-      }
+      setLoading(true)
       setError(null)
-      const data = await SupabaseService.getProducts(familyId, limit, offset)
-
-      if (append) {
-        setProducts(prev => {
-          const seen = new Set(prev.map(p => p.id))
-          const fresh = data.filter(p => !seen.has(p.id))
-          const next = [...prev, ...fresh]
-          productsRef.current = next
-          return next
-        })
-      } else {
-        setProducts(data)
-        productsRef.current = data
-      }
-
-      // Если вернулось меньше, чем limit, значит это последняя страница
-      if (limit !== undefined && data.length < limit) {
-        setHasMore(false)
-      } else if (limit !== undefined) {
-        setHasMore(true)
-      }
+      const data = await SupabaseService.getProducts(familyId)
+      setProducts(data)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ошибка загрузки продуктов')
     } finally {
       setLoading(false)
-      setLoadingMore(false)
     }
   }, [familyId])
-
-  const loadMore = useCallback(async (limit: number) => {
-    if (inFlightRef.current || !hasMore) return
-    inFlightRef.current = true
-    try {
-      await fetchProducts(limit, productsRef.current.length, true)
-    } finally {
-      inFlightRef.current = false
-    }
-  }, [hasMore, fetchProducts])
 
   const updateProduct = async (id: number, updates: Partial<Product>) => {
     try {
@@ -95,20 +60,14 @@ export const useProducts = (familyId: number) => {
   }
 
   useEffect(() => {
-    if (familyId) {
-      // Загружаем первые 100 продуктов при инициализации (достаточно для аналитики)
-      fetchProducts(100, 0, false)
-    }
+    if (familyId) fetchProducts()
   }, [familyId, fetchProducts])
 
   return {
     products,
     loading,
-    loadingMore,
-    hasMore,
     error,
     refetch: fetchProducts,
-    loadMore,
     updateProduct,
     createProduct,
     deleteProduct

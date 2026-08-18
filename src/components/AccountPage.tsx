@@ -139,8 +139,6 @@ const AccountPage = ({ receipts, onOpenReceipt }: AccountPageProps) => {
     <>
       <AppHeader title={t.title} />
       <div style={{ padding: '0 var(--gutter-mobile) var(--space-12)', maxWidth: 'var(--content-max)', margin: '0 auto' }}>
-        <RecentReceiptsSection receipts={receipts} lang={lang} onOpenReceipt={onOpenReceipt} />
-
         <SectionHeader>{t.lang}</SectionHeader>
         <Card>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-6)' }}>
@@ -261,6 +259,10 @@ const AccountPage = ({ receipts, onOpenReceipt }: AccountPageProps) => {
           <Button variant="danger" block onClick={() => signOut()} disabled={clearing}>
             {t.logout}
           </Button>
+        </div>
+
+        <div style={{ paddingTop: 'var(--space-10)' }}>
+          <RecentReceiptsSection receipts={receipts} lang={lang} onOpenReceipt={onOpenReceipt} />
         </div>
       </div>
     </>

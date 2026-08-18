@@ -77,7 +77,7 @@ const GroceryTrackerApp = () => {
   const familyId = profile?.family_id ?? 0
   const online = useOnlineStatus()
 
-  const { products, loading: productsLoading, updateProduct: mutateProduct, loadMore, loadingMore, hasMore, refetch: refetchProducts } = useProducts(familyId)
+  const { products, loading: productsLoading, updateProduct: mutateProduct, refetch: refetchProducts } = useProducts(familyId)
   const { receipts } = useReceipts(familyId)
   const { stats: monthlyStats } = useMonthlyStats(familyId)
 
@@ -228,9 +228,6 @@ const GroceryTrackerApp = () => {
             <ProductsPage
               products={processedProducts}
               loading={productsLoading}
-              hasMore={hasMore}
-              loadMore={loadMore}
-              loadingMore={loadingMore}
               typeTranslations={typeTranslations}
               filterType={typeFilter}
               onMarkTypeBought={handleMarkTypeBought}

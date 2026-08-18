@@ -1,7 +1,11 @@
 import { MouseEvent } from 'react'
+import { Heart, ThumbsDown } from 'lucide-react'
 import { ListRow } from './ListRow'
 import { StatusBadge } from './StatusBadge'
 import { ForecastStatus } from './StatusDot'
+
+const HEART_COLOR = '#e11d48'
+const DISLIKE_COLOR = '#78716c'
 
 interface ProductRowProps {
   name: string
@@ -26,10 +30,13 @@ const LikeButton = ({
   onClick: (e: MouseEvent<HTMLButtonElement>) => void
   lang: 'ru' | 'pt'
 }) => {
-  const activeColor = variant === 'like' ? 'var(--success-fg, #2e7d32)' : 'var(--text-danger)'
   const label = variant === 'like'
     ? (lang === 'pt' ? 'Gosto' : 'Нравится')
     : (lang === 'pt' ? 'Não gosto' : 'Не нравится')
+  const color = active
+    ? (variant === 'like' ? HEART_COLOR : DISLIKE_COLOR)
+    : 'var(--text-disabled)'
+  const Icon = variant === 'like' ? Heart : ThumbsDown
   return (
     <button
       type="button"
@@ -44,14 +51,12 @@ const LikeButton = ({
         height: 32,
         border: 'none',
         background: 'transparent',
-        color: active ? activeColor : 'var(--text-disabled)',
+        color,
         cursor: 'pointer',
         padding: 0,
-        fontSize: 16,
-        lineHeight: 1,
       }}
     >
-      {variant === 'like' ? (active ? '♥' : '♡') : (active ? '✕' : '⊘')}
+      <Icon size={18} strokeWidth={1.75} fill={active ? color : 'none'} />
     </button>
   )
 }
