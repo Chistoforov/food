@@ -1,4 +1,5 @@
 import { LikeButtons } from './LikeButtons'
+import { PhotoButton } from './PhotoButton'
 
 interface ReceiptItemRowProps {
   name: string
@@ -8,6 +9,7 @@ interface ReceiptItemRowProps {
   lang?: 'ru' | 'pt'
   first?: boolean
   likeStatus?: -1 | 1 | null
+  imageUrl?: string | null
   onLikeToggle?: (next: -1 | 1 | null) => void
 }
 
@@ -19,6 +21,7 @@ export function ReceiptItemRow({
   lang = 'ru',
   first = false,
   likeStatus = null,
+  imageUrl = null,
   onLikeToggle,
 }: ReceiptItemRowProps) {
   const display = lang === 'pt' ? originalName || name : name || originalName || ''
@@ -50,6 +53,7 @@ export function ReceiptItemRow({
         )}
       </div>
       {onLikeToggle && <LikeButtons likeStatus={likeStatus} lang={lang} onToggle={onLikeToggle} />}
+      {imageUrl && <PhotoButton url={imageUrl} alt={display} lang={lang} />}
       {pricePaid && (
         <div style={{ flex: 'none', textAlign: 'right' }}>
           <div className="tnum" style={{ font: 'var(--type-num)', color: 'var(--text-primary)' }}>{pricePaid}</div>

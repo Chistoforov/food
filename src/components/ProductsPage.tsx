@@ -19,6 +19,7 @@ export interface ProcessedProduct {
   status: DbStatus
   purchaseCount: number
   likeStatus?: -1 | 1 | null
+  imageUrl?: string | null
 }
 
 interface ProductsPageProps {
@@ -215,6 +216,7 @@ const ProductsPage: React.FC<ProductsPageProps> = ({
               status={toForecast(p.status)}
               lang={lang}
               likeStatus={p.likeStatus ?? null}
+              imageUrl={p.imageUrl ?? null}
               onLikeToggle={onSetLikeStatus ? (next) => onSetLikeStatus(p.id, next) : undefined}
               onClick={() => onOpenProduct(p)}
             />

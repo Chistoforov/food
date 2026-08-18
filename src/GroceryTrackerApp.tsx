@@ -84,6 +84,7 @@ const GroceryTrackerApp = () => {
   const [typeStats, setTypeStats] = useState<TypeStats>({})
   const [endingCountsByType, setEndingCountsByType] = useState<Record<string, number>>({})
   const [typeTranslations, setTypeTranslations] = useState<TypeTranslationMaps>(EMPTY_TRANSLATIONS)
+  const [productImages, setProductImages] = useState<Map<number, string>>(new Map())
 
   useEffect(() => {
     if (!familyId) return
@@ -96,6 +97,9 @@ const GroceryTrackerApp = () => {
     SupabaseService.getProductTypeTranslations()
       .then((t) => setTypeTranslations(t))
       .catch((err) => console.error('translations failed:', err))
+    SupabaseService.getProductImageMap(familyId)
+      .then((m) => setProductImages(m))
+      .catch((err) => console.error('product images failed:', err))
   }, [familyId])
 
   const [sheet, setSheet] = useState<
@@ -121,8 +125,9 @@ const GroceryTrackerApp = () => {
         status: product.status as DbStatus,
         purchaseCount: product.purchase_count,
         likeStatus: product.like_status ?? null,
+        imageUrl: productImages.get(product.id) ?? null,
       })),
-    [products],
+    [products, productImages],
   )
 
   const endingCount = useMemo(

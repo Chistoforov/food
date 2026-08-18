@@ -24,7 +24,7 @@ const formatDate = (iso: string, lang: 'ru' | 'pt') => {
 const ReceiptSheet: React.FC<ReceiptSheetProps> = ({ receipt, familyId, onClose, onSetLikeStatus }) => {
   const { language } = useLanguage()
   const lang: 'ru' | 'pt' = language
-  const [items, setItems] = useState<Array<ProductHistory & { product?: Product }>>([])
+  const [items, setItems] = useState<Array<ProductHistory & { product?: Product; imageUrl?: string | null }>>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -85,6 +85,7 @@ const ReceiptSheet: React.FC<ReceiptSheetProps> = ({ receipt, familyId, onClose,
                 pricePaid={null}
                 lang={lang}
                 likeStatus={p?.like_status ?? null}
+                imageUrl={it.imageUrl ?? null}
                 onLikeToggle={
                   productId && onSetLikeStatus
                     ? async (next) => {

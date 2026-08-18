@@ -1,5 +1,6 @@
 import { LikeButtons } from './LikeButtons'
 import { ListRow } from './ListRow'
+import { PhotoButton } from './PhotoButton'
 import { StatusBadge } from './StatusBadge'
 import { ForecastStatus } from './StatusDot'
 
@@ -10,6 +11,7 @@ interface ProductRowProps {
   status?: ForecastStatus
   lang?: 'ru' | 'pt'
   likeStatus?: -1 | 1 | null
+  imageUrl?: string | null
   onLikeToggle?: (next: -1 | 1 | null) => void
   onClick?: () => void
   first?: boolean
@@ -22,6 +24,7 @@ export function ProductRow({
   status = 'ok',
   lang = 'ru',
   likeStatus = null,
+  imageUrl = null,
   onLikeToggle,
   onClick,
   first = false,
@@ -38,6 +41,7 @@ export function ProductRow({
   const right = (
     <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
       {onLikeToggle && <LikeButtons likeStatus={likeStatus} lang={lang} onToggle={onLikeToggle} />}
+      {imageUrl && <PhotoButton url={imageUrl} alt={display} lang={lang} />}
       {badge}
     </div>
   )

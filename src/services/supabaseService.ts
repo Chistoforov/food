@@ -599,24 +599,53 @@ export class SupabaseService {
   /**
    * Get all products from a receipt with their details
    */
-  static async getReceiptProducts(receiptId: number, familyId: number): Promise<Array<ProductHistory & { product?: Product }>> {
+  static async getReceiptProducts(receiptId: number, familyId: number): Promise<Array<ProductHistory & { product?: Product; imageUrl?: string | null }>> {
     const { data, error } = await supabase
       .from('product_history')
       .select(`
         *,
-        products (*)
+        products (*),
+        catalog_products ( image_url )
       `)
       .eq('receipt_id', receiptId)
       .eq('family_id', familyId)
       .order('created_at', { ascending: true })
 
     if (error) throw error
-    
-    // Transform the data to include product details
-    return (data || []).map(item => ({
-      ...item,
-      product: item.products as unknown as Product
-    }))
+
+    return (data || []).map((item) => {
+      const cp = item.catalog_products as { image_url?: string | null } | Array<{ image_url?: string | null }> | null | undefined
+      const imageUrl = Array.isArray(cp) ? cp[0]?.image_url ?? null : cp?.image_url ?? null
+      return {
+        ...item,
+        product: item.products as unknown as Product,
+        imageUrl,
+      }
+    })
+  }
+
+  /**
+   * Map of product_id → catalog image_url (most recent purchase with a match).
+   * Used to render a photo icon in product lists without a schema change.
+   */
+  static async getProductImageMap(familyId: number): Promise<Map<number, string>> {
+    const { data, error } = await supabase
+      .from('product_history')
+      .select('product_id, date, catalog_products!inner(image_url)')
+      .eq('family_id', familyId)
+      .order('date', { ascending: false })
+
+    if (error) throw error
+    const map = new Map<number, string>()
+    type Row = { product_id: number; catalog_products: { image_url: string | null } | Array<{ image_url: string | null }> | null }
+    for (const row of ((data as unknown) as Row[]) || []) {
+      const cp = row.catalog_products
+      const url = Array.isArray(cp) ? cp[0]?.image_url : cp?.image_url
+      if (!url) continue
+      if (map.has(row.product_id)) continue
+      map.set(row.product_id, url)
+    }
+    return map
   }
 
   /**
