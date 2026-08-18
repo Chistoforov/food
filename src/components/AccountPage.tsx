@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { AppHeader, Card, SectionHeader, ListRow, SegmentedControl, Button, RecentReceiptsSection, TextField, FilterChip } from './ds'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -30,6 +30,14 @@ const AccountPage = ({ receipts, monthlyStats, monthFilter, onSetMonthFilter, fa
   const [inviting, setInviting] = useState(false)
   const [filteredReceipts, setFilteredReceipts] = useState<Receipt[] | null>(null)
   const [filteredLoading, setFilteredLoading] = useState(false)
+  const receiptsAnchorRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    // Скроллим к секции чеков, когда фильтр месяца применён и данные готовы.
+    // Ловит случай "клик по месяцу на Home → мгновенный переход на Account".
+    if (!monthFilter || filteredLoading) return
+    receiptsAnchorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [monthFilter, filteredLoading])
 
   useEffect(() => {
     if (!familyId || !monthFilter) {
@@ -312,7 +320,7 @@ const AccountPage = ({ receipts, monthlyStats, monthFilter, onSetMonthFilter, fa
           </Button>
         </div>
 
-        <div style={{ paddingTop: 'var(--space-10)' }}>
+        <div ref={receiptsAnchorRef} style={{ paddingTop: 'var(--space-10)', scrollMarginTop: 'var(--space-4)' }}>
           {monthChips.length > 0 && (
             <div style={{ display: 'flex', gap: 'var(--space-4)', overflowX: 'auto', padding: '0 0 var(--space-6)' }}>
               <FilterChip selected={monthFilter === null} onClick={() => onSetMonthFilter(null)}>
