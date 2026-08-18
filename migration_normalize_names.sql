@@ -17,17 +17,30 @@
 --   уже применено 2026-08-08.
 -- ============================================================================
 
+-- v2 (2026-08-18): added wine-color expansions (bco→branco, tto→tinto,
+-- rsd/rosé→rose), region shortcuts (alent→alentejo, dour→douro,
+-- res→reserva), and fixed V.WORD spacing (was collapsing to 'vinhoword').
 CREATE OR REPLACE FUNCTION normalize_pd_name(s TEXT) RETURNS TEXT AS $$
 DECLARE r TEXT;
 BEGIN
   IF s IS NULL THEN RETURN NULL; END IF;
   r := LOWER(s);
+
   r := REGEXP_REPLACE(r, '\yqj\.?\y|\yqjo\y', 'queijo', 'gi');
-  r := REGEXP_REPLACE(r, '\yv\.\y', 'vinho', 'gi');
+  r := REGEXP_REPLACE(r, '\yv\.\s?', 'vinho ', 'gi');
   r := REGEXP_REPLACE(r, '\yflc\y', 'flocos', 'gi');
   r := REGEXP_REPLACE(r, '\yint\y', 'integral', 'gi');
   r := REGEXP_REPLACE(r, '\yemb\.?\y', 'embalado', 'gi');
   r := REGEXP_REPLACE(r, '\ybov\.?\y', 'bovino', 'gi');
+
+  r := REGEXP_REPLACE(r, '\ybco\y|\ybranc[oa]\y', 'branco', 'gi');
+  r := REGEXP_REPLACE(r, '\ytto\y|\ytint[oa]\y', 'tinto', 'gi');
+  r := REGEXP_REPLACE(r, '\yrsd\y|\yros[eé]\y|\yrosad[oa]\y', 'rose', 'gi');
+
+  r := REGEXP_REPLACE(r, '\yalent\y', 'alentejo', 'gi');
+  r := REGEXP_REPLACE(r, '\ydour\y', 'douro', 'gi');
+  r := REGEXP_REPLACE(r, '\yres\.?\y', 'reserva', 'gi');
+
   r := REGEXP_REPLACE(r, '(\d+([,.]\d+)?)(kg|gr|g|cl|ml|l|un|mm|cm)([a-z])', '\1\3 \4', 'gi');
   r := REGEXP_REPLACE(r, '\y(ccp|ccg|cpp\d*|cpg\d*|sdr|sk|cc|pd|cv)\y', ' ', 'gi');
   r := REGEXP_REPLACE(r, '\d+([,.]\d+)?\s*(kg|gr|g|cl|ml|l|un|m|mm|cm|x|t|dg)\y', ' ', 'gi');
