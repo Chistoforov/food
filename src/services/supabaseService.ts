@@ -1,4 +1,4 @@
-import { supabase, Product, Receipt, ProductHistory, MonthlyStats, UserProfile } from '../lib/supabase'
+import { supabase, Product, Receipt, ProductHistory, MonthlyStats, UserProfile, FamilyInvitation } from '../lib/supabase'
 
 export class SupabaseService {
   // Работа с продуктами
@@ -33,6 +33,11 @@ export class SupabaseService {
 
     if (error) throw error
     return data
+  }
+
+  static async setLikeStatus(id: number, status: -1 | 1 | null): Promise<void> {
+    const { error } = await supabase.from('products').update({ like_status: status }).eq('id', id)
+    if (error) throw error
   }
 
   static async updateProduct(id: number, updates: Partial<Product>): Promise<Product> {
@@ -858,15 +863,36 @@ export class SupabaseService {
     return map
   }
 
-  static async getProductTypeTranslations(): Promise<Record<string, string>> {
-    const { data, error } = await supabase.from('product_type_translations').select('pt, ru')
+  static async getProductTypeTranslations(): Promise<{ ruToPt: Record<string, string>; ptToRu: Record<string, string> }> {
+    const { data, error } = await supabase.from('product_type_i18n').select('ru, pt')
     if (error) {
-      console.warn('product_type_translations fetch failed:', error.message)
-      return {}
+      console.warn('product_type_i18n fetch failed:', error.message)
+      return { ruToPt: {}, ptToRu: {} }
     }
-    const map: Record<string, string> = {}
-    for (const row of data || []) map[row.pt] = row.ru
-    return map
+    const ruToPt: Record<string, string> = {}
+    const ptToRu: Record<string, string> = {}
+    for (const row of data || []) {
+      if (row.ru && row.pt) {
+        ruToPt[row.ru] = row.pt
+        ptToRu[row.pt] = row.ru
+      }
+    }
+    return { ruToPt, ptToRu }
+  }
+
+  // Форсированный override статуса типа: используется после виртуальной покупки,
+  // так как SQL-функция calculate_product_type_status игнорирует ph.quantity = 0
+  // и оставляет тип в 'ending-soon'. Мы уже пометили все SKU 'ok' на клиенте
+  // через updateProductStats — синхронизируем и type-cache.
+  static async markTypeStatsOk(familyId: number, productType: string): Promise<void> {
+    const { error } = await supabase
+      .from('product_type_stats')
+      .update({ status: 'ok' })
+      .eq('family_id', familyId)
+      .eq('product_type', productType)
+    if (error) {
+      console.warn('markTypeStatsOk failed:', error.message)
+    }
   }
 
   // Пересчитать статистику типов продуктов (обновить кэш)
@@ -1187,12 +1213,15 @@ export class SupabaseService {
   }
 
   // === AUTH & FAMILY MANAGEMENT ===
-  static async inviteUser(email: string, familyId: number) {
-    return await supabase.from('family_invitations').insert({
-      family_id: familyId,
-      email,
-      status: 'pending'
-    })
+  static async inviteUser(email: string, familyId: number): Promise<FamilyInvitation> {
+    const normalized = email.trim().toLowerCase()
+    const { data, error } = await supabase
+      .from('family_invitations')
+      .insert({ family_id: familyId, email: normalized, status: 'pending' })
+      .select()
+      .single()
+    if (error) throw error
+    return data as FamilyInvitation
   }
 
   static async getFamilyMembers(familyId: number) {
@@ -1204,15 +1233,17 @@ export class SupabaseService {
      return data;
   }
 
-  static async getFamilyInvitations(familyId: number) {
+  static async getFamilyInvitations(familyId: number): Promise<FamilyInvitation[]> {
       const { data, error } = await supabase
         .from('family_invitations')
         .select('*')
         .eq('family_id', familyId)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false })
       if (error) throw error
-      return data
+      return (data || []) as FamilyInvitation[]
   }
-  
+
   static async cancelInvitation(id: number) {
       const { error } = await supabase
         .from('family_invitations')

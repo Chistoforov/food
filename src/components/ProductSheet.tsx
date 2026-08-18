@@ -3,11 +3,12 @@ import { Modal, TextField, Select, Button } from './ds'
 import { useLanguage } from '../contexts/LanguageContext'
 import { SupabaseService } from '../services/supabaseService'
 import type { ProcessedProduct } from './ProductsPage'
+import { displayType as displayTypeUtil, type TypeTranslationMaps } from '../lib/typeI18n'
 
 interface ProductSheetProps {
   product: ProcessedProduct
   familyId: number
-  typeTranslations: Record<string, string>
+  typeTranslations: TypeTranslationMaps
   onClose: () => void
   onSaved: (updated: { name_ru?: string | null; product_type?: string | null }) => Promise<void> | void
 }
@@ -25,9 +26,12 @@ const ProductSheet: React.FC<ProductSheetProps> = ({ product, familyId, typeTran
 
   const options = [
     { value: '', label: t.empty },
-    ...Array.from(new Set([type, ...Object.keys(typeTranslations)].filter(Boolean)))
+    ...Array.from(new Set([type, ...Object.keys(typeTranslations.ruToPt)].filter(Boolean)))
       .sort()
-      .map((v) => ({ value: v, label: lang === 'ru' && typeTranslations[v] ? `${typeTranslations[v]} · ${v}` : v })),
+      .map((v) => {
+        const other = displayTypeUtil(v, lang === 'ru' ? 'pt' : 'ru', typeTranslations)
+        return { value: v, label: other && other !== v ? `${displayTypeUtil(v, lang, typeTranslations)} · ${other}` : v }
+      }),
   ]
 
   const title = lang === 'pt' ? product.originalName || product.name : nameRu || product.name || product.originalName || ''

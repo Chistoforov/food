@@ -1,6 +1,7 @@
-import { Card, SectionHeader, StockRow, ReceiptRow, EmptyState, Banner, Button, type ForecastStatus } from './ds'
-import { Receipt } from '../lib/supabase'
+import { Card, SectionHeader, StockRow, EmptyState, Banner, Button, MonthSpendCard, type ForecastStatus } from './ds'
+import { MonthlyStats, Receipt } from '../lib/supabase'
 import { useLanguage } from '../contexts/LanguageContext'
+import { displayType as displayTypeUtil, type TypeTranslationMaps } from '../lib/typeI18n'
 
 type DbStatus = 'ending-soon' | 'ok' | 'calculating' | 'irregular'
 
@@ -9,12 +10,12 @@ const toForecast = (s: DbStatus): ForecastStatus => (s === 'ending-soon' ? 'endi
 interface HomePageProps {
   productTypeStats: Record<string, { status: DbStatus; productCount: number }>
   endingCountsByType: Record<string, number>
-  typeTranslations: Record<string, string>
+  typeTranslations: TypeTranslationMaps
   receipts: Receipt[]
+  monthlyStats: MonthlyStats[]
   offline: boolean
   onRetry: () => void
   onOpenType: (type: string) => void
-  onOpenReceipt: (receipt: Receipt) => void
 }
 
 const formatUpdated = (hours: number | null, lang: 'ru' | 'pt') => {
@@ -27,30 +28,20 @@ const formatUpdated = (hours: number | null, lang: 'ru' | 'pt') => {
   return `обновлено ${hours} ч назад`
 }
 
-const formatDate = (iso: string, lang: 'ru' | 'pt') => {
-  const d = new Date(iso)
-  return d.toLocaleDateString(lang === 'pt' ? 'pt-PT' : 'ru-RU', { day: 'numeric', month: 'long' })
-}
-
-const formatMoney = (amount: number, lang: 'ru' | 'pt') => {
-  const n = Number(amount || 0).toFixed(2)
-  return lang === 'pt' ? `${n.replace('.', ',')} €` : `€${n}`
-}
-
 const HomePage: React.FC<HomePageProps> = ({
   productTypeStats,
   endingCountsByType,
   typeTranslations,
   receipts,
+  monthlyStats,
   offline,
   onRetry,
   onOpenType,
-  onOpenReceipt,
 }) => {
   const { language } = useLanguage()
   const lang: 'ru' | 'pt' = language
 
-  const displayType = (pt: string) => (lang === 'ru' && typeTranslations[pt]) || pt
+  const displayType = (type: string) => displayTypeUtil(type, lang, typeTranslations)
 
   const entries = Object.entries(productTypeStats)
     .map(([type, s]) => ({ type, status: toForecast(s.status), count: s.productCount }))
@@ -63,8 +54,8 @@ const HomePage: React.FC<HomePageProps> = ({
   const empty = entries.length === 0 && receipts.length === 0
 
   const titles = lang === 'pt'
-    ? { home: 'Início', endingSoon: 'A acabar', ok: 'Suficiente', recent: 'Recibos recentes', offline: 'Sem rede. Últimos dados exibidos.', retry: 'Repetir', emptyTitle: 'Ainda vazio', emptyDesc: 'Pede para te adicionarem à família — os dados aparecem sozinhos.' }
-    : { home: 'Дом', endingSoon: 'Заканчивается', ok: 'В норме', recent: 'Последние чеки', offline: 'Нет сети. Показаны последние данные.', retry: 'Повторить', emptyTitle: 'Пока пусто', emptyDesc: 'Попроси добавить тебя в семью — данные появятся сами.' }
+    ? { home: 'Início', endingSoon: 'A acabar', ok: 'Suficiente', offline: 'Sem rede. Últimos dados exibidos.', retry: 'Repetir', emptyTitle: 'Ainda vazio', emptyDesc: 'Pede para te adicionarem à família — os dados aparecem sozinhos.' }
+    : { home: 'Дом', endingSoon: 'Заканчивается', ok: 'В норме', offline: 'Нет сети. Показаны последние данные.', retry: 'Повторить', emptyTitle: 'Пока пусто', emptyDesc: 'Попроси добавить тебя в семью — данные появятся сами.' }
 
   return (
     <>
@@ -83,6 +74,7 @@ const HomePage: React.FC<HomePageProps> = ({
           </Card>
         ) : (
           <>
+            <MonthSpendCard stats={monthlyStats} lang={lang} />
             {ending.length > 0 && (
               <>
                 <SectionHeader count={ending.length}>{titles.endingSoon}</SectionHeader>
@@ -122,24 +114,6 @@ const HomePage: React.FC<HomePageProps> = ({
               </>
             )}
 
-            {receipts.length > 0 && (
-              <>
-                <SectionHeader count={receipts.length}>{titles.recent}</SectionHeader>
-                <Card padded={false}>
-                  {receipts.map((r, i) => (
-                    <ReceiptRow
-                      key={r.id}
-                      first={i === 0}
-                      date={formatDate(r.date, lang)}
-                      total={formatMoney(r.total_amount, lang)}
-                      itemCount={r.items_count}
-                      lang={lang}
-                      onClick={() => onOpenReceipt(r)}
-                    />
-                  ))}
-                </Card>
-              </>
-            )}
           </>
         )}
       </div>

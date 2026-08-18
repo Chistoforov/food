@@ -39,6 +39,7 @@ export interface Product {
   purchase_count: number
   family_id: number
   normalized_name?: string
+  like_status?: -1 | 1 | null
   created_at: string
   updated_at: string
 }

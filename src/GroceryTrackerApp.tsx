@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AppHeader, Banner, TabBar } from './components/ds'
-import { useProducts, useReceipts } from './hooks/useSupabaseData'
+import { useMonthlyStats, useProducts, useReceipts } from './hooks/useSupabaseData'
 import { SupabaseService } from './services/supabaseService'
 import { useAuth } from './contexts/AuthContext'
 import { useLanguage } from './contexts/LanguageContext'
@@ -12,6 +12,7 @@ import ProductsPage, { type ProcessedProduct } from './components/ProductsPage'
 import ProductSheet from './components/ProductSheet'
 import ReceiptSheet from './components/ReceiptSheet'
 import { Receipt } from './lib/supabase'
+import { EMPTY_TRANSLATIONS, type TypeTranslationMaps } from './lib/typeI18n'
 
 type Tab = 'home' | 'products' | 'account'
 
@@ -78,10 +79,11 @@ const GroceryTrackerApp = () => {
 
   const { products, loading: productsLoading, updateProduct: mutateProduct, loadMore, loadingMore, hasMore, refetch: refetchProducts } = useProducts(familyId)
   const { receipts } = useReceipts(familyId)
+  const { stats: monthlyStats } = useMonthlyStats(familyId)
 
   const [typeStats, setTypeStats] = useState<TypeStats>({})
   const [endingCountsByType, setEndingCountsByType] = useState<Record<string, number>>({})
-  const [typeTranslations, setTypeTranslations] = useState<Record<string, string>>({})
+  const [typeTranslations, setTypeTranslations] = useState<TypeTranslationMaps>(EMPTY_TRANSLATIONS)
 
   useEffect(() => {
     if (!familyId) return
@@ -117,6 +119,7 @@ const GroceryTrackerApp = () => {
         predictedEnd: product.predicted_end,
         status: product.status as DbStatus,
         purchaseCount: product.purchase_count,
+        likeStatus: product.like_status ?? null,
       })),
     [products],
   )
@@ -159,6 +162,10 @@ const GroceryTrackerApp = () => {
       }
       await new Promise((r) => setTimeout(r, 400))
       await SupabaseService.recalculateProductTypeStats(familyId)
+      // SQL-функция calculate_product_type_status учитывает только реальные покупки
+      // (quantity > 0) и не сдвигает статус типа после виртуальной покупки.
+      // Форсированно ставим кэш типа в 'ok', пока пользователь не купит реально.
+      await SupabaseService.markTypeStatsOk(familyId, type)
       const [fresh, freshEnding] = await Promise.all([
         SupabaseService.getProductTypeStats(familyId),
         SupabaseService.getEndingSoonCountsByType(familyId),
@@ -208,10 +215,10 @@ const GroceryTrackerApp = () => {
               endingCountsByType={endingCountsByType}
               typeTranslations={typeTranslations}
               receipts={receipts}
+              monthlyStats={monthlyStats}
               offline={!online}
               onRetry={() => window.location.reload()}
               onOpenType={openTypeOnProducts}
-              onOpenReceipt={openReceipt}
             />
           </>
         )}
@@ -227,11 +234,20 @@ const GroceryTrackerApp = () => {
               typeTranslations={typeTranslations}
               filterType={typeFilter}
               onMarkTypeBought={handleMarkTypeBought}
+              onClearTypeFilter={() => setTypeFilter(null)}
               onOpenProduct={openProduct}
+              onSetLikeStatus={async (id, next) => {
+                try {
+                  await SupabaseService.setLikeStatus(id, next)
+                  await mutateProduct(id, { like_status: next })
+                } catch (err) {
+                  console.error('setLikeStatus failed:', err)
+                }
+              }}
             />
           </>
         )}
-        {tab === 'account' && <AccountPage />}
+        {tab === 'account' && <AccountPage receipts={receipts} onOpenReceipt={openReceipt} />}
       </div>
 
       <TabBar

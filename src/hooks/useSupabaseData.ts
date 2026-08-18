@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { SupabaseService } from '../services/supabaseService'
 import { Product, Receipt, ProductHistory, MonthlyStats } from '../lib/supabase'
 
@@ -9,6 +9,8 @@ export const useProducts = (familyId: number) => {
   const [error, setError] = useState<string | null>(null)
   const [hasMore, setHasMore] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
+  const inFlightRef = useRef(false)
+  const productsRef = useRef<Product[]>([])
 
   const fetchProducts = useCallback(async (limit?: number, offset?: number, append: boolean = false) => {
     try {
@@ -19,16 +21,25 @@ export const useProducts = (familyId: number) => {
       }
       setError(null)
       const data = await SupabaseService.getProducts(familyId, limit, offset)
-      
+
       if (append) {
-        setProducts(prev => [...prev, ...data])
+        setProducts(prev => {
+          const seen = new Set(prev.map(p => p.id))
+          const fresh = data.filter(p => !seen.has(p.id))
+          const next = [...prev, ...fresh]
+          productsRef.current = next
+          return next
+        })
       } else {
         setProducts(data)
+        productsRef.current = data
       }
-      
+
       // Если вернулось меньше, чем limit, значит это последняя страница
       if (limit !== undefined && data.length < limit) {
         setHasMore(false)
+      } else if (limit !== undefined) {
+        setHasMore(true)
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ошибка загрузки продуктов')
@@ -39,9 +50,14 @@ export const useProducts = (familyId: number) => {
   }, [familyId])
 
   const loadMore = useCallback(async (limit: number) => {
-    if (!hasMore || loadingMore) return
-    await fetchProducts(limit, products.length, true)
-  }, [hasMore, loadingMore, products.length, fetchProducts])
+    if (inFlightRef.current || !hasMore) return
+    inFlightRef.current = true
+    try {
+      await fetchProducts(limit, productsRef.current.length, true)
+    } finally {
+      inFlightRef.current = false
+    }
+  }, [hasMore, fetchProducts])
 
   const updateProduct = async (id: number, updates: Partial<Product>) => {
     try {
