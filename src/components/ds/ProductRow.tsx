@@ -38,11 +38,23 @@ export function ProductRow({
   ) : (
     <StatusBadge status={status} lang={lang} dot={status !== 'irregular'} />
   )
+  const hasIcons = Boolean(onLikeToggle) || Boolean(imageUrl)
   const right = (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-      {onLikeToggle && <LikeButtons likeStatus={likeStatus} lang={lang} onToggle={onLikeToggle} />}
-      {imageUrl && <PhotoButton url={imageUrl} alt={display} lang={lang} />}
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'flex-end',
+        gap: 'var(--space-3)',
+      }}
+    >
       {badge}
+      {hasIcons && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+          {onLikeToggle && <LikeButtons likeStatus={likeStatus} lang={lang} onToggle={onLikeToggle} />}
+          {imageUrl && <PhotoButton url={imageUrl} alt={display} lang={lang} />}
+        </div>
+      )}
     </div>
   )
   return (
