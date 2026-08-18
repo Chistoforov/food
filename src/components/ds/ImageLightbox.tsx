@@ -23,7 +23,13 @@ export function ImageLightbox({ url, alt, onClose }: ImageLightboxProps) {
 
   return createPortal(
     <div
-      onClick={onClose}
+      onClick={(e) => {
+        // React portals bubble events through the React tree — stop the click here
+        // so it doesn't reach whichever row rendered the PhotoButton (which would
+        // open the product edit sheet on close).
+        e.stopPropagation()
+        onClose()
+      }}
       role="dialog"
       aria-modal="true"
       style={{
