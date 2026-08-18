@@ -83,6 +83,25 @@ export class SupabaseService {
     return data || []
   }
 
+  // Все чеки конкретного месяца (без пагинации — в месяце обычно <=50 чеков)
+  static async getReceiptsByMonth(familyId: number, year: number, monthMM: number): Promise<Receipt[]> {
+    const mm = String(monthMM).padStart(2, '0')
+    const nextMonth = monthMM === 12 ? 1 : monthMM + 1
+    const nextYear = monthMM === 12 ? year + 1 : year
+    const nextMM = String(nextMonth).padStart(2, '0')
+    const from = `${year}-${mm}-01`
+    const to = `${nextYear}-${nextMM}-01`
+    const { data, error } = await supabase
+      .from('receipts')
+      .select('*')
+      .eq('family_id', familyId)
+      .gte('date', from)
+      .lt('date', to)
+      .order('date', { ascending: false })
+    if (error) throw error
+    return data || []
+  }
+
   static async createReceipt(receipt: Omit<Receipt, 'id' | 'created_at'>): Promise<Receipt> {
     const { data, error } = await supabase
       .from('receipts')

@@ -1,26 +1,12 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { MonthlyStats } from '../../lib/supabase'
+import { formatMonth, monthKeyOf, parseMonthKey } from '../../lib/monthI18n'
 
 interface MonthSpendCardProps {
   stats: MonthlyStats[]
   lang: 'ru' | 'pt'
-}
-
-const parseMonthKey = (year: number, month: string): { y: number; m: number } | null => {
-  // month может быть 'YYYY-MM' или 'MM'
-  const parts = month.split('-')
-  const mm = parts.length > 1 ? parseInt(parts[1], 10) : parseInt(month, 10)
-  const yy = parts.length > 1 ? parseInt(parts[0], 10) : year
-  if (!yy || !mm || mm < 1 || mm > 12) return null
-  return { y: yy, m: mm }
-}
-
-const formatMonth = (year: number, month: string, lang: 'ru' | 'pt') => {
-  const parsed = parseMonthKey(year, month)
-  if (!parsed) return ''
-  const d = new Date(parsed.y, parsed.m - 1, 1)
-  const raw = d.toLocaleDateString(lang === 'pt' ? 'pt-PT' : 'ru-RU', { month: 'long', year: 'numeric' })
-  return raw.charAt(0).toUpperCase() + raw.slice(1)
+  activeMonthKey?: string | null
+  onSelect?: (monthKey: string) => void
 }
 
 const formatMoney = (amount: number, lang: 'ru' | 'pt') => {
@@ -36,7 +22,7 @@ const receiptsLabel = (n: number, lang: 'ru' | 'pt') => {
   return `${n} ${suffix}`
 }
 
-export function MonthSpendCard({ stats, lang }: MonthSpendCardProps) {
+export function MonthSpendCard({ stats, lang, activeMonthKey, onSelect }: MonthSpendCardProps) {
   const scrollerRef = useRef<HTMLDivElement | null>(null)
 
   const items = useMemo(() => {
@@ -82,20 +68,30 @@ export function MonthSpendCard({ stats, lang }: MonthSpendCardProps) {
     >
       {items.map((s) => {
         const spent = Number(s.total_spent || 0)
+        const key = monthKeyOf(s)
+        const isActive = !!key && key === activeMonthKey
+        const clickable = !!onSelect && !!key
         return (
-          <div
-            key={`${s.year}-${s.month}`}
+          <button
+            key={key ?? `${s.year}-${s.month}`}
+            type="button"
+            disabled={!clickable}
+            onClick={clickable ? () => onSelect!(key!) : undefined}
             style={{
               scrollSnapAlign: 'start',
               flex: '0 0 auto',
               minWidth: 200,
               padding: 'var(--space-5) var(--space-7)',
-              border: '1px solid var(--line-hairline)',
+              border: `1px solid ${isActive ? 'var(--stone-500)' : 'var(--line-hairline)'}`,
               background: 'var(--surface-card)',
               borderRadius: 'var(--radius-md)',
               display: 'flex',
               flexDirection: 'column',
               gap: 4,
+              textAlign: 'left',
+              cursor: clickable ? 'pointer' : 'default',
+              font: 'inherit',
+              color: 'inherit',
             }}
           >
             <span style={{ font: 'var(--type-meta)', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
@@ -107,7 +103,7 @@ export function MonthSpendCard({ stats, lang }: MonthSpendCardProps) {
             <span style={{ font: 'var(--type-meta)', color: 'var(--text-tertiary)' }}>
               {receiptsLabel(s.receipts_count || 0, lang)}
             </span>
-          </div>
+          </button>
         )
       })}
     </div>

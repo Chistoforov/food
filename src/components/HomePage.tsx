@@ -13,9 +13,11 @@ interface HomePageProps {
   typeTranslations: TypeTranslationMaps
   receipts: Receipt[]
   monthlyStats: MonthlyStats[]
+  activeMonthKey?: string | null
   offline: boolean
   onRetry: () => void
   onOpenType: (type: string) => void
+  onOpenMonth?: (monthKey: string) => void
 }
 
 const formatUpdated = (hours: number | null, lang: 'ru' | 'pt') => {
@@ -34,9 +36,11 @@ const HomePage: React.FC<HomePageProps> = ({
   typeTranslations,
   receipts,
   monthlyStats,
+  activeMonthKey,
   offline,
   onRetry,
   onOpenType,
+  onOpenMonth,
 }) => {
   const { language } = useLanguage()
   const lang: 'ru' | 'pt' = language
@@ -74,7 +78,7 @@ const HomePage: React.FC<HomePageProps> = ({
           </Card>
         ) : (
           <>
-            <MonthSpendCard stats={monthlyStats} lang={lang} />
+            <MonthSpendCard stats={monthlyStats} lang={lang} activeMonthKey={activeMonthKey} onSelect={onOpenMonth} />
             {ending.length > 0 && (
               <>
                 <SectionHeader count={ending.length}>{titles.endingSoon}</SectionHeader>

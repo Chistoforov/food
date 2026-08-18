@@ -1,19 +1,24 @@
-import { useEffect, useState } from 'react'
-import { AppHeader, Card, SectionHeader, ListRow, SegmentedControl, Button, RecentReceiptsSection, TextField } from './ds'
+import { useEffect, useMemo, useState } from 'react'
+import { AppHeader, Card, SectionHeader, ListRow, SegmentedControl, Button, RecentReceiptsSection, TextField, FilterChip } from './ds'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { SupabaseService } from '../services/supabaseService'
-import { UserProfile, Receipt, FamilyInvitation } from '../lib/supabase'
+import { UserProfile, Receipt, FamilyInvitation, MonthlyStats } from '../lib/supabase'
 import { clearAppCache } from '../utils/cacheHelper'
+import { monthKeyOf, parseMonthString, shortMonthLabel } from '../lib/monthI18n'
 
 interface AccountPageProps {
   receipts: Receipt[]
+  monthlyStats: MonthlyStats[]
+  monthFilter: string | null
+  onSetMonthFilter: (key: string | null) => void
+  familyId: number
   onOpenReceipt: (receipt: Receipt) => void
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
-const AccountPage = ({ receipts, onOpenReceipt }: AccountPageProps) => {
+const AccountPage = ({ receipts, monthlyStats, monthFilter, onSetMonthFilter, familyId, onOpenReceipt }: AccountPageProps) => {
   const { user, profile, signOut } = useAuth()
   const { language, setLanguage } = useLanguage()
   const lang: 'ru' | 'pt' = language
@@ -23,6 +28,48 @@ const AccountPage = ({ receipts, onOpenReceipt }: AccountPageProps) => {
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteError, setInviteError] = useState<string | null>(null)
   const [inviting, setInviting] = useState(false)
+  const [filteredReceipts, setFilteredReceipts] = useState<Receipt[] | null>(null)
+  const [filteredLoading, setFilteredLoading] = useState(false)
+
+  useEffect(() => {
+    if (!familyId || !monthFilter) {
+      setFilteredReceipts(null)
+      return
+    }
+    const parsed = parseMonthString(monthFilter)
+    if (!parsed) {
+      setFilteredReceipts(null)
+      return
+    }
+    let cancelled = false
+    setFilteredLoading(true)
+    SupabaseService.getReceiptsByMonth(familyId, parsed.y, parsed.m)
+      .then((rows) => {
+        if (!cancelled) setFilteredReceipts(rows)
+      })
+      .catch((err) => {
+        console.error('receipts by month failed:', err)
+        if (!cancelled) setFilteredReceipts([])
+      })
+      .finally(() => {
+        if (!cancelled) setFilteredLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [familyId, monthFilter])
+
+  const monthChips = useMemo(() => {
+    const seen = new Set<string>()
+    const out: string[] = []
+    for (const s of monthlyStats) {
+      const key = monthKeyOf(s)
+      if (!key || seen.has(key)) continue
+      seen.add(key)
+      out.push(key)
+    }
+    return out.sort((a, b) => b.localeCompare(a))
+  }, [monthlyStats])
 
   useEffect(() => {
     if (!profile?.family_id) return
@@ -58,6 +105,8 @@ const AccountPage = ({ receipts, onOpenReceipt }: AccountPageProps) => {
         clearCacheHint: 'Recalcula os dados locais e recarrega.',
         clearCacheDoing: 'A limpar…',
         logout: 'Sair',
+        receiptsAll: 'Todos',
+        receiptsLoading: 'A carregar…',
       }
     : {
         title: 'Аккаунт',
@@ -82,6 +131,8 @@ const AccountPage = ({ receipts, onOpenReceipt }: AccountPageProps) => {
         clearCacheHint: 'Пересчитает данные и перезагрузит приложение.',
         clearCacheDoing: 'Сбрасываю…',
         logout: 'Выйти',
+        receiptsAll: 'Все',
+        receiptsLoading: 'Загрузка…',
       }
 
   const handleInvite = async () => {
@@ -262,7 +313,33 @@ const AccountPage = ({ receipts, onOpenReceipt }: AccountPageProps) => {
         </div>
 
         <div style={{ paddingTop: 'var(--space-10)' }}>
-          <RecentReceiptsSection receipts={receipts} lang={lang} onOpenReceipt={onOpenReceipt} />
+          {monthChips.length > 0 && (
+            <div style={{ display: 'flex', gap: 'var(--space-4)', overflowX: 'auto', padding: '0 0 var(--space-6)' }}>
+              <FilterChip selected={monthFilter === null} onClick={() => onSetMonthFilter(null)}>
+                {t.receiptsAll}
+              </FilterChip>
+              {monthChips.map((key) => (
+                <FilterChip
+                  key={key}
+                  selected={monthFilter === key}
+                  onClick={() => onSetMonthFilter(monthFilter === key ? null : key)}
+                >
+                  {shortMonthLabel(key, lang)}
+                </FilterChip>
+              ))}
+            </div>
+          )}
+          {filteredLoading ? (
+            <div style={{ padding: 'var(--space-6) var(--space-1)', font: 'var(--type-meta)', color: 'var(--text-tertiary)' }}>
+              {t.receiptsLoading}
+            </div>
+          ) : (
+            <RecentReceiptsSection
+              receipts={filteredReceipts ?? receipts}
+              lang={lang}
+              onOpenReceipt={onOpenReceipt}
+            />
+          )}
         </div>
       </div>
     </>

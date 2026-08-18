@@ -105,6 +105,7 @@ const GroceryTrackerApp = () => {
   >(null)
 
   const [typeFilter, setTypeFilter] = useState<string | null>(null)
+  const [receiptsMonthFilter, setReceiptsMonthFilter] = useState<string | null>(null)
 
   const processedProducts: ProcessedProduct[] = useMemo(
     () =>
@@ -139,6 +140,11 @@ const GroceryTrackerApp = () => {
   const openTypeOnProducts = (type: string) => {
     setTypeFilter(type)
     setTab('products')
+  }
+
+  const openMonthOnAccount = (monthKey: string) => {
+    setReceiptsMonthFilter(monthKey)
+    setTab('account')
   }
 
   const openProduct = (p: ProcessedProduct) => setSheet({ kind: 'product', product: p })
@@ -225,9 +231,11 @@ const GroceryTrackerApp = () => {
               typeTranslations={typeTranslations}
               receipts={receipts}
               monthlyStats={monthlyStats}
+              activeMonthKey={receiptsMonthFilter}
               offline={!online}
               onRetry={() => window.location.reload()}
               onOpenType={openTypeOnProducts}
+              onOpenMonth={openMonthOnAccount}
             />
           </>
         )}
@@ -246,7 +254,16 @@ const GroceryTrackerApp = () => {
             />
           </>
         )}
-        {tab === 'account' && <AccountPage receipts={receipts} onOpenReceipt={openReceipt} />}
+        {tab === 'account' && (
+          <AccountPage
+            receipts={receipts}
+            monthlyStats={monthlyStats}
+            monthFilter={receiptsMonthFilter}
+            onSetMonthFilter={setReceiptsMonthFilter}
+            familyId={familyId}
+            onOpenReceipt={openReceipt}
+          />
+        )}
       </div>
 
       <TabBar
