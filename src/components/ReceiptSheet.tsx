@@ -8,6 +8,7 @@ interface ReceiptSheetProps {
   receipt: Receipt
   familyId: number
   onClose: () => void
+  onSetLikeStatus?: (productId: number, next: -1 | 1 | null) => Promise<void> | void
 }
 
 const formatMoney = (amount: number, lang: 'ru' | 'pt') => {
@@ -20,7 +21,7 @@ const formatDate = (iso: string, lang: 'ru' | 'pt') => {
   return d.toLocaleDateString(lang === 'pt' ? 'pt-PT' : 'ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
 }
 
-const ReceiptSheet: React.FC<ReceiptSheetProps> = ({ receipt, familyId, onClose }) => {
+const ReceiptSheet: React.FC<ReceiptSheetProps> = ({ receipt, familyId, onClose, onSetLikeStatus }) => {
   const { language } = useLanguage()
   const lang: 'ru' | 'pt' = language
   const [items, setItems] = useState<Array<ProductHistory & { product?: Product }>>([])
@@ -74,6 +75,7 @@ const ReceiptSheet: React.FC<ReceiptSheetProps> = ({ receipt, familyId, onClose 
             const p = it.product
             const primary = p ? (lang === 'pt' ? p.name : p.name_ru || p.name) : lang === 'pt' ? 'Artigo desconhecido' : 'Неизвестный товар'
             const original = p ? p.original_name || p.name : null
+            const productId = p?.id
             return (
               <ReceiptItemRow
                 key={it.id ?? i}
@@ -82,6 +84,26 @@ const ReceiptSheet: React.FC<ReceiptSheetProps> = ({ receipt, familyId, onClose 
                 originalName={lang === 'pt' ? null : original}
                 pricePaid={null}
                 lang={lang}
+                likeStatus={p?.like_status ?? null}
+                onLikeToggle={
+                  productId && onSetLikeStatus
+                    ? async (next) => {
+                        // Оптимистично обновляем локальную копию (модалка отображает свою data)
+                        setItems((prev) =>
+                          prev.map((row) =>
+                            row.product?.id === productId
+                              ? { ...row, product: { ...row.product, like_status: next } as Product }
+                              : row,
+                          ),
+                        )
+                        try {
+                          await onSetLikeStatus(productId, next)
+                        } catch (err) {
+                          console.error('receipt like toggle failed:', err)
+                        }
+                      }
+                    : undefined
+                }
               />
             )
           })}

@@ -144,6 +144,15 @@ const GroceryTrackerApp = () => {
   const openProduct = (p: ProcessedProduct) => setSheet({ kind: 'product', product: p })
   const openReceipt = (r: Receipt) => setSheet({ kind: 'receipt', receipt: r })
 
+  const handleSetLikeStatus = async (id: number, next: -1 | 1 | null) => {
+    try {
+      await SupabaseService.setLikeStatus(id, next)
+      await mutateProduct(id, { like_status: next })
+    } catch (err) {
+      console.error('setLikeStatus failed:', err)
+    }
+  }
+
   const handleProductSaved = async () => {
     await refetchProducts()
     if (familyId) {
@@ -233,14 +242,7 @@ const GroceryTrackerApp = () => {
               onMarkTypeBought={handleMarkTypeBought}
               onClearTypeFilter={() => setTypeFilter(null)}
               onOpenProduct={openProduct}
-              onSetLikeStatus={async (id, next) => {
-                try {
-                  await SupabaseService.setLikeStatus(id, next)
-                  await mutateProduct(id, { like_status: next })
-                } catch (err) {
-                  console.error('setLikeStatus failed:', err)
-                }
-              }}
+              onSetLikeStatus={handleSetLikeStatus}
             />
           </>
         )}
@@ -270,7 +272,12 @@ const GroceryTrackerApp = () => {
         />
       )}
       {sheet?.kind === 'receipt' && (
-        <ReceiptSheet receipt={sheet.receipt} familyId={familyId} onClose={() => setSheet(null)} />
+        <ReceiptSheet
+          receipt={sheet.receipt}
+          familyId={familyId}
+          onClose={() => setSheet(null)}
+          onSetLikeStatus={handleSetLikeStatus}
+        />
       )}
     </div>
   )

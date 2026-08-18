@@ -1,11 +1,7 @@
-import { MouseEvent } from 'react'
-import { Heart, ThumbsDown } from 'lucide-react'
+import { LikeButtons } from './LikeButtons'
 import { ListRow } from './ListRow'
 import { StatusBadge } from './StatusBadge'
 import { ForecastStatus } from './StatusDot'
-
-const HEART_COLOR = '#e11d48'
-const DISLIKE_COLOR = '#78716c'
 
 interface ProductRowProps {
   name: string
@@ -17,48 +13,6 @@ interface ProductRowProps {
   onLikeToggle?: (next: -1 | 1 | null) => void
   onClick?: () => void
   first?: boolean
-}
-
-const LikeButton = ({
-  active,
-  variant,
-  onClick,
-  lang,
-}: {
-  active: boolean
-  variant: 'like' | 'dislike'
-  onClick: (e: MouseEvent<HTMLButtonElement>) => void
-  lang: 'ru' | 'pt'
-}) => {
-  const label = variant === 'like'
-    ? (lang === 'pt' ? 'Gosto' : 'Нравится')
-    : (lang === 'pt' ? 'Não gosto' : 'Не нравится')
-  const color = active
-    ? (variant === 'like' ? HEART_COLOR : DISLIKE_COLOR)
-    : 'var(--text-disabled)'
-  const Icon = variant === 'like' ? Heart : ThumbsDown
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      title={label}
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: 32,
-        height: 32,
-        border: 'none',
-        background: 'transparent',
-        color,
-        cursor: 'pointer',
-        padding: 0,
-      }}
-    >
-      <Icon size={18} strokeWidth={1.75} fill={active ? color : 'none'} />
-    </button>
-  )
 }
 
 export function ProductRow({
@@ -83,28 +37,7 @@ export function ProductRow({
   )
   const right = (
     <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-      {onLikeToggle && (
-        <>
-          <LikeButton
-            variant="like"
-            active={likeStatus === 1}
-            lang={lang}
-            onClick={(e) => {
-              e.stopPropagation()
-              onLikeToggle(likeStatus === 1 ? null : 1)
-            }}
-          />
-          <LikeButton
-            variant="dislike"
-            active={likeStatus === -1}
-            lang={lang}
-            onClick={(e) => {
-              e.stopPropagation()
-              onLikeToggle(likeStatus === -1 ? null : -1)
-            }}
-          />
-        </>
-      )}
+      {onLikeToggle && <LikeButtons likeStatus={likeStatus} lang={lang} onToggle={onLikeToggle} />}
       {badge}
     </div>
   )

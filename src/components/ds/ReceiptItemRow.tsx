@@ -1,3 +1,5 @@
+import { LikeButtons } from './LikeButtons'
+
 interface ReceiptItemRowProps {
   name: string
   originalName?: string | null
@@ -5,16 +7,27 @@ interface ReceiptItemRowProps {
   priceNow?: string | null
   lang?: 'ru' | 'pt'
   first?: boolean
+  likeStatus?: -1 | 1 | null
+  onLikeToggle?: (next: -1 | 1 | null) => void
 }
 
-export function ReceiptItemRow({ name, originalName, pricePaid, priceNow, lang = 'ru', first = false }: ReceiptItemRowProps) {
+export function ReceiptItemRow({
+  name,
+  originalName,
+  pricePaid,
+  priceNow,
+  lang = 'ru',
+  first = false,
+  likeStatus = null,
+  onLikeToggle,
+}: ReceiptItemRowProps) {
   const display = lang === 'pt' ? originalName || name : name || originalName || ''
   const delta = priceNow && priceNow !== pricePaid
   return (
     <div
       style={{
         display: 'flex',
-        alignItems: 'flex-start',
+        alignItems: 'center',
         gap: 'var(--space-6)',
         padding: 'var(--space-5) var(--space-7)',
         borderTop: first ? 'none' : '1px solid var(--line-hairline)',
@@ -36,6 +49,7 @@ export function ReceiptItemRow({ name, originalName, pricePaid, priceNow, lang =
           </div>
         )}
       </div>
+      {onLikeToggle && <LikeButtons likeStatus={likeStatus} lang={lang} onToggle={onLikeToggle} />}
       {pricePaid && (
         <div style={{ flex: 'none', textAlign: 'right' }}>
           <div className="tnum" style={{ font: 'var(--type-num)', color: 'var(--text-primary)' }}>{pricePaid}</div>
