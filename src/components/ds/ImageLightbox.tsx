@@ -41,7 +41,6 @@ export function ImageLightbox({ url, alt, onClose }: ImageLightboxProps) {
       <img
         src={url}
         alt={alt || ''}
-        onClick={(e) => e.stopPropagation()}
         style={{
           maxWidth: '100%',
           maxHeight: '100%',
@@ -49,7 +48,7 @@ export function ImageLightbox({ url, alt, onClose }: ImageLightboxProps) {
           background: '#fff',
           borderRadius: 'var(--radius-sm)',
           boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
-          cursor: 'default',
+          cursor: 'zoom-out',
         }}
       />
     </div>,
