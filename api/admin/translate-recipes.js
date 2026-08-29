@@ -200,12 +200,34 @@ async function runInstructions(supabase, recipesPerBatch, maxBatches, deadline) 
     if (data.length < step) break;
     from += step;
   }
-  const stats = { pending: rows.length, translated: 0, batches: 0 };
+  const stats = { pending: rows.length, translated: 0, batches: 0, failed_batches: 0, last_error: null };
   for (let i = 0; i < rows.length; i += recipesPerBatch) {
     if (stats.batches >= maxBatches || Date.now() >= deadline) break;
     const chunk = rows.slice(i, i + recipesPerBatch);
     const stepArrays = chunk.map((r) => r.instructions_pt);
-    const translations = await translateStepArrays(stepArrays, INSTRUCTIONS_SYSTEM_PROMPT);
+    let translations;
+    try {
+      translations = await translateStepArrays(stepArrays, INSTRUCTIONS_SYSTEM_PROMPT);
+    } catch (err) {
+      stats.failed_batches++;
+      stats.last_error = err.message.slice(0, 200);
+      stats.batches++;
+      // Если размер батча > 1, попробуем каждый рецепт отдельно чтобы не терять весь чанк.
+      if (chunk.length > 1) {
+        for (const r of chunk) {
+          if (Date.now() >= deadline) break;
+          try {
+            const single = await translateStepArrays([r.instructions_pt], INSTRUCTIONS_SYSTEM_PROMPT);
+            await supabase.from('recipes').update({ instructions_ru: single[0] }).eq('id', r.id);
+            stats.translated += 1;
+          } catch (subErr) {
+            stats.failed_batches++;
+            stats.last_error = subErr.message.slice(0, 200);
+          }
+        }
+      }
+      continue;
+    }
     await Promise.all(
       chunk.map((r, j) =>
         supabase.from('recipes').update({ instructions_ru: translations[j] }).eq('id', r.id)
