@@ -136,6 +136,14 @@ const GroceryTrackerApp = () => {
     [typeStats],
   )
 
+  const availableTypes = useMemo(() => {
+    const set = new Set<string>()
+    for (const p of processedProducts) {
+      if (p.status !== 'ending-soon' && p.product_type) set.add(p.product_type)
+    }
+    return set
+  }, [processedProducts])
+
   const lastSyncHours = useMemo(() => {
     if (receipts.length === 0) return null
     const newest = receipts.reduce((acc, r) => (new Date(r.date) > new Date(acc.date) ? r : acc), receipts[0])
@@ -224,14 +232,6 @@ const GroceryTrackerApp = () => {
   const titles = lang === 'pt'
     ? { home: 'Início', products: 'Produtos', recipes: 'Receitas', account: 'Conta', productsCount: (n: number) => `${n} produtos` }
     : { home: 'Дом', products: 'Продукты', recipes: 'Рецепты', account: 'Аккаунт', productsCount: (n: number) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'продукт' : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? 'продукта' : 'продуктов'}` }
-
-  const availableTypes = useMemo(() => {
-    const set = new Set<string>()
-    for (const p of processedProducts) {
-      if (p.status !== 'ending-soon' && p.product_type) set.add(p.product_type)
-    }
-    return set
-  }, [processedProducts])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--surface-page)' }}>
