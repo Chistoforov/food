@@ -28,6 +28,10 @@
       "schedule": "0 3 * * 0"
     },
     {
+      "path": "/api/cron/pd-recipes-sync",
+      "schedule": "0 4 * * 1"
+    },
+    {
       "path": "/api/cron/keepalive",
       "schedule": "0 6 */5 * *"
     }
