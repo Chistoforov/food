@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { createPortal } from 'react-dom'
+import { useOverlayBackClose } from '../../hooks/useOverlayBackClose'
 
 interface ImageLightboxProps {
   url: string
@@ -8,6 +9,8 @@ interface ImageLightboxProps {
 }
 
 export function ImageLightbox({ url, alt, onClose }: ImageLightboxProps) {
+  useOverlayBackClose(true, onClose)
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()

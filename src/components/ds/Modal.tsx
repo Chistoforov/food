@@ -1,5 +1,6 @@
 import { ReactNode, useEffect } from 'react'
 import { createPortal } from 'react-dom'
+import { useOverlayBackClose } from '../../hooks/useOverlayBackClose'
 
 interface ModalProps {
   open?: boolean
@@ -12,6 +13,8 @@ interface ModalProps {
 }
 
 export function Modal({ open = true, title, children, footer, onClose, closeLabel = 'Закрыть', wide = false }: ModalProps) {
+  useOverlayBackClose(open, onClose)
+
   useEffect(() => {
     if (!open) return
     const handler = (e: KeyboardEvent) => {

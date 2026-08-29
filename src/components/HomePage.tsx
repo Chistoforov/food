@@ -79,6 +79,30 @@ const HomePage: React.FC<HomePageProps> = ({
         ) : (
           <>
             <MonthSpendCard stats={monthlyStats} lang={lang} activeMonthKey={activeMonthKey} onSelect={onOpenMonth} />
+          </>
+        )}
+
+        <div
+          style={{
+            marginTop: 'var(--space-7)',
+            border: '4px solid #8CC63F',
+            borderRadius: 20,
+            background: '#fff',
+            padding: 'var(--space-6) var(--space-7)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+        >
+          <img
+            src="/loyalty-barcode.png"
+            alt="Pingo Doce loyalty barcode"
+            style={{ width: '100%', maxWidth: 320, height: 'auto', display: 'block' }}
+          />
+        </div>
+
+        {!empty && (
+          <>
             {ending.length > 0 && (
               <>
                 <SectionHeader count={ending.length}>{titles.endingSoon}</SectionHeader>
