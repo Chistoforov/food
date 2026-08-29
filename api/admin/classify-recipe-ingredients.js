@@ -226,23 +226,34 @@ export default async function handler(req, res) {
     })
   );
 
+  // Рекурсивный fallback: если Claude вернул не тот count/JSON — режем чанк пополам,
+  // на длине 1 возвращаем [''] (skip). Так один сломанный ингредиент не блокирует остальные.
+  stats.failed_batches = 0;
+  stats.skipped_names = 0;
+  stats.last_error = null;
+  async function classifyWithFallback(names) {
+    try {
+      return await classifyBatch(names, systemText);
+    } catch (err) {
+      stats.failed_batches++;
+      stats.last_error = err.message.slice(0, 200);
+      if (names.length === 1) {
+        stats.skipped_names++;
+        return [''];
+      }
+      const mid = Math.floor(names.length / 2);
+      const left = await classifyWithFallback(names.slice(0, mid));
+      const right = await classifyWithFallback(names.slice(mid));
+      return [...left, ...right];
+    }
+  }
+
   // 5. LLM-цикл по уникальным неклассифицированным именам.
   for (let i = 0; i < llmKeys.length; i += batchSize) {
     if (stats.batches >= maxBatches || Date.now() >= deadline) break;
     const keyChunk = llmKeys.slice(i, i + batchSize);
     const nameChunk = keyChunk.map((k) => nameByKey.get(k));
-    let types;
-    try {
-      types = await classifyBatch(nameChunk, systemText);
-    } catch (err) {
-      return res.status(500).json({
-        error: `batch ${stats.batches + 1}: ${err.message}`,
-        stats: {
-          ...stats,
-          new_terms_this_run: [...stats.new_terms_this_run],
-        },
-      });
-    }
+    const types = await classifyWithFallback(nameChunk);
     await Promise.all(
       keyChunk.map(async (key, j) => {
         const t = types[j];
@@ -259,7 +270,7 @@ export default async function handler(req, res) {
     );
     stats.llm_classified += keyChunk.length;
     stats.batches++;
-    if (stats.samples.length < 5) stats.samples.push([nameChunk[0], types[0]]);
+    if (stats.samples.length < 5 && types[0]) stats.samples.push([nameChunk[0], types[0]]);
   }
 
   const { count: remainingAfter } = await supabase
