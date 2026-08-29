@@ -65,6 +65,55 @@ async function fillTranslations(supabase, table, prompt) {
   return rows.length;
 }
 
+const INSTRUCTIONS_TR_PROMPT = [
+  'You translate Portuguese cooking-step instructions from Pingo Doce recipes to Russian.',
+  'Input is a JSON array of arrays: each inner array is the ordered steps of one recipe.',
+  'Return the same-shape JSON array of arrays (same outer length, same inner lengths).',
+  'Translate each step as one natural Russian sentence/paragraph in the imperative cooking-instruction voice.',
+  'Keep units (g, ml, cl, L, kg, °C) and brand/product names in Latin. Do NOT renumber or add prefixes.',
+  'Return ONLY JSON — no markdown, no commentary.',
+].join(' ');
+
+async function fillInstructionsTranslation(supabase) {
+  const { data: rows } = await supabase
+    .from('recipes')
+    .select('id, instructions_pt')
+    .not('instructions_pt', 'is', null)
+    .is('instructions_ru', null)
+    .order('id')
+    .limit(30);
+  if (!rows || rows.length === 0) return 0;
+  const stepArrays = rows.map((r) => r.instructions_pt);
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': ANTHROPIC_KEY,
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 8192,
+      temperature: 0.2,
+      system: [{ type: 'text', text: INSTRUCTIONS_TR_PROMPT, cache_control: { type: 'ephemeral' } }],
+      messages: [
+        { role: 'user', content: JSON.stringify(stepArrays) },
+        { role: 'assistant', content: '[' },
+      ],
+    }),
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`Anthropic ${res.status}: ${text.slice(0, 200)}`);
+  const arr = JSON.parse('[' + JSON.parse(text).content?.[0]?.text);
+  if (!Array.isArray(arr) || arr.length !== rows.length) throw new Error('bad shape');
+  for (let i = 0; i < rows.length; i++) {
+    const sub = arr[i];
+    if (!Array.isArray(sub) || sub.length !== stepArrays[i].length) continue;
+    await supabase.from('recipes').update({ instructions_ru: sub.map(String) }).eq('id', rows[i].id);
+  }
+  return rows.length;
+}
+
 async function fillClassifications(supabase, familyId) {
   const { data: rows } = await supabase
     .from('recipe_ingredients')
@@ -166,11 +215,14 @@ export default async function handler(req, res) {
   });
 
   // Phase 3: translate + classify (только если ANTHROPIC_KEY и есть что делать)
-  const llm = { recipes_translated: 0, ingredients_translated: 0, ingredients_classified: 0 };
+  const llm = { recipes_translated: 0, ingredients_translated: 0, instructions_translated: 0, ingredients_classified: 0 };
   if (ANTHROPIC_KEY && Date.now() < deadline) {
     try { llm.recipes_translated = await fillTranslations(supabase, 'recipes', RECIPE_TR_PROMPT); } catch (e) { llm.tr_recipes_error = e.message; }
     if (Date.now() < deadline) {
       try { llm.ingredients_translated = await fillTranslations(supabase, 'recipe_ingredients', INGREDIENT_TR_PROMPT); } catch (e) { llm.tr_ingredients_error = e.message; }
+    }
+    if (Date.now() < deadline) {
+      try { llm.instructions_translated = await fillInstructionsTranslation(supabase); } catch (e) { llm.tr_instructions_error = e.message; }
     }
     if (Date.now() < deadline) {
       try { llm.ingredients_classified = await fillClassifications(supabase, DEFAULT_FAMILY_ID); } catch (e) { llm.cls_error = e.message; }

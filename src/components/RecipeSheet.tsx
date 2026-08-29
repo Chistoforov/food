@@ -14,8 +14,15 @@ const RecipeSheet: React.FC<RecipeSheetProps> = ({ recipe, ingredients, availabl
   const lang: 'ru' | 'pt' = language
 
   const t = lang === 'pt'
-    ? { close: 'Fechar', category: 'Categoria', ingredients: 'Ingredientes', open: 'Abrir no Pingo Doce', have: 'em casa', missing: 'em falta' }
-    : { close: 'Закрыть', category: 'Категория', ingredients: 'Ингредиенты', open: 'Открыть на Pingo Doce', have: 'есть', missing: 'нет' }
+    ? { close: 'Fechar', category: 'Categoria', ingredients: 'Ingredientes', instructions: 'Preparação', open: 'Abrir no Pingo Doce', have: 'em casa', missing: 'em falta' }
+    : { close: 'Закрыть', category: 'Категория', ingredients: 'Ингредиенты', instructions: 'Приготовление', open: 'Открыть на Pingo Doce', have: 'есть', missing: 'нет' }
+
+  const steps: string[] | null =
+    lang === 'pt'
+      ? recipe.instructions_pt
+      : (recipe.instructions_ru && recipe.instructions_ru.length > 0
+          ? recipe.instructions_ru
+          : recipe.instructions_pt)
 
   const title = lang === 'pt' ? recipe.name_pt : (recipe.name_ru || recipe.name_pt)
 
@@ -103,6 +110,28 @@ const RecipeSheet: React.FC<RecipeSheetProps> = ({ recipe, ingredients, availabl
               })}
             </div>
           </div>
+
+          {steps && steps.length > 0 && (
+            <div>
+              <div style={{ font: 'var(--type-section)', color: 'var(--text-primary)', marginBottom: 'var(--space-4)' }}>
+                {t.instructions}
+              </div>
+              <ol style={{ margin: 0, paddingLeft: 'var(--space-6)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+                {steps.map((step, i) => (
+                  <li
+                    key={i}
+                    style={{
+                      font: 'var(--type-body)',
+                      color: 'var(--text-primary)',
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {step}
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
 
           <a
             href={recipe.url}

@@ -138,6 +138,44 @@ export function parseIngredient(raw) {
   return { quantity_text: numToken, name_pt: rest };
 }
 
+// JSON-LD recipeInstructions бывает трёх форматов:
+//   1) string (единый блок текста)
+//   2) [HowToStep{ text }, ...]
+//   3) [HowToSection{ itemListElement: [HowToStep, ...] }, ...]
+export function parseInstructions(raw) {
+  if (!raw) return [];
+  if (typeof raw === 'string') {
+    return raw
+      .split(/\n+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  for (const item of raw) {
+    if (!item) continue;
+    if (typeof item === 'string') {
+      const s = item.trim();
+      if (s) out.push(s);
+      continue;
+    }
+    if (typeof item !== 'object') continue;
+    const type = item['@type'];
+    const isSection =
+      type === 'HowToSection' || (Array.isArray(type) && type.includes('HowToSection'));
+    if (isSection && Array.isArray(item.itemListElement)) {
+      for (const step of item.itemListElement) {
+        const text = step && typeof step === 'object' ? step.text : step;
+        if (typeof text === 'string' && text.trim()) out.push(text.trim());
+      }
+      continue;
+    }
+    const text = item.text;
+    if (typeof text === 'string' && text.trim()) out.push(text.trim());
+  }
+  return out;
+}
+
 // Скрапит одну детальную страницу, обновляет recipes + переписывает recipe_ingredients.
 export async function scrapeOne(supabase, row) {
   const { id, url } = row;
@@ -153,6 +191,7 @@ export async function scrapeOne(supabase, row) {
   else if (typeof img === 'string') imageUrl = img;
   else if (img && typeof img === 'object' && img.url) imageUrl = String(img.url);
   const rawIngredients = Array.isArray(recipe.recipeIngredient) ? recipe.recipeIngredient : [];
+  const instructions = parseInstructions(recipe.recipeInstructions).map((s) => s.slice(0, 2000));
   if (!name || rawIngredients.length === 0) {
     throw new Error(`empty payload name=${!!name} ingredients=${rawIngredients.length}`);
   }
@@ -181,11 +220,12 @@ export async function scrapeOne(supabase, row) {
       name_pt: name.slice(0, 500),
       image_url: imageUrl,
       category: category ? category.slice(0, 200) : null,
+      instructions_pt: instructions.length > 0 ? instructions : null,
       scraped_at: new Date().toISOString(),
     })
     .eq('id', id);
   if (updErr) throw updErr;
-  return { ingredients: ingredientRows.length };
+  return { ingredients: ingredientRows.length, instructions: instructions.length };
 }
 
 // Проходит массив recipes воркер-пулом; уважает soft deadline и глобальный limit.

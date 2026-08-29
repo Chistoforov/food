@@ -110,6 +110,8 @@ export interface Recipe {
   name_ru: string | null
   image_url: string | null
   category: string | null
+  instructions_pt: string[] | null
+  instructions_ru: string[] | null
   sitemap_lastmod: string | null
   scraped_at: string | null
   created_at: string
