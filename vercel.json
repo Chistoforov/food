@@ -26,6 +26,10 @@
     {
       "path": "/api/cron/pd-catalog-sync",
       "schedule": "0 3 * * 0"
+    },
+    {
+      "path": "/api/cron/keepalive",
+      "schedule": "0 6 */5 * *"
     }
   ],
   "headers": [
