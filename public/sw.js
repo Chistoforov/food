@@ -1,81 +1,83 @@
-const CACHE_NAME = 'grocery-tracker-v3';
-const urlsToCache = [
-  '/',
-  '/index.html',
-  '/manifest.json'
-];
+const CACHE_NAME = 'grocery-tracker-v4';
+const OFFLINE_URL = '/';
 
-// Установка service worker
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => {
-        console.log('Opened cache');
-        return cache.addAll(urlsToCache);
-      })
+    (async () => {
+      const cache = await caches.open(CACHE_NAME);
+      try {
+        await cache.add(OFFLINE_URL);
+      } catch (_) {
+        // ignore precache failure; runtime cache still works
+      }
+      await self.skipWaiting();
+    })(),
   );
 });
 
-// Активация service worker
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            console.log('Deleting old cache:', cacheName);
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    })
+    (async () => {
+      const names = await caches.keys();
+      await Promise.all(names.map((n) => (n !== CACHE_NAME ? caches.delete(n) : null)));
+      await self.clients.claim();
+    })(),
   );
 });
 
-// Перехват запросов
-self.addEventListener('fetch', (event) => {
-  // Игнорируем расширения Chrome и другие схемы кроме http/https
-  if (!event.request.url.startsWith('http')) {
-    return;
-  }
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
+});
 
-  // Кэшируем только GET запросы (Cache API не поддерживает POST/PUT/DELETE)
-  if (event.request.method !== 'GET') {
-    event.respondWith(fetch(event.request));
+// Runtime routing:
+// - Navigations & HTML: network-first (so a new deploy is picked up immediately).
+// - Same-origin static assets (JS/CSS with hashed names, images, svg, fonts): cache-first
+//   with background refresh, since their filenames change per build.
+// - Everything else (API, cross-origin): network only, no interception.
+self.addEventListener('fetch', (event) => {
+  const req = event.request;
+  if (req.method !== 'GET') return;
+
+  const url = new URL(req.url);
+  if (url.origin !== self.location.origin) return;
+  if (url.pathname.startsWith('/api/')) return;
+
+  const isNavigation =
+    req.mode === 'navigate' ||
+    (req.headers.get('accept') || '').includes('text/html');
+
+  if (isNavigation) {
+    event.respondWith(
+      (async () => {
+        try {
+          const fresh = await fetch(req);
+          const cache = await caches.open(CACHE_NAME);
+          cache.put(OFFLINE_URL, fresh.clone()).catch(() => {});
+          return fresh;
+        } catch (_) {
+          const cache = await caches.open(CACHE_NAME);
+          const cached = await cache.match(OFFLINE_URL);
+          if (cached) return cached;
+          return new Response('Offline', { status: 503, statusText: 'Offline' });
+        }
+      })(),
+    );
     return;
   }
 
   event.respondWith(
-    caches.match(event.request)
-      .then((response) => {
-        // Возвращаем кешированный ответ, если он есть
-        if (response) {
-          return response;
-        }
-        
-        // Клонируем запрос
-        const fetchRequest = event.request.clone();
-        
-        return fetch(fetchRequest).then((response) => {
-          // Проверяем, что получили валидный ответ
-          if (!response || response.status !== 200 || response.type !== 'basic') {
-            return response;
+    (async () => {
+      const cache = await caches.open(CACHE_NAME);
+      const cached = await cache.match(req);
+      const network = fetch(req)
+        .then((res) => {
+          if (res && res.status === 200 && res.type === 'basic') {
+            cache.put(req, res.clone()).catch(() => {});
           }
-          
-          // Клонируем ответ
-          const responseToCache = response.clone();
-          
-          caches.open(CACHE_NAME)
-            .then((cache) => {
-              cache.put(event.request, responseToCache);
-            });
-          
-          return response;
-        }).catch(() => {
-          // Возвращаем офлайн-страницу при отсутствии сети
-          return caches.match('/');
-        });
-      })
+          return res;
+        })
+        .catch(() => cached);
+      return cached || network;
+    })(),
   );
 });
-

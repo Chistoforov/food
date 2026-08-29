@@ -36,14 +36,18 @@
     <!-- Register Service Worker -->
     <script>
       if ('serviceWorker' in navigator) {
+        let reloading = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          if (reloading) return;
+          reloading = true;
+          window.location.reload();
+        });
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('/sw.js')
             .then((registration) => {
-              console.log('SW registered: ', registration);
+              registration.update().catch(() => {});
             })
-            .catch((registrationError) => {
-              console.log('SW registration failed: ', registrationError);
-            });
+            .catch(() => {});
         });
       }
     </script>
