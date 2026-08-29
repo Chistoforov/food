@@ -1,4 +1,4 @@
-import { supabase, Product, Receipt, ProductHistory, MonthlyStats, UserProfile, FamilyInvitation } from '../lib/supabase'
+import { supabase, Product, Receipt, ProductHistory, MonthlyStats, UserProfile, FamilyInvitation, Recipe, RecipeIngredient } from '../lib/supabase'
 
 export class SupabaseService {
   // Работа с продуктами
@@ -1298,5 +1298,29 @@ export class SupabaseService {
         .delete()
         .eq('id', id)
       if (error) throw error
+  }
+
+  // --- Recipes ---
+  // Возвращает только полноценно спарсенные рецепты (scraped_at IS NOT NULL).
+  static async getRecipes(): Promise<Recipe[]> {
+    const { data, error } = await supabase
+      .from('recipes')
+      .select('*')
+      .not('scraped_at', 'is', null)
+      .order('name_pt', { ascending: true })
+    if (error) throw error
+    return (data || []) as Recipe[]
+  }
+
+  static async getRecipeIngredients(recipeIds: number[]): Promise<RecipeIngredient[]> {
+    if (recipeIds.length === 0) return []
+    const { data, error } = await supabase
+      .from('recipe_ingredients')
+      .select('*')
+      .in('recipe_id', recipeIds)
+      .order('recipe_id', { ascending: true })
+      .order('position', { ascending: true })
+    if (error) throw error
+    return (data || []) as RecipeIngredient[]
   }
 }

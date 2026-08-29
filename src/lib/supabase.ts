@@ -101,3 +101,32 @@ export interface FamilyInvitation {
   status: 'pending' | 'accepted' | 'rejected'
   created_at: string
 }
+
+export interface Recipe {
+  id: number
+  external_id: string
+  url: string
+  name_pt: string
+  name_ru: string | null
+  image_url: string | null
+  category: string | null
+  sitemap_lastmod: string | null
+  scraped_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface RecipeIngredient {
+  id: number
+  recipe_id: number
+  position: number
+  raw_text: string
+  name_pt: string
+  name_ru: string | null
+  quantity_text: string | null
+  product_type: string | null
+}
+
+export interface RecipeWithIngredients extends Recipe {
+  ingredients: RecipeIngredient[]
+}

@@ -11,10 +11,11 @@ import HomePage, { formatUpdated } from './components/HomePage'
 import ProductsPage, { type ProcessedProduct } from './components/ProductsPage'
 import ProductSheet from './components/ProductSheet'
 import ReceiptSheet from './components/ReceiptSheet'
+import RecipesPage from './components/RecipesPage'
 import { Receipt } from './lib/supabase'
 import { EMPTY_TRANSLATIONS, type TypeTranslationMaps } from './lib/typeI18n'
 
-type Tab = 'home' | 'products' | 'account'
+type Tab = 'home' | 'products' | 'recipes' | 'account'
 
 type DbStatus = 'ending-soon' | 'ok' | 'calculating' | 'irregular'
 type TypeStats = Record<string, { status: DbStatus; productCount: number }>
@@ -63,7 +64,7 @@ const GroceryTrackerApp = () => {
 
   const [tab, setTab] = useState<Tab>(() => {
     const saved = typeof window !== 'undefined' ? localStorage.getItem(TAB_STORAGE) : null
-    return saved === 'products' || saved === 'account' ? saved : 'home'
+    return saved === 'products' || saved === 'account' || saved === 'recipes' ? saved : 'home'
   })
 
   useEffect(() => {
@@ -221,8 +222,16 @@ const GroceryTrackerApp = () => {
   }
 
   const titles = lang === 'pt'
-    ? { home: 'Início', products: 'Produtos', account: 'Conta', productsCount: (n: number) => `${n} produtos` }
-    : { home: 'Дом', products: 'Продукты', account: 'Аккаунт', productsCount: (n: number) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'продукт' : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? 'продукта' : 'продуктов'}` }
+    ? { home: 'Início', products: 'Produtos', recipes: 'Receitas', account: 'Conta', productsCount: (n: number) => `${n} produtos` }
+    : { home: 'Дом', products: 'Продукты', recipes: 'Рецепты', account: 'Аккаунт', productsCount: (n: number) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'продукт' : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? 'продукта' : 'продуктов'}` }
+
+  const availableTypes = useMemo(() => {
+    const set = new Set<string>()
+    for (const p of processedProducts) {
+      if (p.status !== 'ending-soon' && p.product_type) set.add(p.product_type)
+    }
+    return set
+  }, [processedProducts])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--surface-page)' }}>
@@ -259,6 +268,12 @@ const GroceryTrackerApp = () => {
             />
           </>
         )}
+        {tab === 'recipes' && (
+          <>
+            <AppHeader title={titles.recipes} />
+            <RecipesPage availableTypes={availableTypes} />
+          </>
+        )}
         {tab === 'account' && (
           <AccountPage
             receipts={receipts}
@@ -277,6 +292,7 @@ const GroceryTrackerApp = () => {
         items={[
           { value: 'home', label: titles.home, badge: endingCount || undefined },
           { value: 'products', label: titles.products },
+          { value: 'recipes', label: titles.recipes },
           { value: 'account', label: titles.account },
         ]}
       />
