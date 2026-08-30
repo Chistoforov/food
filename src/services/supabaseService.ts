@@ -911,6 +911,23 @@ export class SupabaseService {
     return map
   }
 
+  static async getPerishableShelfLife(): Promise<Record<string, number>> {
+    const { data, error } = await supabase
+      .from('perishable_shelf_life')
+      .select('product_type, shelf_life_days')
+    if (error) {
+      console.warn('perishable_shelf_life fetch failed:', error.message)
+      return {}
+    }
+    const map: Record<string, number> = {}
+    for (const row of data || []) {
+      if (row.product_type && typeof row.shelf_life_days === 'number') {
+        map[row.product_type] = row.shelf_life_days
+      }
+    }
+    return map
+  }
+
   static async getProductTypeTranslations(): Promise<{ ruToPt: Record<string, string>; ptToRu: Record<string, string> }> {
     const { data, error } = await supabase.from('product_type_i18n').select('ru, pt')
     if (error) {

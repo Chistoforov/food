@@ -86,6 +86,7 @@ const GroceryTrackerApp = () => {
   const [endingCountsByType, setEndingCountsByType] = useState<Record<string, number>>({})
   const [typeTranslations, setTypeTranslations] = useState<TypeTranslationMaps>(EMPTY_TRANSLATIONS)
   const [productImages, setProductImages] = useState<Map<number, string>>(new Map())
+  const [shelfLife, setShelfLife] = useState<Record<string, number>>({})
 
   useEffect(() => {
     if (!familyId) return
@@ -101,6 +102,9 @@ const GroceryTrackerApp = () => {
     SupabaseService.getProductImageMap(familyId)
       .then((m) => setProductImages(m))
       .catch((err) => console.error('product images failed:', err))
+    SupabaseService.getPerishableShelfLife()
+      .then((m) => setShelfLife(m))
+      .catch((err) => console.error('shelf life failed:', err))
   }, [familyId])
 
   const [sheet, setSheet] = useState<
@@ -137,21 +141,28 @@ const GroceryTrackerApp = () => {
   )
 
   const availableTypes = useMemo(() => {
-    const set = new Set<string>()
-    const freshMs = 14 * 24 * 60 * 60 * 1000
+    const set = new Set<string>([
+      // Basic pantry — assumed always available in a home kitchen.
+      'соль', 'вода', 'сахар', 'перец чёрный', 'перец черный',
+    ])
+    const dayMs = 24 * 60 * 60 * 1000
+    const defaultFreshDays = 45
     const now = Date.now()
     for (const p of processedProducts) {
       if (!p.product_type) continue
+      if (p.status === 'ending-soon') continue
       if (p.status === 'ok') { set.add(p.product_type); continue }
-      // calculating = first purchase without established cadence; treat as "have"
-      // only if the single purchase is fresh enough to plausibly still be in the pantry.
-      if (p.status === 'calculating' && p.lastPurchase) {
-        if (now - Date.parse(p.lastPurchase) <= freshMs) set.add(p.product_type)
+      // 'irregular' / 'calculating': not enough cadence data for a forecast.
+      // Fall back to shelf-life-aware recency: perishables use their capped
+      // shelf life, everything else gets a generous default window.
+      if (!p.lastPurchase) continue
+      const days = shelfLife[p.product_type] ?? defaultFreshDays
+      if (now - Date.parse(p.lastPurchase) <= days * dayMs) {
+        set.add(p.product_type)
       }
-      // 'ending-soon' and 'irregular' are not counted as available.
     }
     return set
-  }, [processedProducts])
+  }, [processedProducts, shelfLife])
 
   const lastSyncHours = useMemo(() => {
     if (receipts.length === 0) return null
