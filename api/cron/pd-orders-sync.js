@@ -311,6 +311,9 @@ async function processReceipt(supabase, familyId, summary, detail, catalogCache,
   if (existing) return { skipped: true, receiptId: existing.id };
 
   const dateOnly = String(summary.transactionDate).slice(0, 10);
+  // Вставляем 'pending' — триггер trigger_product_type_stats_on_receipt_processed
+  // навешан WHEN (NEW.status = 'processed'), поэтому пересчёт статусов не стартует,
+  // пока мы не долили в product_history строки текущего чека.
   const { data: receipt, error: recErr } = await supabase
     .from('receipts')
     .insert({
@@ -318,7 +321,7 @@ async function processReceipt(supabase, familyId, summary, detail, catalogCache,
       date: dateOnly,
       items_count: detail.details?.totalItems ?? detail.products?.list?.length ?? 0,
       total_amount: detail.details?.total ?? summary.total ?? 0,
-      status: 'processed',
+      status: 'pending',
       family_id: familyId,
     })
     .select('id')
@@ -351,6 +354,14 @@ async function processReceipt(supabase, familyId, summary, detail, catalogCache,
       product_internal_code: it.productInternalCode ?? null,
     });
   }
+
+  // Теперь product_history уже содержит все позиции — переводим receipt в 'processed',
+  // что триггерит recalculate_product_type_stats со свежими данными.
+  const { error: updErr } = await supabase
+    .from('receipts')
+    .update({ status: 'processed' })
+    .eq('id', receipt.id);
+  if (updErr) throw updErr;
 
   return { skipped: false, receiptId: receipt.id, itemsInserted: items.length };
 }
@@ -423,6 +434,22 @@ export default async function handler(req, res) {
     }
   }
 
+  // Safety-net: гарантированный пересчёт статусов после всех вставок.
+  // Триггер на receipts уже дёрнул recalculate в processReceipt, но повторный вызов
+  // дёшев и страхует от гонок / промахов триггера, а также заменяет отдельный
+  // /api/recalculate-statuses cron (Vercel Hobby разрешает только один cron/день).
+  let recalcOk = false;
+  try {
+    const { error: recalcErr } = await supabase.rpc('recalculate_product_type_stats', {
+      p_family_id: PD_FAMILY_ID,
+    });
+    if (recalcErr) throw recalcErr;
+    recalcOk = true;
+  } catch (err) {
+    errors++;
+    results.push({ recalc_error: err instanceof Error ? err.message : String(err) });
+  }
+
   return res.status(200).json({
     ok: true,
     family_id: PD_FAMILY_ID,
@@ -431,6 +458,7 @@ export default async function handler(req, res) {
     processed_this_run: results.filter((r) => !r.error && !r.skipped).length,
     skipped_existing: results.filter((r) => r.skipped).length,
     errors,
+    recalc_ok: recalcOk,
     error_details: results.filter((r) => r.error).slice(0, 5),
     elapsed_ms: Date.now() - started,
     sample_results: results.slice(0, 5),
