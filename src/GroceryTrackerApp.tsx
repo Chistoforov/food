@@ -138,8 +138,17 @@ const GroceryTrackerApp = () => {
 
   const availableTypes = useMemo(() => {
     const set = new Set<string>()
+    const freshMs = 14 * 24 * 60 * 60 * 1000
+    const now = Date.now()
     for (const p of processedProducts) {
-      if (p.status !== 'ending-soon' && p.product_type) set.add(p.product_type)
+      if (!p.product_type) continue
+      if (p.status === 'ok') { set.add(p.product_type); continue }
+      // calculating = first purchase without established cadence; treat as "have"
+      // only if the single purchase is fresh enough to plausibly still be in the pantry.
+      if (p.status === 'calculating' && p.lastPurchase) {
+        if (now - Date.parse(p.lastPurchase) <= freshMs) set.add(p.product_type)
+      }
+      // 'ending-soon' and 'irregular' are not counted as available.
     }
     return set
   }, [processedProducts])
