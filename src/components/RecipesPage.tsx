@@ -107,7 +107,9 @@ const RecipesPage: React.FC<RecipesPageProps> = ({ availableTypes }) => {
       const pa = TIER_PRIORITY[a.tier]
       const pb = TIER_PRIORITY[b.tier]
       if (pa !== pb) return pa - pb
-      if (a.matched !== b.matched) return b.matched - a.matched
+      const am = a.total - a.matched
+      const bm = b.total - b.matched
+      if (am !== bm) return am - bm
       const an = (lang === 'ru' ? a.recipe.name_ru || a.recipe.name_pt : a.recipe.name_pt).toLowerCase()
       const bn = (lang === 'ru' ? b.recipe.name_ru || b.recipe.name_pt : b.recipe.name_pt).toLowerCase()
       return an.localeCompare(bn)
@@ -122,10 +124,16 @@ const RecipesPage: React.FC<RecipesPageProps> = ({ availableTypes }) => {
       </div>
 
       <div style={{ display: 'flex', gap: 'var(--space-4)', overflowX: 'auto', padding: 'var(--space-6) 0' }}>
+        {counts.complete > 0 && (
+          <FilterChip selected={tierFilter === 'complete'} count={counts.complete} onClick={() => setTierFilter('complete')}>{t.complete}</FilterChip>
+        )}
+        {counts.missing_one > 0 && (
+          <FilterChip selected={tierFilter === 'missing_one'} count={counts.missing_one} onClick={() => setTierFilter('missing_one')}>{t.missing_one}</FilterChip>
+        )}
+        {counts.missing_many > 0 && (
+          <FilterChip selected={tierFilter === 'missing_many'} count={counts.missing_many} onClick={() => setTierFilter('missing_many')}>{t.missing_many}</FilterChip>
+        )}
         <FilterChip selected={tierFilter === 'all'} count={counts.all} onClick={() => setTierFilter('all')}>{t.all}</FilterChip>
-        <FilterChip selected={tierFilter === 'complete'} count={counts.complete} onClick={() => setTierFilter('complete')}>{t.complete}</FilterChip>
-        <FilterChip selected={tierFilter === 'missing_one'} count={counts.missing_one} onClick={() => setTierFilter('missing_one')}>{t.missing_one}</FilterChip>
-        <FilterChip selected={tierFilter === 'missing_many'} count={counts.missing_many} onClick={() => setTierFilter('missing_many')}>{t.missing_many}</FilterChip>
       </div>
 
       {loading && recipes.length === 0 ? (
