@@ -183,30 +183,32 @@ const GroceryTrackerApp = () => {
 
   const handleMarkTypeBought = async (type: string) => {
     if (!familyId) return
-    try {
-      const n = await SupabaseService.addVirtualPurchaseForType(type, familyId)
-      if (n === 0) {
-        alert(lang === 'pt' ? 'Sem produtos deste tipo.' : 'Нет продуктов этого типа.')
-        return
+    setTypeFilter(null)
+    void (async () => {
+      try {
+        const n = await SupabaseService.addVirtualPurchaseForType(type, familyId)
+        if (n === 0) {
+          alert(lang === 'pt' ? 'Sem produtos deste tipo.' : 'Нет продуктов этого типа.')
+          return
+        }
+        await new Promise((r) => setTimeout(r, 400))
+        await SupabaseService.recalculateProductTypeStats(familyId)
+        // SQL-функция calculate_product_type_status учитывает только реальные покупки
+        // (quantity > 0) и не сдвигает статус типа после виртуальной покупки.
+        // Форсированно ставим кэш типа в 'ok', пока пользователь не купит реально.
+        await SupabaseService.markTypeStatsOk(familyId, type)
+        const [fresh, freshEnding] = await Promise.all([
+          SupabaseService.getProductTypeStats(familyId),
+          SupabaseService.getEndingSoonCountsByType(familyId),
+          refetchProducts(),
+        ])
+        setTypeStats(fresh)
+        setEndingCountsByType(freshEnding)
+      } catch (err) {
+        console.error('mark bought failed:', err)
+        alert(lang === 'pt' ? 'Não foi possível guardar.' : 'Не удалось сохранить.')
       }
-      await new Promise((r) => setTimeout(r, 400))
-      await SupabaseService.recalculateProductTypeStats(familyId)
-      // SQL-функция calculate_product_type_status учитывает только реальные покупки
-      // (quantity > 0) и не сдвигает статус типа после виртуальной покупки.
-      // Форсированно ставим кэш типа в 'ok', пока пользователь не купит реально.
-      await SupabaseService.markTypeStatsOk(familyId, type)
-      const [fresh, freshEnding] = await Promise.all([
-        SupabaseService.getProductTypeStats(familyId),
-        SupabaseService.getEndingSoonCountsByType(familyId),
-        refetchProducts(),
-      ])
-      setTypeStats(fresh)
-      setEndingCountsByType(freshEnding)
-      setTypeFilter(null)
-    } catch (err) {
-      console.error('mark bought failed:', err)
-      alert(lang === 'pt' ? 'Não foi possível guardar.' : 'Не удалось сохранить.')
-    }
+    })()
   }
 
   if (authLoading) {
