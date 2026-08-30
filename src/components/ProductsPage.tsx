@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { ImageIcon } from 'lucide-react'
 import { Card, SearchField, FilterChip, ProductRow, EmptyState, Button, type ForecastStatus } from './ds'
 import { useLanguage } from '../contexts/LanguageContext'
 import { displayType as displayTypeUtil, type TypeTranslationMaps } from '../lib/typeI18n'
@@ -348,20 +349,22 @@ const CatalogRow: React.FC<{ hit: CatalogHit; first: boolean }> = ({ hit, first 
   <div
     style={{
       display: 'flex',
-      alignItems: 'center',
+      flexDirection: 'column',
       gap: 'var(--space-4)',
-      padding: 'var(--space-4) var(--space-5)',
+      padding: 'var(--space-6) var(--space-7)',
       borderTop: first ? 'none' : '1px solid var(--line-hairline)',
     }}
   >
+    <span style={{ font: 'var(--type-row-title)', color: 'var(--text-primary)', wordBreak: 'break-word' }}>
+      {hit.name}
+    </span>
     <div
       style={{
-        flex: '0 0 auto',
-        width: 56,
-        height: 56,
+        width: '100%',
+        aspectRatio: '16 / 9',
         borderRadius: 'var(--radius-sm)',
-        background: 'var(--surface-sunken)',
         overflow: 'hidden',
+        background: 'var(--surface-sunken)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -370,48 +373,24 @@ const CatalogRow: React.FC<{ hit: CatalogHit; first: boolean }> = ({ hit, first 
       {hit.image_url ? (
         <img
           src={hit.image_url}
-          alt=""
+          alt={hit.name}
           loading="lazy"
-          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-          onError={(e) => {
-            ;(e.currentTarget as HTMLImageElement).style.display = 'none'
-          }}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
         />
-      ) : null}
+      ) : (
+        <ImageIcon size={28} strokeWidth={1.5} color="var(--text-disabled)" />
+      )}
     </div>
-    <div style={{ minWidth: 0, flex: 1 }}>
-      <div
-        style={{
-          font: 'var(--type-body)',
-          color: 'var(--text-primary)',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        {hit.name}
-      </div>
-      <div style={{ display: 'flex', gap: 'var(--space-3)', marginTop: 2, alignItems: 'baseline' }}>
+    {(hit.brand || hit.category1) && (
+      <div style={{ display: 'flex', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
         {hit.brand && (
-          <span style={{ font: 'var(--type-caption)', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
-            {hit.brand}
-          </span>
+          <span style={{ font: 'var(--type-meta)', color: 'var(--text-secondary)' }}>{hit.brand}</span>
         )}
         {hit.category1 && (
-          <span
-            style={{
-              font: 'var(--type-caption)',
-              color: 'var(--text-tertiary)',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {hit.category1}
-          </span>
+          <span style={{ font: 'var(--type-meta)', color: 'var(--text-tertiary)' }}>{hit.category1}</span>
         )}
       </div>
-    </div>
+    )}
   </div>
 )
 
