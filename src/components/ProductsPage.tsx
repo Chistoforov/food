@@ -1,7 +1,24 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Card, SearchField, FilterChip, ProductRow, EmptyState, Button, type ForecastStatus } from './ds'
 import { useLanguage } from '../contexts/LanguageContext'
 import { displayType as displayTypeUtil, type TypeTranslationMaps } from '../lib/typeI18n'
+import { SupabaseService } from '../services/supabaseService'
+
+type CatalogHit = {
+  id: number
+  name: string
+  brand: string | null
+  category1: string | null
+  category2: string | null
+  image_url: string | null
+}
+
+type CatalogState = {
+  q: string
+  loading: boolean
+  translated: string | null
+  results: CatalogHit[]
+}
 
 type DbStatus = 'ending-soon' | 'ok' | 'calculating' | 'irregular'
 
@@ -59,6 +76,8 @@ const ProductsPage: React.FC<ProductsPageProps> = ({
   const [filter, setFilter] = useState<'all' | ForecastStatus>('all')
   const [marking, setMarking] = useState(false)
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+  const [catalogState, setCatalogState] = useState<CatalogState | null>(null)
+  const catalogCache = useRef<Map<string, { translated: string | null; results: CatalogHit[] }>>(new Map())
 
   // Сбрасываем клиентскую пагинацию при смене фильтров/поиска
   useEffect(() => {
@@ -68,8 +87,8 @@ const ProductsPage: React.FC<ProductsPageProps> = ({
   const displayType = (type?: string) => (type ? displayTypeUtil(type, lang, typeTranslations) : '')
 
   const t = lang === 'pt'
-    ? { search: 'Encontrar produto', clear: 'Limpar', clearFilter: 'Limpar filtro', bought: 'Comprado', boughtDoing: 'A guardar…', all: 'Todos', emptyTitle: 'Ainda vazio', emptyDesc: 'Pede para te adicionarem à família — os dados aparecem sozinhos.', noMatchTitle: 'Nada encontrado', noMatchDesc: 'Tenta outro nome ou remove o filtro.', loadMore: 'Mostrar mais', loading: 'A carregar…', products: (n: number) => (n === 1 ? '1 produto' : `${n} produtos`) }
-    : { search: 'Найти продукт', clear: 'Сброс', clearFilter: 'Снять фильтр', bought: 'Куплено', boughtDoing: 'Сохраняю…', all: 'Все', emptyTitle: 'Пока пусто', emptyDesc: 'Попроси добавить тебя в семью — данные появятся сами.', noMatchTitle: 'Ничего не найдено', noMatchDesc: 'Попробуй другое название или сними фильтр.', loadMore: 'Показать ещё', loading: 'Загрузка…', products: (n: number) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'продукт' : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? 'продукта' : 'продуктов'}` }
+    ? { search: 'Encontrar produto', clear: 'Limpar', clearFilter: 'Limpar filtro', bought: 'Comprado', boughtDoing: 'A guardar…', all: 'Todos', emptyTitle: 'Ainda vazio', emptyDesc: 'Pede para te adicionarem à família — os dados aparecem sozinhos.', noMatchTitle: 'Nada encontrado', noMatchDesc: 'Tenta outro nome ou remove o filtro.', loadMore: 'Mostrar mais', loading: 'A carregar…', products: (n: number) => (n === 1 ? '1 produto' : `${n} produtos`), catalogTitle: 'No catálogo do Pingo Doce', catalogLoading: 'A procurar no catálogo…', catalogNone: 'Nada semelhante encontrado no Pingo Doce.', catalogHint: (from: string, to: string) => `Procurei: ${from} → ${to}` }
+    : { search: 'Найти продукт', clear: 'Сброс', clearFilter: 'Снять фильтр', bought: 'Куплено', boughtDoing: 'Сохраняю…', all: 'Все', emptyTitle: 'Пока пусто', emptyDesc: 'Попроси добавить тебя в семью — данные появятся сами.', noMatchTitle: 'Ничего не найдено', noMatchDesc: 'Попробуй другое название или сними фильтр.', loadMore: 'Показать ещё', loading: 'Загрузка…', products: (n: number) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'продукт' : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? 'продукта' : 'продуктов'}`, catalogTitle: 'В каталоге Pingo Doce', catalogLoading: 'Ищем в каталоге…', catalogNone: 'В Pingo Doce ничего похожего не нашли.', catalogHint: (from: string, to: string) => `Искали: ${from} → ${to}` }
 
   const filterLabels: Record<'all' | ForecastStatus, string> = lang === 'pt'
     ? { all: 'Todos', ending_soon: 'A acabar', ok: 'Suficiente', irregular: 'Irregular', calculating: 'A calcular' }
@@ -100,6 +119,41 @@ const ProductsPage: React.FC<ProductsPageProps> = ({
   products.forEach((p) => {
     counts[toForecast(p.status)] += 1
   })
+
+  const trimmedQ = q.trim()
+  const shouldSearchCatalog =
+    !loading && trimmedQ.length >= 2 && filter === 'all' && !filterType && rows.length === 0 && products.length > 0
+
+  useEffect(() => {
+    if (!shouldSearchCatalog) {
+      setCatalogState(null)
+      return
+    }
+    const cacheKey = `${lang}|${trimmedQ.toLowerCase()}`
+    const cached = catalogCache.current.get(cacheKey)
+    if (cached) {
+      setCatalogState({ q: trimmedQ, loading: false, translated: cached.translated, results: cached.results })
+      return
+    }
+    let cancelled = false
+    setCatalogState({ q: trimmedQ, loading: true, translated: null, results: [] })
+    const timer = setTimeout(async () => {
+      try {
+        const r = await SupabaseService.searchCatalog(trimmedQ, lang)
+        if (cancelled) return
+        catalogCache.current.set(cacheKey, { translated: r.translatedQuery, results: r.results })
+        setCatalogState({ q: trimmedQ, loading: false, translated: r.translatedQuery, results: r.results })
+      } catch (err) {
+        if (cancelled) return
+        console.warn('catalog search failed', err)
+        setCatalogState({ q: trimmedQ, loading: false, translated: null, results: [] })
+      }
+    }, 300)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [trimmedQ, lang, shouldSearchCatalog])
 
   return (
     <div style={{ padding: '0 var(--gutter-mobile) var(--space-12)', maxWidth: 'var(--content-max)', margin: '0 auto' }}>
@@ -201,9 +255,13 @@ const ProductsPage: React.FC<ProductsPageProps> = ({
           <EmptyState title={t.emptyTitle} description={t.emptyDesc} />
         </Card>
       ) : rows.length === 0 ? (
-        <Card>
-          <EmptyState title={t.noMatchTitle} description={t.noMatchDesc} />
-        </Card>
+        shouldSearchCatalog ? (
+          <CatalogSection state={catalogState} q={trimmedQ} labels={t} />
+        ) : (
+          <Card>
+            <EmptyState title={t.noMatchTitle} description={t.noMatchDesc} />
+          </Card>
+        )
       ) : (
         <Card padded={false}>
           {rows.slice(0, visibleCount).map((p, i) => (
@@ -234,5 +292,127 @@ const ProductsPage: React.FC<ProductsPageProps> = ({
     </div>
   )
 }
+
+type CatalogLabels = {
+  catalogTitle: string
+  catalogLoading: string
+  catalogNone: string
+  catalogHint: (from: string, to: string) => string
+}
+
+const CatalogSection: React.FC<{ state: CatalogState | null; q: string; labels: CatalogLabels }> = ({ state, q, labels }) => {
+  if (!state || state.loading) {
+    return (
+      <Card>
+        <EmptyState title={labels.catalogLoading} />
+      </Card>
+    )
+  }
+  if (state.results.length === 0) {
+    return (
+      <Card>
+        <EmptyState title={labels.catalogNone} />
+      </Card>
+    )
+  }
+  return (
+    <div>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'baseline',
+          justifyContent: 'space-between',
+          gap: 'var(--space-4)',
+          padding: 'var(--space-6) var(--space-3) var(--space-3)',
+        }}
+      >
+        <span style={{ font: 'var(--type-label)', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+          {labels.catalogTitle}
+        </span>
+        {state.translated && (
+          <span style={{ font: 'var(--type-caption)', color: 'var(--text-tertiary)', textAlign: 'right' }}>
+            {labels.catalogHint(q, state.translated)}
+          </span>
+        )}
+      </div>
+      <Card padded={false}>
+        {state.results.map((hit, i) => (
+          <CatalogRow key={hit.id} hit={hit} first={i === 0} />
+        ))}
+      </Card>
+    </div>
+  )
+}
+
+const CatalogRow: React.FC<{ hit: CatalogHit; first: boolean }> = ({ hit, first }) => (
+  <div
+    style={{
+      display: 'flex',
+      alignItems: 'center',
+      gap: 'var(--space-4)',
+      padding: 'var(--space-4) var(--space-5)',
+      borderTop: first ? 'none' : '1px solid var(--line-hairline)',
+    }}
+  >
+    <div
+      style={{
+        flex: '0 0 auto',
+        width: 56,
+        height: 56,
+        borderRadius: 'var(--radius-sm)',
+        background: 'var(--surface-sunken)',
+        overflow: 'hidden',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      {hit.image_url ? (
+        <img
+          src={hit.image_url}
+          alt=""
+          loading="lazy"
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          onError={(e) => {
+            ;(e.currentTarget as HTMLImageElement).style.display = 'none'
+          }}
+        />
+      ) : null}
+    </div>
+    <div style={{ minWidth: 0, flex: 1 }}>
+      <div
+        style={{
+          font: 'var(--type-body)',
+          color: 'var(--text-primary)',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {hit.name}
+      </div>
+      <div style={{ display: 'flex', gap: 'var(--space-3)', marginTop: 2, alignItems: 'baseline' }}>
+        {hit.brand && (
+          <span style={{ font: 'var(--type-caption)', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+            {hit.brand}
+          </span>
+        )}
+        {hit.category1 && (
+          <span
+            style={{
+              font: 'var(--type-caption)',
+              color: 'var(--text-tertiary)',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {hit.category1}
+          </span>
+        )}
+      </div>
+    </div>
+  </div>
+)
 
 export default ProductsPage

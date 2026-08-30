@@ -1323,4 +1323,16 @@ export class SupabaseService {
     if (error) throw error
     return (data || []) as RecipeIngredient[]
   }
+
+  // --- Catalog search (all PD products, not only bought) ---
+  static async searchCatalog(q: string, lang: 'ru' | 'pt'): Promise<{
+    translatedQuery: string | null
+    results: Array<{ id: number; name: string; brand: string | null; category1: string | null; category2: string | null; image_url: string | null }>
+  }> {
+    const url = `/api/catalog-search?q=${encodeURIComponent(q)}&lang=${lang}`
+    const res = await fetch(url, { method: 'GET' })
+    if (!res.ok) throw new Error(`catalog-search ${res.status}`)
+    const json = await res.json()
+    return { translatedQuery: json.translated_query ?? null, results: json.results ?? [] }
+  }
 }
