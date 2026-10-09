@@ -310,6 +310,11 @@ async function processReceipt(supabase, familyId, summary, detail, catalogCache,
     .maybeSingle();
   if (existing) return { skipped: true, receiptId: existing.id };
 
+  // PD /user/transactions возвращает и loyalty-движения (сканирование карты,
+  // купоны, промо) — у них detail.products.list пустой. Чеком это не считаем.
+  const items = detail.products?.list ?? [];
+  if (items.length === 0) return { skipped: true, reason: 'no_items' };
+
   const dateOnly = String(summary.transactionDate).slice(0, 10);
   // Вставляем 'pending' — триггер trigger_product_type_stats_on_receipt_processed
   // навешан WHEN (NEW.status = 'processed'), поэтому пересчёт статусов не стартует,
@@ -328,7 +333,6 @@ async function processReceipt(supabase, familyId, summary, detail, catalogCache,
     .single();
   if (recErr) throw recErr;
 
-  const items = detail.products?.list ?? [];
   for (const it of items) {
     const productId = await findOrCreateProduct(supabase, familyId, it.name, vocabularySet);
     if (dateOnly) {
